@@ -1,7 +1,7 @@
 # Архитектура Embedding Space Explorer
 
 > Документ фиксирует архитектурные решения. Он обновляется на каждом этапе разработки.
-> Текущий статус: **Этап 2 (эмбеддинги и кэш)**. Решения будущих этапов помечены
+> Текущий статус: **Этап 3 (пространство и проекции)**. Решения будущих этапов помечены
 > как «план» и могут уточняться; уже реализованные — как «реализовано».
 
 ## 1. Обзор
@@ -12,13 +12,13 @@
 ```
 ┌─────────────────────────── Браузер (localhost:5173) ───────────────────────────┐
 │  Frontend: React 19 + TypeScript (strict) + Vite                               │
-│  Zustand (единственный state-менеджер) · R3F/Drei (этап 3) · Monaco (этап 1)    │
+│  Zustand (единственный state-менеджер) · R3F/Drei ✅(этап 3) · Monaco ✅(этап 1) │
 │  Все обращения к данным — только через типизированный API-клиент (`src/api`)   │
 └───────────────────────────────────────┬────────────────────────────────────────┘
                                         │ HTTP /api/* (dev-прокси Vite → 127.0.0.1:8000)
 ┌───────────────────────────────────────▼────────────────────────────────────────┐
 │  Backend: Python 3.11–3.13, FastAPI, слушает только 127.0.0.1                  │
-│  api (HTTP-слой, DTO) → доменные модули → хранение (SQLite + .npy, этапы 1–2)  │
+│  api (HTTP-слой, DTO) → доменные модули → хранение (SQLite + .npz, этапы 1–3)  │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -73,7 +73,7 @@ backend/
 | `jobs/` ✅ | JobManager: очередь, один worker-поток, прогресс, отмена, предупреждения | 1 |
 | `embedding_providers/` ✅ | интерфейс провайдера + sentence-transformers (CPU, batching, прогресс, отмена); каталог моделей; lazy-import тяжёлых библиотек | 2 |
 | `vector_store/` ✅ | .npz-кэш векторов на запуск (ids/text_hashes/frag_hashes/vectors), атомарная запись, upsert/prune | 2 |
-| `projection_methods/` | PCA, UMAP (параметры + seed + версии библиотек сохраняются) | 3 |
+| `projection_methods/` ✅ | интерфейс метода + каталог; PCA (sklearn, full SVD — детерминированная), UMAP (lazy numba, seeded); декларативные спецификации параметров (валидация и UI-форма из одного источника); .npz-кэш координат на запуск | 3 |
 | `slice_engine/` | математический срез: `d(x) = dot(x − p, n)`, слой `|d| ≤ t/2` в исходном D-мерном пространстве | 4 |
 | `neighbor_search/` | kNN по исходным эмбеддингам, выбранная метрика (по умолчанию cosine) | 4 |
 | `relation_providers/` | структурные отношения (imports/calls/belongs_to/…): извлечение, импорт, ручные | 4 |
@@ -137,21 +137,31 @@ FastAPI; хранение изолировано за интерфейсами. 
 ```
 frontend/src/
   main.tsx              # точка входа (+ monaco/setup — офлайн, slim)
-  App.tsx               # app-shell: TopBar / (Corpus | Diagnostics | Start) / StatusBar
+  App.tsx               # app-shell: TopBar / (Corpus | Space | Experiments | Diagnostics | Start) / StatusBar
   api/                  # types.ts (зеркало DTO backend), client.ts (ApiError code/hint)
   state/
     uiStore.ts          # подключение, диагностика, активная секция
-    projectStore.ts     # проект, файлы, выделение (activeFragmentId), changes, задачи
+    projectStore.ts     # проект, файлы, выделение (activeFragmentId + selectedFragmentIds), changes, задачи
+    experimentStore.ts  # модель/режим/запуски эмбеддингов + каталог/форма/инвентарь проекций
+    spaceStore.ts       # облака точек (raw+display буферы), hover, режим взаимодействия
   monaco/
     setup.ts            # loader.config(monaco) — без CDN; editor.api + 4 языка; тема ese-dark
     helpers.ts          # чистые функции: язык, декорации, бейджи kind (тестируются без monaco)
+  space/
+    selectionMath.ts    # чистая математика: fit/NDC-рамка/хит-тест/тики/canvas-маппинг (без three.js)
+    palette.ts          # kind→цвет (зеркало токенов и бейджей корпуса), легенда
+    fragmentRef.ts      # PointMeta → FragmentMeta (id/file_id; остальное догружает корпус)
+    projectionLabels.ts # честные подписи запусков проекций (устарела/кэш повреждён)
   components/
     corpus/             # CorpusPanel, FileTree, FragmentList, SelectedFragmentCard, JobProgress
     inspector/          # SourceInspector (Monaco read-only + locator-бар)
+    space/              # SpaceSection (Allotment-компоновка), Scene3D (R3F), Projection2D (canvas),
+                        # ProjectionControls (+ ExperimentJobPoller)
     TopBar / SectionTabs / StatusBar / DiagnosticsPanel / ConnectionIndicator
     StartScreen / FolderPickerDialog / ChangesDialog / WorkspaceLayout (Allotment)
+    ExperimentsPanel    # модель, режим подготовки, расчёт, запуски эмбеддингов
   theme/tokens.css      # дизайн-токены (цвета/шрифты/отступы из UI-ТЗ)
-  styles/global.css     # базовые стили + корпус/инспектор/модалки/декорации Monaco
+  styles/global.css     # базовые стили + корпус/инспектор/модалки/декорации Monaco/пространство
 ```
 
 ### 4.2. Состояние
@@ -160,21 +170,30 @@ frontend/src/
 вводятся). Планируемое разделение store'ов по назначению (ТЗ §2.2):
 
 - `uiStore` ✅ — подключение, диагностика, активная секция;
-- `projectStore` ✅ (этап 1) — открытый проект, файлы, `activeFragmentId` (общий selection
-  state), located-фрагменты, changes/staleness, активная задача;
-- `experimentStore` ✅ (этап 2) — каталог моделей, режим подготовки, форма расчёта,
-  задача эмбеддингов, инвентарь запусков (этапы 3–5 добавят проекции/срезы/кластеры/метрики).
+- `projectStore` ✅ (этапы 1, 3) — открытый проект, файлы, `activeFragmentId` +
+  `selectedFragmentIds` (общий selection state всех представлений), located-фрагменты,
+  changes/staleness, активная задача;
+- `experimentStore` ✅ (этапы 2–3) — каталог моделей, режим подготовки, форма расчёта,
+  задача эмбеддингов, инвентарь запусков; каталог методов проекции, форма (метод/
+  параметры из серверных спецификаций/seed), инвентарь проекций, задача проекции
+  (этапы 4–5 добавят срезы/кластеры/метрики);
+- `spaceStore` ✅ (этап 3) — интерфейсное состояние SPACE: загруженные облака точек
+  (raw-координаты + view-only display-буфер), активные проекции 3D/2D, hover, размер
+  точек, режим взаимодействия (орбита/рамка). Координаты — только с сервера.
 
-`activeFragmentId` — будущая точка синхронизации 3D-сцены, 2D-проекции, списка фрагментов
-и Monaco по **id фрагмента** (этап 3).
+`activeFragmentId`/`selectedFragmentIds` ✅ — точка синхронизации 3D-сцены, 2D-проекции,
+списка фрагментов и Monaco по **id фрагмента** (работает с этапа 3).
 
 ### 4.3. Модули UI (план по этапам)
 
 `app-shell` ✅(0) → `fragment-explorer` + `source-inspector` ✅(1, Monaco read-only,
 обратная трассировка выделения) → `task-status` ✅(1, JobProgress + polling) →
-`space-view` (3, R3F: батчинг точек через instanced-буферы, без компонента на точку) →
-`projection-view` (3, 2D canvas) → `relations-panel` (4) → `experiment-controls` (2–5) →
-`export-panel` (5). Панели размещаются через Allotment ✅(1).
+`space-view` ✅(3, R3F: один объект точек с буферными атрибутами, без компонента на точку;
+hover/клик/Ctrl-клик/рамка выделения, легенда, состояния) → `projection-view` ✅(3,
+canvas 2D с осями/тиками, тот же selection state) → `relations-panel` (4) →
+`experiment-controls` ✅(2–3: эмбеддинги и проекции; метрики — 5) → `export-panel` (5).
+Панели размещаются через Allotment ✅(1); SPACE использует полную компоновку ТЗ §4.2
+(корпус | 3D / управление / 2D | инспектор).
 
 ### 4.4. Честность интерфейса (ТЗ §17.2)
 
@@ -193,7 +212,9 @@ frontend/src/
 | react / vite / typescript | 19.3.1 / 8.3.4 / 5.9.3 | package-lock.json; TS7 пока не поддерживается typescript-eslint (<6.1.0), поэтому 5.9 |
 | monaco-editor / allotment | 0.57.0 / 1.20.6 | monaco — «slim»: editor.api + monarch-токенайзеры python/js/ts/md, без TS/JSON/CSS/HTML language-сервисов (read-only просмотр, экономия RAM/сборки) |
 | torch / sentence-transformers | 2.14.1+cpu / 6.1.0 ✅ | torch только CPU (+extra-index-url download.pytorch.org); 8 ГБ RAM: batch size по умолчанию 16, прогресс и отмена между батчами |
-| umap-learn / scikit-learn / tree-sitter-language-pack | 0.5.12 / 1.9.1 / 1.22.1 (план) | |
+| scikit-learn / umap-learn | 1.9.1 / 0.5.12 ✅ | umap тянет numba 0.68.0 + llvmlite 0.50.0 + pynndescent 0.6.0; совместимость с numpy 2.4.6 проверена; первый импорт numba медленный (~10 с) — lazy |
+| three / @react-three/fiber / @react-three/drei | 0.186.1 / 9.8.2 / 10.7.9 ✅ | R3F 9 — линия для React 19 (peer >=19 <19.4); @types/three в devDependencies |
+| tree-sitter-language-pack | 1.22.1 (план) | больше языков сегментации — после MVP |
 
 Зависимости добавляются только когда этап реально их использует; версии фиксируются
 lock-файлами. Приложение не требует GPU, Docker, облачных аккаунтов и прав администратора.
@@ -213,7 +234,7 @@ lock-файлами. Приложение не требует GPU, Docker, об�
 | **0** | Каркас, запуск одной командой, health, диагностика, lint/typecheck/test | ✅ интерфейс открывается на localhost; backend только локально; диагностика показывает версии и статус |
 | **1** | Корпус и трассировка: сканирование, tree-sitter-сегментация (Python/JS/TS/TSX), Markdown, fallback, stable IDs, SQLite, Monaco-инспектор, обратная трассировка строк, изменения файлов с подтверждением, фоновые задачи | ✅ фрагменты видны в UI и ведут к корректным строкам; тесты ID/line mapping/инкрементальности проходят |
 | 2 | Embeddings: провайдер ST, CPU batching, raw / context-enriched, кэш и инвалидирование | повторный запуск не пересчитывает неизменившиеся фрагменты |
-| 3 | Пространство: PCA/UMAP, R3F-сцена, 2D-проекция, selection-синхронизация | точка выбирается в обеих сценах, инспектор открывает исходник |
+| **3** | Пространство: PCA/UMAP (параметры+seed+версии сохраняются, кэш координат, честное устаревание), R3F-сцена (батченные буферы, hover, клик/Ctrl-клик/рамка), 2D-проекция (canvas, оси/тики), selection-синхронизация по id фрагмента | ✅ точка выбирается в обеих сценах, инспектор открывает правильный исходник; координаты получены из сохранённых эмбеддингов (сверено с независимым пересчётом PCA в real-model E2E) |
 | 4 | Срезы, соседи, структурные отношения, кластеры, ручные группы | математические тесты срезов; UI разделяет слой/проекцию и связь/близость |
 | 5 | Метрики, эксперименты, экспорт | эксперимент переоткрывается; экспорт содержит параметры |
 | 6 | Стабилизация и приёмка | все критерии ТЗ §18 |

@@ -2,7 +2,7 @@
 
 # Single source of truth for versions reported by /api/health and stored in
 # experiments / project manifests.
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 # Data schema version. Bump on breaking changes to the project database layout
 # or on-disk formats; migrations live in the storage module.

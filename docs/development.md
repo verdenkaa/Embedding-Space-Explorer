@@ -65,7 +65,7 @@ scripts\checks.bat            # Windows (или scripts/checks.ps1 из PowerShe
 проекта может не быть:
 
 ```powershell
-.venv\Scripts\python -m pytest          # юнит-тесты
+.venv\Scripts\python -m pytest          # юнит-тесты (129)
 .venv\Scripts\python -m ruff check .    # линтер
 .venv\Scripts\python -m ruff format --check .   # форматирование
 .venv\Scripts\python -m mypy .          # строгая типизация
@@ -81,16 +81,19 @@ scripts\checks.bat            # Windows (или scripts/checks.ps1 из PowerShe
 .venv\Scripts\python -m pytest -m real_model
 ```
 
-Они используют компактную `all-MiniLM-L6-v2` (~90 МБ); модель по умолчанию
+Они используют компактную `all-MiniLM-L6-v2` (~90 МБ): инференс и полный
+E2E этапа 3 (эмбеддинги → PCA/UMAP → координаты сверяются с независимым
+пересчётом PCA из сохранённых .npz). Модель по умолчанию
 (`paraphrase-multilingual-MiniLM-L12-v2`, ~470 МБ) проверяется ручным
-сценарием — это осознанное разделение, а не пропуск тестов.
+сценарием — это осознанное разделение, а не пропуск тестов. Первый запуск
+UMAP-тестов медленнее: numba компилирует kernel'ы (~10–15 с один раз на процесс).
 
 ### Frontend (вручную)
 
 Из каталога `frontend/` (в корне репозитория нет `package.json`):
 
 ```powershell
-npm run test        # vitest (jsdom)
+npm run test        # vitest (jsdom, 123 теста)
 npm run lint        # eslint (flat config, typescript-eslint)
 npm run typecheck   # tsc --noEmit, strict
 npm run build       # production-сборка
@@ -133,14 +136,27 @@ ASCII-пунктуацию (обычные кавычки и дефис). Без
   размер, ЧЕСТНОЕ описание ограничений. Другой рантайм (не ST) — новый класс
   `EmbeddingProvider` + ветка в `create_provider`. Кэш-ключи учитывают модель
   (fingerprint запуска), смешение векторов исключено; детали — `docs/data-model.md` §6.5.
-- **Новый метод проекции** — интерфейс `projection_methods` (этап 3): имя метода,
-  параметры, seed, версии библиотек сохраняются в конфиге проекции.
+- **Новый метод проекции** — реализовать `ProjectionMethod`
+  (`backend/app/projection_methods/base.py`: `is_available()`, `fit(vectors,
+  n_components, params, seed) -> ProjectionResult`), объявить параметры
+  декларативно (`ParamSpec` — они же валидируются на сервере и рендерят
+  UI-форму) и добавить экземпляр в `METHODS` (`registry.py`). Fingerprint
+  кэша учитывает метод — координаты разных методов никогда не смешиваются;
+  версии библиотек записываются в запуск автоматически (`library_versions`).
+  Требования: детерминированность при фиксированных (вход, params, seed),
+  честная оговорка об интерпретации (`caveat`), тяжёлые импорты — lazy.
+  Обязательны тесты: геометрия на известном синтетическом наборе, guards на
+  вырожденные входы, API-поток compute → points.
 - **Новая метрика** — `metrics/` (этап 5): явные входы, определение положительных пар,
   текст-пояснение для UI.
 - **Новый экспортёр** — `exporters/` (этап 5).
 - **Новая панель UI** — компонент в `frontend/src/components/`, данные только через
-  `src/api/client.ts`; состояние — в соответствующем zustand-store (`uiStore` /
-  `projectStore` / будущий `experimentStore`). Monaco подключается «slim»
+  `src/api/client.ts`; состояние — в соответствующем zustand-store: интерфейс —
+  `uiStore`, проект/корпус/общее выделение — `projectStore`, эксперименты
+  (эмбеддинги, проекции) — `experimentStore`, состояние SPACE-представления —
+  `spaceStore`. Чистую математику видов (пикнинг, рамки, тики) выносите в
+  `src/space/` без импортов three.js — так она тестируется в jsdom.
+  Monaco подключается «slim»
   (`src/monaco/setup.ts`): новый язык подсветки — импорт
   `monaco-editor/languages/definitions/<lang>/register`; language-сервисы
   (IntelliSense) не добавлять без необходимости — инспектор read-only.
