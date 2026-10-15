@@ -21,6 +21,7 @@ import type {
   JobInfo,
   ProjectInfo,
   ProjectSummary,
+  StalenessReport,
 } from "../api/types";
 
 export interface ProjectError {
@@ -44,6 +45,7 @@ interface ProjectState {
   searchResults: FragmentSearchResponse | null;
   changes: ChangesReport | null;
   changesLoading: boolean;
+  staleness: StalenessReport | null;
   activeJob: JobInfo | null;
   loading: boolean;
   error: ProjectError | null;
@@ -64,6 +66,7 @@ interface ProjectState {
   runSearch: () => Promise<void>;
   loadChanges: () => Promise<void>;
   closeChanges: () => void;
+  checkStaleness: () => Promise<void>;
   startIndex: () => Promise<void>;
   tickActiveJob: () => Promise<void>;
   cancelActiveJob: () => Promise<void>;
@@ -93,6 +96,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   searchResults: null,
   changes: null,
   changesLoading: false,
+  staleness: null,
   activeJob: null,
   loading: false,
   error: null,
@@ -133,6 +137,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       searchQuery: "",
       searchResults: null,
       changes: null,
+      staleness: null,
     });
     try {
       const current = await api.getProject(projectId);
@@ -160,6 +165,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       searchQuery: "",
       searchResults: null,
       changes: null,
+      staleness: null,
       activeJob: null,
       error: null,
     });
@@ -286,13 +292,27 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
 
   closeChanges: () => set({ changes: null, changesLoading: false }),
 
+  checkStaleness: async () => {
+    const { current, activeJob } = get();
+    if (!current) return;
+    // Skip while a job runs: the index is legitimately in flux.
+    if (activeJob && (activeJob.state === "queued" || activeJob.state === "running")) return;
+    try {
+      const staleness = await api.getStaleness(current.id);
+      set({ staleness });
+    } catch {
+      // Background indicator only: never spam the error banner for it.
+      set({ staleness: null });
+    }
+  },
+
   startIndex: async () => {
     const { current } = get();
     if (!current) return;
     set({ error: null });
     try {
       const job = await api.startIndex(current.id);
-      set({ activeJob: job, changes: null });
+      set({ activeJob: job, changes: null, staleness: null });
     } catch (err) {
       set({ error: toError(err) });
     }
@@ -307,6 +327,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       set({ activeJob: job });
       if (job.state === "done" || job.state === "failed" || job.state === "cancelled") {
         await Promise.all([get().refreshFiles(), get().refreshProject()]);
+        await get().checkStaleness();
       }
     } catch (err) {
       set({ error: toError(err) });

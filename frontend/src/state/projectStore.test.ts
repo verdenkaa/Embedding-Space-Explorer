@@ -16,7 +16,7 @@ import type {
   ProjectSummary,
 } from "../api/types";
 import { useProjectStore } from "./projectStore";
-import { mockFetch, mockResponse } from "../testUtils";
+import { mockFetch, mockReject, mockResponse } from "../testUtils";
 
 const PROJECT: ProjectInfo = {
   id: "p1",
@@ -137,6 +137,7 @@ function resetStore() {
     searchResults: null,
     changes: null,
     changesLoading: false,
+    staleness: null,
     activeJob: null,
     loading: false,
     error: null,
@@ -287,5 +288,48 @@ describe("projectStore", () => {
     const error = useProjectStore.getState().error;
     expect(error?.code).toBe("forbidden_host");
     expect(error?.hint).toBe("use localhost");
+  });
+});
+
+describe("staleness indicator", () => {
+  const STALE = {
+    dirty: true,
+    new_count: 2,
+    modified_count: 1,
+    deleted_count: 0,
+    unchanged_count: 5,
+    root_errors: [],
+  };
+
+  it("checkStaleness stores the report", async () => {
+    const { fetchMock } = mockFetch({ "/staleness": STALE });
+    vi.stubGlobal("fetch", fetchMock);
+    useProjectStore.setState({ current: PROJECT });
+
+    await useProjectStore.getState().checkStaleness();
+    expect(useProjectStore.getState().staleness).toEqual(STALE);
+  });
+
+  it("skips polling while an indexing job runs", async () => {
+    const { fetchMock, calls } = mockFetch({ "/staleness": STALE });
+    vi.stubGlobal("fetch", fetchMock);
+    useProjectStore.setState({ current: PROJECT, activeJob: job("running", 1, 3) });
+
+    await useProjectStore.getState().checkStaleness();
+    expect(calls).toHaveLength(0);
+    expect(useProjectStore.getState().staleness).toBeNull();
+  });
+
+  it("fails silently (no error banner) when backend is unreachable", async () => {
+    const { fetchMock } = mockFetch({
+      "/staleness": mockReject(new TypeError("Failed to fetch")),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    useProjectStore.setState({ current: PROJECT, staleness: STALE });
+
+    await useProjectStore.getState().checkStaleness();
+    const state = useProjectStore.getState();
+    expect(state.staleness).toBeNull();
+    expect(state.error).toBeNull();
   });
 });

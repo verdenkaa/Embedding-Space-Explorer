@@ -18,6 +18,7 @@ import type {
   LocateResponse,
   ProjectInfo,
   ProjectSummary,
+  StalenessReport,
 } from "./types";
 
 export class ApiError extends Error {
@@ -104,6 +105,8 @@ export const api = {
     request<{ deleted: string }>(`/api/projects/${pid}?confirm=true`, { method: "DELETE" }),
   getChanges: (pid: string): Promise<ChangesReport> =>
     request<ChangesReport>(`/api/projects/${pid}/changes`),
+  getStaleness: (pid: string): Promise<StalenessReport> =>
+    request<StalenessReport>(`/api/projects/${pid}/staleness`),
   startIndex: (pid: string): Promise<JobInfo> =>
     request<JobInfo>(`/api/projects/${pid}/index`, { method: "POST" }),
 

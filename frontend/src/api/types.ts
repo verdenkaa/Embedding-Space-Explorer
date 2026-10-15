@@ -210,3 +210,12 @@ export interface FsListResponse {
   entries: FsDirEntry[];
   drives: boolean;
 }
+
+export interface StalenessReport {
+  dirty: boolean;
+  new_count: number;
+  modified_count: number;
+  deleted_count: number;
+  unchanged_count: number;
+  root_errors: string[];
+}

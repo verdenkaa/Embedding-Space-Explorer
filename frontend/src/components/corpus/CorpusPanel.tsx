@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
+const STALENESS_POLL_MS = 30_000;
+
 import type { FragmentMeta } from "../../api/types";
 import { useProjectStore } from "../../state/projectStore";
 import { ChangesDialog } from "../ChangesDialog";
@@ -26,14 +28,24 @@ export function CorpusPanel() {
   const searchResults = useProjectStore((s) => s.searchResults);
   const changes = useProjectStore((s) => s.changes);
   const changesLoading = useProjectStore((s) => s.changesLoading);
+  const staleness = useProjectStore((s) => s.staleness);
   const selectFile = useProjectStore((s) => s.selectFile);
   const selectFragment = useProjectStore((s) => s.selectFragment);
   const setSearchQuery = useProjectStore((s) => s.setSearchQuery);
   const runSearch = useProjectStore((s) => s.runSearch);
   const loadChanges = useProjectStore((s) => s.loadChanges);
   const startIndex = useProjectStore((s) => s.startIndex);
+  const checkStaleness = useProjectStore((s) => s.checkStaleness);
 
   const [searchInput, setSearchInput] = useState("");
+
+  // Background staleness indicator: check on mount and every 30 s.
+  // The store skips checks while an indexing job runs.
+  useEffect(() => {
+    void checkStaleness();
+    const timer = setInterval(() => void checkStaleness(), STALENESS_POLL_MS);
+    return () => clearInterval(timer);
+  }, [checkStaleness]);
 
   // Debounced fragment search (server-side).
   useEffect(() => {
@@ -78,12 +90,24 @@ export function CorpusPanel() {
         <div className="corpus-toolbar__spacer" />
         <button
           type="button"
-          className="btn btn--small"
+          className={`btn btn--small${staleness?.dirty ? " btn--alert" : ""}`}
           onClick={() => void loadChanges()}
           disabled={changesLoading}
-          title="Просканировать корни и показать новые/изменённые/удалённые файлы (ничего не меняет)"
+          title={
+            staleness?.dirty
+              ? `Корпус устарел: ${staleness.new_count} новых, ${staleness.modified_count} изменённых, ${staleness.deleted_count} удалённых. Нажмите, чтобы посмотреть и применить.`
+              : "Просканировать корни и показать новые/изменённые/удалённые файлы (ничего не меняет)"
+          }
+          aria-label={
+            staleness?.dirty ? "Изменения: требуется переиндексация" : "Изменения"
+          }
         >
           {changesLoading ? "Проверка…" : "Изменения"}
+          {staleness?.dirty && (
+            <span className="btn__alert-badge" aria-hidden="true">
+              {staleness.new_count + staleness.modified_count + staleness.deleted_count}
+            </span>
+          )}
         </button>
         <button
           type="button"

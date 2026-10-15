@@ -227,3 +227,40 @@ describe("CorpusPanel", () => {
     expect(screen.getByText(/Проект пустой/)).toBeTruthy();
   });
 });
+
+describe("CorpusPanel staleness button", () => {
+  const STALE = {
+    dirty: true,
+    new_count: 2,
+    modified_count: 1,
+    deleted_count: 3,
+    unchanged_count: 0,
+    root_errors: [],
+  };
+
+  it("lights up with a count badge when the corpus is stale", () => {
+    const { fetchMock } = mockFetch({ ...baseRoutes(), "/staleness": STALE });
+    vi.stubGlobal("fetch", fetchMock);
+    resetStore({ staleness: STALE });
+
+    render(<CorpusPanel />);
+    const button = screen.getByRole("button", {
+      name: "Изменения: требуется переиндексация",
+    });
+    expect(button.className).toContain("btn--alert");
+    // Badge shows the total, not color alone (6 = 2 new + 1 mod + 3 del).
+    expect(button.textContent).toContain("6");
+  });
+
+  it("stays neutral when the index is fresh", () => {
+    const CLEAN = { ...STALE, dirty: false, new_count: 0, modified_count: 0, deleted_count: 0 };
+    const { fetchMock } = mockFetch({ ...baseRoutes(), "/staleness": CLEAN });
+    vi.stubGlobal("fetch", fetchMock);
+    resetStore({ staleness: CLEAN });
+
+    render(<CorpusPanel />);
+    const button = screen.getByRole("button", { name: "Изменения" });
+    expect(button.className).not.toContain("btn--alert");
+    expect(button.textContent).not.toMatch(/\d/);
+  });
+});
