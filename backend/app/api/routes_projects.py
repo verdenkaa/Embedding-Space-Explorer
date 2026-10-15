@@ -18,9 +18,10 @@ from app.api.schemas import (
     ProjectStats,
     ProjectSummaryDTO,
     SkippedFileDTO,
+    StalenessReport,
 )
 from app.api.serialization import job_info_from_row
-from app.jobs.indexing import build_index_inputs, run_index_job
+from app.jobs.indexing import build_index_inputs, compute_staleness, run_index_job
 from app.jobs.manager import JobManager
 from app.storage.models import FileRow, FragmentRow, JobRow
 from app.storage.projects_store import (
@@ -145,6 +146,28 @@ def get_changes(
         ],
         root_errors=scan.root_errors,
         warnings=scan.warnings,
+    )
+
+
+@router.get("/{project_id}/staleness", response_model=StalenessReport)
+def get_staleness(
+    ctx: Annotated[ProjectContext, Depends(get_project)],
+) -> StalenessReport:
+    """Lightweight "needs re-index?" probe for the UI indicator.
+
+    Full scan with the project's exclusion rules (so skipped/binary/secret
+    files never light the indicator), but classification without content
+    hashing. Does NOT modify anything.
+    """
+    inputs = compute_staleness(ctx)
+    plan = inputs.plan
+    return StalenessReport(
+        dirty=bool(plan.new or plan.modified or plan.deleted),
+        new_count=len(plan.new),
+        modified_count=len(plan.modified),
+        deleted_count=len(plan.deleted),
+        unchanged_count=plan.unchanged_count,
+        root_errors=inputs.scan.root_errors,
     )
 
 

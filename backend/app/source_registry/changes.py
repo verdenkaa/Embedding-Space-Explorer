@@ -58,12 +58,19 @@ class ChangesPlan:
 def classify_changes(
     scan: ScanResult,
     existing: list[ExistingFileInfo],
+    *,
+    verify_hashes: bool = True,
 ) -> ChangesPlan:
     """Compare a fresh scan with indexed files.
 
     Fast path: files whose size AND mtime match the index are considered
     unchanged without re-hashing. Anything suspicious is hashed and compared
     by content, so touch-only changes do not trigger re-fragmentation.
+
+    With `verify_hashes=False` (staleness indicator), suspicious files are
+    reported as modified WITHOUT hashing: cheaper, but may over-report on
+    touch-only changes (e.g. after git checkout). The authoritative /changes
+    report always verifies hashes.
     """
     by_key = {(e.root, e.rel_path): e for e in existing}
     seen_keys: set[tuple[str, str]] = set()
@@ -84,6 +91,9 @@ def classify_changes(
             continue
         if prev.size != cand.size:
             modified.append(_change(cand, "size"))
+            continue
+        if not verify_hashes:
+            modified.append(_change(cand, "content"))
             continue
         fresh_hash = hash_file(cand.abs_path)
         if fresh_hash is None or fresh_hash != prev.content_hash:

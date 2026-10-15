@@ -238,6 +238,22 @@ class ChangesReport(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class StalenessReport(BaseModel):
+    """Cheap indicator: does the corpus need re-indexing?
+
+    Computed without content hashing (size/mtime only), so it may slightly
+    over-report after touch-only changes; GET /changes gives the verified
+    picture. Used to light up the "Changes" button in the UI.
+    """
+
+    dirty: bool
+    new_count: int
+    modified_count: int
+    deleted_count: int
+    unchanged_count: int
+    root_errors: list[str] = Field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # Filesystem browser (root picker)
 # ---------------------------------------------------------------------------

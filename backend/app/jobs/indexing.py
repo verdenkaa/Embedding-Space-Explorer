@@ -39,13 +39,16 @@ class IndexInputs:
     plan: ChangesPlan
 
 
-def build_index_inputs(project: ProjectContext) -> IndexInputs:
-    """Shared by GET /changes (preview) and the indexing job (apply)."""
+def scan_project(project: ProjectContext) -> ScanResult:
+    """Full scan of the project roots (same rules as indexing)."""
     manifest = project.manifest
-    scan = scan_roots(manifest.roots, manifest.split_options)
+    return scan_roots(manifest.roots, manifest.split_options)
+
+
+def load_existing_files(project: ProjectContext) -> list[ExistingFileInfo]:
     with project.session_factory() as session:
         rows = session.execute(select(FileRow)).scalars().all()
-        existing = [
+        return [
             ExistingFileInfo(
                 id=r.id,
                 root=r.root,
@@ -58,7 +61,23 @@ def build_index_inputs(project: ProjectContext) -> IndexInputs:
             )
             for r in rows
         ]
-    plan = classify_changes(scan, existing)
+
+
+def build_index_inputs(project: ProjectContext) -> IndexInputs:
+    """Shared by GET /changes (preview) and the indexing job (apply)."""
+    scan = scan_project(project)
+    plan = classify_changes(scan, load_existing_files(project))
+    return IndexInputs(scan=scan, plan=plan)
+
+
+def compute_staleness(project: ProjectContext) -> IndexInputs:
+    """Cheap staleness probe for the UI indicator: same scan, no hashing.
+
+    May over-report (touch-only changes count as modified); the authoritative
+    report is GET /changes, which verifies content hashes.
+    """
+    scan = scan_project(project)
+    plan = classify_changes(scan, load_existing_files(project), verify_hashes=False)
     return IndexInputs(scan=scan, plan=plan)
 
 

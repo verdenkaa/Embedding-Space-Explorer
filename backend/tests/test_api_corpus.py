@@ -265,3 +265,47 @@ def test_jobs_history(client: TestClient, project: dict[str, object]) -> None:
     assert jobs[0]["state"] == "done"
     assert jobs[0]["progress_total"] == 5
     assert jobs[0]["progress_done"] == 5
+
+
+def test_staleness_indicator_flow(
+    client: TestClient, project: dict[str, object], sample_project: Path
+) -> None:
+    pid = project["id"]
+    assert isinstance(pid, str)
+
+    # Before any indexing: everything is "new" -> dirty.
+    stale = client.get(f"/api/projects/{pid}/staleness").json()
+    assert stale["dirty"] is True
+    assert stale["new_count"] == 5
+
+    _index(client, pid)
+
+    # Fresh index -> clean.
+    stale = client.get(f"/api/projects/{pid}/staleness").json()
+    assert stale["dirty"] is False
+    assert stale["unchanged_count"] == 5
+    assert (stale["new_count"], stale["modified_count"], stale["deleted_count"]) == (0, 0, 0)
+
+    # New file -> dirty with new_count.
+    fresh_file = sample_project / "src" / "fresh.py"
+    fresh_file.write_text("def fresh():\n    return 1\n", encoding="utf-8")
+    stale = client.get(f"/api/projects/{pid}/staleness").json()
+    assert stale["dirty"] is True and stale["new_count"] == 1
+
+    # Modified file -> modified_count (size/mtime path, no hashing needed).
+    fresh_file.unlink()
+    utils = sample_project / "src" / "utils.js"
+    utils.write_text(utils.read_text(encoding="utf-8") + "\n// more\n", encoding="utf-8")
+    stale = client.get(f"/api/projects/{pid}/staleness").json()
+    assert stale["dirty"] is True and stale["modified_count"] == 1
+
+    # Deleted file -> deleted_count.
+    utils.write_text("function plainSum(a, b) {\n  return a + b;\n}\n", encoding="utf-8")
+    (sample_project / "docs" / "guide.md").unlink()
+    stale = client.get(f"/api/projects/{pid}/staleness").json()
+    assert stale["dirty"] is True and stale["deleted_count"] == 1
+
+    # After confirmed re-index the indicator goes dark again.
+    _index(client, pid)
+    stale = client.get(f"/api/projects/{pid}/staleness").json()
+    assert stale["dirty"] is False
