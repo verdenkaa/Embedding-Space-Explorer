@@ -137,7 +137,7 @@ Backend — из каталога `backend\`, интерпретатором ven
 
 ```powershell
 cd backend
-.venv\Scripts\python -m pytest        # 129 тестов (+ opt-in: pytest -m real_model — настоящая модель)
+.venv\Scripts\python -m pytest        # 130 тестов (+ opt-in: pytest -m real_model — настоящая модель)
 .venv\Scripts\python -m ruff check .  # линтер
 .venv\Scripts\python -m mypy .        # строгая типизация
 ```
