@@ -47,7 +47,22 @@ npm run dev
 
 ## 3. Тесты, линтеры, типы
 
-### Backend (из каталога `backend/`, в активированном `.venv`)
+### Все проверки одной командой
+
+Из любого каталога репозитория:
+
+```powershell
+scripts\checks.bat            # Windows (или scripts/checks.ps1 из PowerShell)
+```
+
+Скрипт использует собственные окружения проекта (`backend\.venv`,
+`frontend\node_modules`, создаются `dev.bat`/`dev.sh`) и печатает итоговую
+таблицу. Флаги: `-BackendOnly`, `-FrontendOnly`.
+
+### Backend (вручную)
+
+Из каталога `backend/`, интерпретатором venv — в системном Python зависимостей
+проекта может не быть:
 
 ```powershell
 .venv\Scripts\python -m pytest          # юнит-тесты
@@ -56,7 +71,12 @@ npm run dev
 .venv\Scripts\python -m mypy .          # строгая типизация
 ```
 
-### Frontend (из каталога `frontend/`)
+`pytest` можно запускать и из корня репозитория: `tests/conftest.py` добавляет
+`backend/` в `sys.path`, а `pyproject.toml` задаёт `pythonpath = ["."]`.
+
+### Frontend (вручную)
+
+Из каталога `frontend/` (в корне репозитория нет `package.json`):
 
 ```powershell
 npm run test        # vitest (jsdom)
@@ -68,6 +88,14 @@ npm run build       # production-сборка
 Правила (ТЗ §17.6): тесты проверяют реальную логику; нельзя ослаблять или удалять тест
 ради зелёного отчёта; каждое нетривиальное исправление сопровождается регрессионным
 тестом.
+
+### Windows-скрипты PowerShell — правила правки
+
+`*.ps1` обязаны сохраняться в **UTF-8 with BOM** и использовать только
+ASCII-пунктуацию (обычные кавычки и дефис). Без BOM Windows PowerShell 5.1
+прочитает кириллицу как cp1251, а байты «умных» кавычек/тире сломают границы
+строк и весь разбор файла. Оператор `&&` в PS 5.1 недоступен — использовать
+`;` или отдельные вызовы.
 
 ## 4. Конфигурация (переменные окружения backend)
 

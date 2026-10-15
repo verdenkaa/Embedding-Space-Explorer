@@ -12,6 +12,8 @@ dependencies = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# Put backend/ on sys.path so `import app` works for any launch directory.
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100

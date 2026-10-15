@@ -33,8 +33,18 @@
 - Скрипты запуска одной командой: `scripts/dev.bat` и `scripts/dev.ps1` (Windows),
   `scripts/dev.sh` (Linux/macOS): проверка версий Python/Node, установка зависимостей,
   запуск backend и frontend.
+- Скрипт всех проверок одной командой: `scripts/checks.bat` / `checks.ps1`
+  (pytest, ruff, ruff format, mypy, vitest, eslint, tsc, build) с итоговой таблицей.
 - Документация: `README.md`, `docs/architecture.md`, `docs/development.md`.
 - Зафиксированные версии зависимостей: `backend/requirements*.txt`,
   `frontend/package-lock.json`.
+
+### Исправлено
+
+- Совместимость `dev.ps1` с Windows PowerShell 5.1: файл сохраняется в UTF-8 with BOM,
+  пунктуация только ASCII, дочерние окна запускаются через `powershell -NoExit -Command`
+  (без оператора `&&`), добавлено ожидание ответа backend перед открытием браузера.
+- `pytest` запускается из любого каталога (bootstrap `sys.path` в `tests/conftest.py`
+  и `pythonpath = ["."]` в `pyproject.toml`).
 
 [0.1.0]: https://github.com/verdenkaa/Embedding-Space-Explorer/releases/tag/v0.1.0

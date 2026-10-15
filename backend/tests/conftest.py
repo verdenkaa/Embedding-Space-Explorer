@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
-from app.config import Settings
-from app.main import create_app
-from fastapi.testclient import TestClient
+# Make the `app` package importable no matter which directory pytest is
+# launched from. Canonical way: run from backend/ (pyproject.toml sets
+# pythonpath=["."]); this bootstrap also covers a bare `pytest` from the
+# repository root, where backend/pyproject.toml is not picked up as ini.
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
+
+import pytest  # noqa: E402
+from app.config import Settings  # noqa: E402
+from app.main import create_app  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
 
 @pytest.fixture

@@ -60,22 +60,44 @@ Linux/macOS: `./scripts/dev.sh` (остановка — Ctrl+C).
 
 ## Тесты и проверки
 
-Backend (из `backend/`, зависимости ставятся скриптом запуска в `.venv`):
+Всё одной командой, из любого каталога (использует собственные окружения проекта):
 
 ```powershell
+scripts\checks.bat
+```
+
+Прогоняет pytest / ruff / ruff format / mypy для backend (через `backend\.venv`)
+и vitest / eslint / tsc / build для frontend (через `frontend\node_modules`),
+печатает итоговую таблицу и возвращает ненулевой код при провале.
+Флаги: `-BackendOnly`, `-FrontendOnly`.
+
+> `backend\.venv` и `frontend\node_modules` создаёт `scripts\dev.bat` при первом
+> запуске. `.venv` находится **внутри `backend\`**, а не в корне репозитория.
+
+Ручной запуск отдельных проверок:
+
+Backend — из каталога `backend\`, интерпретатором venv (в системном Python
+зависимостей проекта может не быть):
+
+```powershell
+cd backend
 .venv\Scripts\python -m pytest        # 38 тестов: health, security, config
 .venv\Scripts\python -m ruff check .  # линтер
 .venv\Scripts\python -m mypy .        # строгая типизация
 ```
 
-Frontend (из `frontend/`):
+Frontend — из каталога `frontend\` (в корне репозитория нет package.json):
 
 ```powershell
+cd frontend
 npm run test        # 9 тестов: API-клиент, состояния интерфейса, регрессия polling-цикла
 npm run lint        # eslint
 npm run typecheck   # tsc --noEmit (strict)
 npm run build       # production-сборка
 ```
+
+`pytest` благодаря бутстрапу в `tests/conftest.py` работает и из корня
+репозитория, но канонический способ — из `backend\` интерпретатором venv.
 
 ## Структура репозитория
 
@@ -130,6 +152,9 @@ scripts/            dev.bat / dev.ps1 / dev.sh — запуск одной ко�
 | Интерфейс открылся, но «Backend недоступен» | Дождитесь запуска в окне ESE backend; нажмите «Повторить»; проверьте `http://127.0.0.1:8000/api/health` |
 | PowerShell блокирует скрипт | Используйте `scripts\dev.bat` или команду с `-ExecutionPolicy Bypass` выше |
 | Антивирус ругается на venv/npm | Разрешите доступ для папки репозитория (локальная разработка) |
+| Не вижу папку `.venv` | Она внутри `backend\` (`backend\.venv`), создаётся при первом запуске `dev.bat` |
+| `python -m pytest` из корня: `No module named 'app'` | Используйте `scripts\checks.bat`, либо запустите из `backend\` интерпретатором `.venv\Scripts\python` (в системном Python могут отсутствовать fastapi/httpx) |
+| `npm run ...`: `Could not read package.json` | Команды frontend выполняются из каталога `frontend\` (или используйте `scripts\checks.bat`) |
 
 ## Лицензия
 
