@@ -107,8 +107,6 @@ export function ProjectionControls() {
   const projRunId = useExperimentStore((s) => s.projRunId);
   const projMethod = useExperimentStore((s) => s.projMethod);
   const projSeed = useExperimentStore((s) => s.projSeed);
-  const loadRuns = useExperimentStore((s) => s.loadRuns);
-  const loadProjections = useExperimentStore((s) => s.loadProjections);
   const loadProjectionCatalog = useExperimentStore((s) => s.loadProjectionCatalog);
   const setProjRunId = useExperimentStore((s) => s.setProjRunId);
   const setProjMethod = useExperimentStore((s) => s.setProjMethod);
@@ -121,12 +119,12 @@ export function ProjectionControls() {
   const setActiveProjection = useSpaceStore((s) => s.setActiveProjection);
   const setActiveSection = useUiStore((s) => s.setActiveSection);
 
+  // Runs + projections inventory are loaded by SpaceSection (the section
+  // owns orchestration); the controls only need the method catalog itself.
   useEffect(() => {
     if (!current) return;
-    void loadRuns();
-    void loadProjections();
     void loadProjectionCatalog();
-  }, [current, loadRuns, loadProjections, loadProjectionCatalog]);
+  }, [current, loadProjectionCatalog]);
 
   const jobRunning = activeJob?.state === "queued" || activeJob?.state === "running";
   const effectiveRunId = projRunId ?? runs?.[0]?.id ?? null;

@@ -146,6 +146,9 @@ export interface PlotGeometry {
   bounds: PlotBounds;
 }
 
+/** Default 2D plot padding (shared with tests). */
+export const DEFAULT_PADDING: Padding = { left: 54, right: 14, top: 12, bottom: 30 };
+
 /** Raw data → canvas pixels (y flips: canvas grows down, plots grow up). */
 export function dataToCanvas(x: number, y: number, g: PlotGeometry): { cx: number; cy: number } {
   const plotW = Math.max(1, g.width - g.padding.left - g.padding.right);
@@ -234,11 +237,15 @@ export function makeTicks(min: number, max: number, target = 5): number[] {
   return ticks;
 }
 
-/** Compact tick label: fixed decimals for small steps, exponential for big. */
+/** Compact tick label: decimal count derived from the step's own digits
+ *  (steps from makeTicks are 1/2/5·10^k → at most 6 decimals), exponential
+ *  at the magnitudes where fixed notation stops being readable. */
 export function formatTick(value: number, step: number): string {
   if (value === 0) return "0";
   const abs = Math.abs(value);
   if (abs >= 1e5 || abs < 1e-4) return value.toExponential(1);
-  const decimals = Math.max(0, Math.min(6, -Math.floor(Math.log10(step)) + 0));
-  return value.toFixed(Math.min(decimals, 6));
+  const stepText = String(step);
+  const dot = stepText.indexOf(".");
+  const decimals = dot === -1 ? 0 : Math.min(6, stepText.length - dot - 1);
+  return value.toFixed(decimals);
 }

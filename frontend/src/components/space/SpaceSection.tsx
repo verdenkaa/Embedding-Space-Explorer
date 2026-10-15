@@ -27,14 +27,20 @@ export function SpaceSection() {
   const projections = useExperimentStore((s) => s.projections);
   const projRunId = useExperimentStore((s) => s.projRunId);
   const activeJob = useExperimentStore((s) => s.activeJob);
+  const loadRuns = useExperimentStore((s) => s.loadRuns);
+  const loadProjections = useExperimentStore((s) => s.loadProjections);
   const setActiveProjection = useSpaceStore((s) => s.setActiveProjection);
   const reloadActive = useSpaceStore((s) => s.reloadActive);
   const reset = useSpaceStore((s) => s.reset);
 
-  /* Project switch: drop loaded clouds (they belong to another project). */
+  /* Project switch: drop loaded clouds (they belong to another project)
+     and (re)load the data the auto-pick below depends on. */
   useEffect(() => {
     reset();
-  }, [projectId, reset]);
+    if (!projectId) return;
+    void loadRuns();
+    void loadProjections();
+  }, [projectId, reset, loadRuns, loadProjections]);
 
   /* Auto-select which cached projections the views show: freshest non-stale
      per component count of the active embedding run (stale fallback keeps

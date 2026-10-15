@@ -301,7 +301,12 @@ export function Scene3D() {
         return;
       }
       const native = event.nativeEvent;
-      setHover(meta.fragmentId, { kind: "3d", x: native.offsetX, y: native.offsetY });
+      const rect = containerRef.current?.getBoundingClientRect();
+      setHover(meta.fragmentId, {
+        kind: "3d",
+        x: native.clientX - (rect?.left ?? 0),
+        y: native.clientY - (rect?.top ?? 0),
+      });
     },
     [cloud, setHover],
   );
@@ -360,7 +365,7 @@ export function Scene3D() {
     const y = rect ? e.clientY - rect.top : e.clientY;
     dragStartRef.current = { x, y };
     draggedRef.current = false;
-    if (marqueeArmed) {
+    if (marqueeArmed || e.shiftKey) {
       setMarquee({ x0: x, y0: y, x1: x, y1: y });
       (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { COLORS, kindColor } from "../../space/palette";
 import {
+  DEFAULT_PADDING,
   canvasToData,
   computeBounds2D,
   dataToCanvas,
@@ -9,7 +10,6 @@ import {
   hitTest2D,
   indicesInDataRect,
   makeTicks,
-  type Padding,
   type PlotGeometry,
 } from "../../space/selectionMath";
 import { useProjectStore } from "../../state/projectStore";
@@ -28,7 +28,7 @@ import { toFragmentRef } from "../../space/fragmentRef";
  * original space (slices arrive at stage 4 and will be labeled separately).
  */
 
-const PADDING: Padding = { left: 54, right: 14, top: 12, bottom: 30 };
+const PADDING = DEFAULT_PADDING;
 const HIT_RADIUS_PX = 7;
 const DRAG_SLOP_PX = 4;
 
@@ -254,23 +254,25 @@ export function Projection2D() {
 
   const marqueeArmed = interactionMode === "marquee" || shiftDown;
 
+  /** Pointer position in canvas pixels (jsdom-safe: clientX − bounding rect). */
+  const eventPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return;
-    dragRef.current = { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, marquee: marqueeArmed };
-    if (marqueeArmed) {
-      setMarquee({
-        x0: e.nativeEvent.offsetX,
-        y0: e.nativeEvent.offsetY,
-        x1: e.nativeEvent.offsetX,
-        y1: e.nativeEvent.offsetY,
-      });
+    const { x, y } = eventPos(e);
+    const armed = marqueeArmed || e.shiftKey;
+    dragRef.current = { x, y, marquee: armed };
+    if (armed) {
+      setMarquee({ x0: x, y0: y, x1: x, y1: y });
       (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     }
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const x = e.nativeEvent.offsetX;
-    const y = e.nativeEvent.offsetY;
+    const { x, y } = eventPos(e);
     const drag = dragRef.current;
     if (drag?.marquee) {
       setMarquee((prev) => (prev ? { ...prev, x1: x, y1: y } : prev));
@@ -288,8 +290,7 @@ export function Projection2D() {
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
     dragRef.current = null;
-    const x = e.nativeEvent.offsetX;
-    const y = e.nativeEvent.offsetY;
+    const { x, y } = eventPos(e);
     if (drag?.marquee && marquee) {
       const moved = Math.abs(x - drag.x) > DRAG_SLOP_PX || Math.abs(y - drag.y) > DRAG_SLOP_PX;
       if (moved && cloud) {
