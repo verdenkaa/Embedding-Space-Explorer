@@ -3,6 +3,57 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 проект придерживается [семантического версионирования](https://semver.org/lang/ru/).
 
+## [0.3.0] — 2026-10-15
+
+Этап 2 — эмбеддинги и кэш.
+
+### Добавлено
+
+- Backend:
+  - `embedding_providers`: интерфейс провайдера + sentence-transformers (CPU,
+    lazy-import, batch-инференс с прогрессом и отменой между батчами); каталог
+    из двух моделей (по умолчанию paraphrase-multilingual-MiniLM-L12-v2, 384d,
+    с честным описанием ограничений; компактная all-MiniLM-L6-v2); скачивание
+    весов в общий кэш `<data_dir>/models` фоновой задачей, далее офлайн;
+    понятные ошибки при нехватке RAM на импорте torch (ТЗ §12);
+  - `preparation`: режимы raw_fragment / context_enriched с явным шаблоном
+    (path/symbol/kind/parent/language), точное превью через
+    `GET /api/embeddings/preparation-preview`;
+  - `vector_store`: .npz-кэш на запуск (ids/text_hashes/frag_hashes/vectors),
+    атомарная запись, восстановление из повреждённого файла как из пустого;
+  - запуск (run) идентифицируется fingerprint(model, mode, template, params);
+    batch_size в fingerprint НЕ входит — уменьшение батча при нехватке RAM не
+    инвалидирует кэш (ТЗ §12); разные модели/режимы никогда не смешиваются;
+  - расчёт эмбеддингов фоновой задачей: кэш по hash(точный подготовленный текст),
+    чекпоинты (отмена сохраняет посчитанное), prune устаревших/удалённых векторов
+    после каждой переиндексации;
+  - API: `GET /api/models`, `POST …/models/download`, `POST …/embeddings/compute`,
+    `GET …/embeddings` (инвентарь + покрытие embedded/stale/missing);
+  - db schema v2 (аддитивная миграция v1→v2 с бэкапом: таблица embedding_runs);
+  - health: numpy/torch/sentence-transformers — обязательные зависимости;
+  - 107 тестов (fake-provider для логики кэша/отмены/покрытия; opt-in
+    `-m real_model` с настоящей моделью) + реальный E2E: download → compute
+    raw+context → coverage 21/21 → prune на реиндексе → досчёт.
+- Frontend:
+  - раздел EXPERIMENTS: каталог моделей (статус скачивания, кнопка загрузки с
+    размером), режимы подготовки с точным превью шаблона, batch size, расчёт с
+    прогрессом/отменой, таблица запусков с покрытием и кнопкой «Пересчитать»;
+  - experimentStore (однонаправленная зависимость от projectStore); JobProgress
+    генерализован и переиспользуется корпусом и экспериментами;
+  - микрофикс индикатора устаревания: внеочередная проверка при фокусе окна +
+    console.warn при сбое (диагностика «backend не перезапущен после патчей»);
+  - 49 тестов (experimentStore, ExperimentsPanel, обновлённые секции).
+- Документация: `docs/data-model.md` §6.5 (кэш векторов, fingerprint,
+  инвалидация), development.md (real_model, добавление моделей), README
+  (статус этапа 2 — исправлена незамеченная ранее незаменённая плашка этапа 0).
+
+### Изменено
+
+- Версии: приложение 0.3.0, схема данных 3 (project.db v2).
+- requirements: + numpy 2.4.6, torch 2.14.1+cpu (extra-index-url
+  download.pytorch.org), sentence-transformers 6.1.0; mypy-оверрайды
+  follow_imports=skip для тяжёлых ML-библиотек.
+
 ## [0.2.1] — 2026-10-15
 
 ### Добавлено

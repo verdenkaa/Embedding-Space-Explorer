@@ -74,6 +74,17 @@ scripts\checks.bat            # Windows (или scripts/checks.ps1 из PowerShe
 `pytest` можно запускать и из корня репозитория: `tests/conftest.py` добавляет
 `backend/` в `sys.path`, а `pyproject.toml` задаёт `pythonpath = ["."]`.
 
+Тесты с настоящей моделью помечены `real_model` и по умолчанию НЕ запускаются
+(скачивание весов, нагрузка на RAM). Запуск вручную:
+
+```powershell
+.venv\Scripts\python -m pytest -m real_model
+```
+
+Они используют компактную `all-MiniLM-L6-v2` (~90 МБ); модель по умолчанию
+(`paraphrase-multilingual-MiniLM-L12-v2`, ~470 МБ) проверяется ручным
+сценарием — это осознанное разделение, а не пропуск тестов.
+
 ### Frontend (вручную)
 
 Из каталога `frontend/` (в корне репозитория нет `package.json`):
@@ -117,10 +128,11 @@ ASCII-пунктуацию (обычные кавычки и дефис). Без
   добавить язык в `LANGUAGE_CONFIGS` (tree-sitter) или `SPLITTER_BY_EXT` /
   `LANGUAGE_BY_EXT` (`registry.py`). Ядро не меняется. Обязательны тесты:
   диапазоны строк, stable ID, fallback при ошибках парсинга.
-- **Новая embedding-модель** — реализовать интерфейс провайдера
-  (`backend/app/embedding_providers/`, этап 2): id/версия модели, размерность, параметры
-  инференса. Кэш-ключи учитывают провайдера, поэтому смешения векторов не произойдёт.
-  Фрагменты и их `content_hash` уже готовы как вход (см. `docs/data-model.md`).
+- **Новая embedding-модель** (sentence-transformers-рантайм) — добавить `ModelInfo`
+  в `backend/app/embedding_providers/registry.py` (каталог): id, размерность,
+  размер, ЧЕСТНОЕ описание ограничений. Другой рантайм (не ST) — новый класс
+  `EmbeddingProvider` + ветка в `create_provider`. Кэш-ключи учитывают модель
+  (fingerprint запуска), смешение векторов исключено; детали — `docs/data-model.md` §6.5.
 - **Новый метод проекции** — интерфейс `projection_methods` (этап 3): имя метода,
   параметры, seed, версии библиотек сохраняются в конфиге проекции.
 - **Новая метрика** — `metrics/` (этап 5): явные входы, определение положительных пар,

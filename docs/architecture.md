@@ -1,7 +1,7 @@
 # Архитектура Embedding Space Explorer
 
 > Документ фиксирует архитектурные решения. Он обновляется на каждом этапе разработки.
-> Текущий статус: **Этап 1 (корпус и трассировка)**. Решения будущих этапов помечены
+> Текущий статус: **Этап 2 (эмбеддинги и кэш)**. Решения будущих этапов помечены
 > как «план» и могут уточняться; уже реализованные — как «реализовано».
 
 ## 1. Обзор
@@ -71,8 +71,8 @@ backend/
 | `fragmentation/` ✅ | интерфейс сегментации + адаптеры: tree-sitter (Python/JS/TS/TSX), Markdown-секции, fallback-чанки; стабильные ID | 1 |
 | `storage/` ✅ | SQLAlchemy + SQLite (WAL): files/fragments/jobs/meta, версионирование схемы, бэкап перед миграцией | 1 |
 | `jobs/` ✅ | JobManager: очередь, один worker-поток, прогресс, отмена, предупреждения | 1 |
-| `embedding_providers/` | интерфейс провайдера + sentence-transformers (CPU, batching, прогресс, отмена) | 2 |
-| `vector_store/` | хранение векторов (.npy/.npz) + кэш с явными cache keys | 2 |
+| `embedding_providers/` ✅ | интерфейс провайдера + sentence-transformers (CPU, batching, прогресс, отмена); каталог моделей; lazy-import тяжёлых библиотек | 2 |
+| `vector_store/` ✅ | .npz-кэш векторов на запуск (ids/text_hashes/frag_hashes/vectors), атомарная запись, upsert/prune | 2 |
 | `projection_methods/` | PCA, UMAP (параметры + seed + версии библиотек сохраняются) | 3 |
 | `slice_engine/` | математический срез: `d(x) = dot(x − p, n)`, слой `|d| ≤ t/2` в исходном D-мерном пространстве | 4 |
 | `neighbor_search/` | kNN по исходным эмбеддингам, выбранная метрика (по умолчанию cosine) | 4 |
@@ -161,8 +161,9 @@ frontend/src/
 
 - `uiStore` ✅ — подключение, диагностика, активная секция;
 - `projectStore` ✅ (этап 1) — открытый проект, файлы, `activeFragmentId` (общий selection
-  state), located-фрагменты, changes, активная задача;
-- `experimentStore` (этап 2+) — активный эксперимент: модель, проекция, срез, кластеры.
+  state), located-фрагменты, changes/staleness, активная задача;
+- `experimentStore` ✅ (этап 2) — каталог моделей, режим подготовки, форма расчёта,
+  задача эмбеддингов, инвентарь запусков (этапы 3–5 добавят проекции/срезы/кластеры/метрики).
 
 `activeFragmentId` — будущая точка синхронизации 3D-сцены, 2D-проекции, списка фрагментов
 и Monaco по **id фрагмента** (этап 3).
@@ -191,7 +192,7 @@ frontend/src/
 | sqlalchemy / tree-sitter | 2.1.4 / 0.26.0 (+ языки: python 0.25.0, javascript 0.25.0, typescript 0.23.2) | Windows-колёса cp312/abi3 проверены по PyPI |
 | react / vite / typescript | 19.3.1 / 8.3.4 / 5.9.3 | package-lock.json; TS7 пока не поддерживается typescript-eslint (<6.1.0), поэтому 5.9 |
 | monaco-editor / allotment | 0.57.0 / 1.20.6 | monaco — «slim»: editor.api + monarch-токенайзеры python/js/ts/md, без TS/JSON/CSS/HTML language-сервисов (read-only просмотр, экономия RAM/сборки) |
-| torch / sentence-transformers | CPU-сборка, 2.14.x / 6.1.x (план, этап 2) | 8 ГБ RAM: консервативный batch size (по умолчанию 16), прогресс и отмена |
+| torch / sentence-transformers | 2.14.1+cpu / 6.1.0 ✅ | torch только CPU (+extra-index-url download.pytorch.org); 8 ГБ RAM: batch size по умолчанию 16, прогресс и отмена между батчами |
 | umap-learn / scikit-learn / tree-sitter-language-pack | 0.5.12 / 1.9.1 / 1.22.1 (план) | |
 
 Зависимости добавляются только когда этап реально их использует; версии фиксируются
