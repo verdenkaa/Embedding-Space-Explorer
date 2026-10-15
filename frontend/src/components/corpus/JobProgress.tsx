@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 
+import type { JobInfo } from "../../api/types";
 import { useProjectStore } from "../../state/projectStore";
 
-/** Polls the active background job while it runs (TZ §10: polling). */
+/** Polls the corpus (index) job while it runs (TZ §10: polling). */
 const POLL_INTERVAL_MS = 1000;
 
 export function JobPoller() {
@@ -19,13 +20,19 @@ export function JobPoller() {
   return null;
 }
 
-export function JobProgress() {
-  const activeJob = useProjectStore((s) => s.activeJob);
-  const cancelActiveJob = useProjectStore((s) => s.cancelActiveJob);
+interface JobProgressProps {
+  job: JobInfo | null;
+  onCancel?: () => void;
+  /** Prefix for the running label, e.g. "индексирование" or "эмбеддинги". */
+  runningLabel?: string;
+}
+
+/** Presentational job progress line with cancel and warnings (shared). */
+export function JobProgress({ job, onCancel, runningLabel = "индексирование" }: JobProgressProps) {
   const [warningsOpen, setWarningsOpen] = useState(false);
 
-  if (!activeJob) return null;
-  const { state, progress_done, progress_total, message, error, warnings } = activeJob;
+  if (!job) return null;
+  const { state, progress_done, progress_total, message, error, warnings } = job;
   const running = state === "queued" || state === "running";
   const pct = progress_total > 0 ? Math.round((progress_done / progress_total) * 100) : 0;
 
@@ -35,25 +42,22 @@ export function JobProgress() {
         {running && <span className="spinner" aria-hidden="true" />}
         <span className="job-progress__state">
           {state === "queued" && "в очереди"}
-          {state === "running" && `индексирование ${progress_done}/${progress_total}`}
+          {state === "running" &&
+            (progress_total > 0 ? `${runningLabel} ${progress_done}/${progress_total}` : runningLabel)}
           {state === "done" && "готово"}
           {state === "failed" && "ошибка"}
           {state === "cancelled" && "отменено"}
         </span>
-        {running && (
+        {running && progress_total > 0 && (
           <span className="job-progress__bar" aria-hidden="true">
             <span className="job-progress__fill" style={{ width: `${pct}%` }} />
           </span>
         )}
         <span className="job-progress__message mono" title={message ?? undefined}>
-          {running ? message : state === "done" ? message : null}
+          {message}
         </span>
-        {running && (
-          <button
-            type="button"
-            className="btn btn--small btn--danger"
-            onClick={() => void cancelActiveJob()}
-          >
+        {running && onCancel && (
+          <button type="button" className="btn btn--small btn--danger" onClick={onCancel}>
             Отменить
           </button>
         )}
@@ -62,7 +66,7 @@ export function JobProgress() {
             type="button"
             className="btn btn--small"
             onClick={() => setWarningsOpen((v) => !v)}
-            title="Показать предупреждения индексирования"
+            title="Показать предупреждения"
             aria-expanded={warningsOpen}
           >
             ⚠ {warnings.length}

@@ -36,15 +36,23 @@ export function CorpusPanel() {
   const loadChanges = useProjectStore((s) => s.loadChanges);
   const startIndex = useProjectStore((s) => s.startIndex);
   const checkStaleness = useProjectStore((s) => s.checkStaleness);
+  const activeJob = useProjectStore((s) => s.activeJob);
+  const cancelActiveJob = useProjectStore((s) => s.cancelActiveJob);
 
   const [searchInput, setSearchInput] = useState("");
 
-  // Background staleness indicator: check on mount and every 30 s.
+  // Background staleness indicator: check on mount, every 30 s, and whenever
+  // the window regains focus (user returns from the IDE right after editing).
   // The store skips checks while an indexing job runs.
   useEffect(() => {
     void checkStaleness();
     const timer = setInterval(() => void checkStaleness(), STALENESS_POLL_MS);
-    return () => clearInterval(timer);
+    const onFocus = () => void checkStaleness();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [checkStaleness]);
 
   // Debounced fragment search (server-side).
@@ -119,7 +127,7 @@ export function CorpusPanel() {
         </button>
       </div>
 
-      <JobProgress />
+      <JobProgress job={activeJob} onCancel={() => void cancelActiveJob()} />
 
       {isEmptyProject && !searching && (
         <div className="empty-hint empty-hint--accent">

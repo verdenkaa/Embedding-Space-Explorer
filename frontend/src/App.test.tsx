@@ -17,8 +17,8 @@ import { mockFetch, mockReject } from "./testUtils";
 const HEALTH_FIXTURE: HealthResponse = {
   status: "ok",
   app_name: "embedding-space-explorer",
-  app_version: "0.2.0",
-  schema_version: 2,
+  app_version: "0.3.0",
+  schema_version: 3,
   python_version: "3.12.7",
   platform: "Windows-11-10.0.26100-SP0",
   server_host: "127.0.0.1",
@@ -132,17 +132,18 @@ describe("App shell", () => {
     expect(useUiStore.getState().connection).toBe("offline");
   });
 
-  it("CORPUS is available; future sections are visibly disabled with their stage", async () => {
+  it("CORPUS and EXPERIMENTS are available; future sections are visibly disabled", async () => {
     stubOnline();
     render(<App />);
 
-    const corpus = screen.getByRole("button", { name: /CORPUS/ });
-    expect((corpus as HTMLButtonElement).disabled).toBe(false);
+    for (const name of ["CORPUS", "EXPERIMENTS"]) {
+      const tab = screen.getByRole("button", { name: new RegExp(name) });
+      expect((tab as HTMLButtonElement).disabled).toBe(false);
+    }
 
     for (const [name, stage] of [
       ["SPACE", "этап 3"],
       ["RELATIONS", "этап 4"],
-      ["EXPERIMENTS", "этап 5"],
     ] as const) {
       const tab = screen.getByRole("button", { name: new RegExp(name) });
       expect((tab as HTMLButtonElement).disabled).toBe(true);

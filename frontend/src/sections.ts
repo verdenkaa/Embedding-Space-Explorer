@@ -34,7 +34,9 @@ export const SECTIONS: SectionDef[] = [
   {
     id: "experiments",
     label: "EXPERIMENTS",
-    stage: 5,
-    description: "Сохранённые эксперименты, метрики и экспорт — появятся на этапе 5.",
+    stage: null,
+    description:
+      "Эмбеддинги: модель, режим подготовки текста, расчёт и покрытие. " +
+      "Сохранение экспериментов, метрики и экспорт — этап 5.",
   },
 ];

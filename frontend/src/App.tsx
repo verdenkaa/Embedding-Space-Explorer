@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 import { DiagnosticsPanel } from "./components/DiagnosticsPanel";
+import { ExperimentsPanel } from "./components/ExperimentsPanel";
 import { StartScreen } from "./components/StartScreen";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
@@ -33,10 +34,12 @@ export default function App() {
       <main className="app-main">
         {activeSection === "diagnostics" ? (
           <DiagnosticsPanel />
-        ) : current ? (
-          <WorkspaceLayout />
-        ) : (
+        ) : !current ? (
           <StartScreen />
+        ) : activeSection === "experiments" ? (
+          <ExperimentsPanel />
+        ) : (
+          <WorkspaceLayout />
         )}
       </main>
       <StatusBar />

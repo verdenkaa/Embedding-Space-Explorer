@@ -6,7 +6,11 @@
 
 import type {
   ChangesReport,
+  ComputeEmbeddingsRequest,
   CreateProjectRequest,
+  EmbeddingRunDTO,
+  ModelInfo,
+  PreparationPreviews,
   FileContent,
   FileDetail,
   FileSummary,
@@ -149,6 +153,17 @@ export const api = {
     request<JobInfo>(`/api/projects/${pid}/jobs/${jid}`),
   cancelJob: (pid: string, jid: string): Promise<JobInfo> =>
     request<JobInfo>(`/api/projects/${pid}/jobs/${jid}/cancel`, { method: "POST" }),
+
+  /* embeddings (stage 2) */
+  listModels: (): Promise<ModelInfo[]> => request<ModelInfo[]>("/api/models"),
+  getPreparationPreview: (): Promise<PreparationPreviews> =>
+    request<PreparationPreviews>("/api/embeddings/preparation-preview"),
+  downloadModel: (pid: string, modelId: string): Promise<JobInfo> =>
+    request<JobInfo>(`/api/projects/${pid}/models/download`, jsonInit("POST", { model_id: modelId })),
+  computeEmbeddings: (pid: string, payload: ComputeEmbeddingsRequest): Promise<JobInfo> =>
+    request<JobInfo>(`/api/projects/${pid}/embeddings/compute`, jsonInit("POST", payload)),
+  listEmbeddingRuns: (pid: string): Promise<EmbeddingRunDTO[]> =>
+    request<EmbeddingRunDTO[]>(`/api/projects/${pid}/embeddings`),
 
   /* filesystem browser (root picker) */
   listDirs: (path?: string): Promise<FsListResponse> =>

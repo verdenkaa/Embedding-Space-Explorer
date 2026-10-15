@@ -300,8 +300,11 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     try {
       const staleness = await api.getStaleness(current.id);
       set({ staleness });
-    } catch {
-      // Background indicator only: never spam the error banner for it.
+    } catch (err) {
+      // Background indicator only: never spam the error banner for it, but
+      // leave a console trace (e.g. 404 => backend predates the endpoint and
+      // must be restarted after applying patches).
+      console.warn("[staleness] check failed:", err instanceof Error ? err.message : err);
       set({ staleness: null });
     }
   },

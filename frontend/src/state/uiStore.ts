@@ -12,7 +12,7 @@ import { ApiError, api } from "../api/client";
 import type { HealthResponse } from "../api/types";
 
 export type ConnectionStatus = "idle" | "loading" | "online" | "offline";
-export type ActiveSection = "corpus" | "diagnostics";
+export type ActiveSection = "corpus" | "diagnostics" | "experiments";
 
 export interface UiError {
   code: string;

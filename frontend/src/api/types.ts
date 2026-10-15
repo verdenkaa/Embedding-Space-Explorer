@@ -219,3 +219,51 @@ export interface StalenessReport {
   unchanged_count: number;
   root_errors: string[];
 }
+
+/* ------------------------------------------------------------------ */
+/* Stage 2: embeddings                                                 */
+/* ------------------------------------------------------------------ */
+
+export type PrepMode = "raw_fragment" | "context_enriched";
+
+export interface ModelInfo {
+  model_id: string;
+  display_name: string;
+  dim: number;
+  approx_download_mb: number;
+  description: string;
+  is_default: boolean;
+  downloaded: boolean;
+}
+
+export interface ComputeEmbeddingsRequest {
+  model_id: string;
+  mode: PrepMode;
+  batch_size: number;
+}
+
+export interface CoverageDTO {
+  fragments_total: number;
+  embedded: number;
+  stale: number;
+  missing: number;
+}
+
+export interface EmbeddingRunDTO {
+  id: string;
+  model_id: string;
+  model_display_name: string;
+  dim: number;
+  mode: PrepMode;
+  template_preview: string;
+  params: Record<string, string | number | boolean>;
+  count: number;
+  coverage: CoverageDTO;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PreparationPreviews {
+  raw_fragment: string;
+  context_enriched: string;
+}
