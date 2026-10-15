@@ -15,6 +15,7 @@ Saves are atomic (tmp + os.replace).
 
 from __future__ import annotations
 
+import hashlib
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -100,6 +101,23 @@ class NpzEmbeddingCache:
     @property
     def dim(self) -> int:
         return int(self.vectors.shape[1]) if self.vectors.ndim == 2 else 0
+
+    def signature(self) -> str:
+        """Content signature: ids + prepared-text hashes + dim.
+
+        Projections record it at compute time; a mismatch means vectors were
+        added/pruned/recomputed since, so dependent results are stale and
+        must be recomputed (TZ §9.3). Re-embedding identical texts does NOT
+        change the signature — projections stay fresh.
+        """
+        digest = hashlib.sha256()
+        for fid, thash in zip(self.ids, self.text_hashes, strict=True):
+            digest.update(fid.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(thash.encode("utf-8"))
+            digest.update(b"\n")
+        digest.update(f"dim={self.dim}\n".encode())
+        return digest.hexdigest()[:32]
 
     def __len__(self) -> int:
         return len(self.ids)
