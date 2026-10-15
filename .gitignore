@@ -218,3 +218,22 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Embedding Space Explorer ---
+# Node / frontend
+node_modules/
+frontend/dist/
+coverage/
+.eslintcache
+npm-debug.log*
+
+# Python virtualenv for the backend (covered above, kept explicit)
+backend/.venv/
+
+# Local application data (research projects, caches, logs)
+.ese/
+*.ese
+ese-data/
+
+# Windows / editor noise
+Thumbs.db
