@@ -734,3 +734,60 @@ def test_real_model_projection_e2e(
     assert pts["count"] == 21
     assert all(len(p["coords"]) == 2 for p in pts["points"])
     assert all(np.isfinite(c) for p in pts["points"] for c in p["coords"])
+
+
+def test_db_migration_v2_to_v3_keeps_embedding_runs(settings: Settings) -> None:
+    """Upgrade path for EXISTING stage-2 projects: opening a v2 database
+    creates projection_runs additively, keeps embedding runs and vectors
+    pointers intact, and leaves a backup (TZ §9.4)."""
+    from app.storage.db import open_database
+    from app.storage.projects_store import ProjectStore
+    from sqlalchemy import text
+
+    store = ProjectStore(settings.data_dir)
+    ctx = store.create_project("upgrade", [str(Path(__file__).parent)])
+    db_path = ctx.project_dir / "project.db"
+
+    with ctx.session_factory() as session:
+        session.add(
+            EmbeddingRunRow(
+                id="run-keep-0000001",
+                model_id="sentence-transformers/all-MiniLM-L6-v2",
+                dim=384,
+                mode="raw_fragment",
+                template="t",
+                params_json="{}",
+                npz_relpath="cache/embeddings/run-keep-0000001.npz",
+                count=21,
+                created_at="2026-10-15T10:00:00+00:00",
+                updated_at="2026-10-15T10:00:00+00:00",
+            )
+        )
+        session.commit()
+
+    # Simulate a stage-2 (v2) database: no projection_runs yet.
+    with ctx.engine.begin() as conn:
+        conn.execute(text("DROP TABLE projection_runs"))
+        conn.execute(text("UPDATE meta SET value='2' WHERE key='schema_version'"))
+    store.close_all()
+
+    engine, factory = open_database(db_path)
+    with factory() as session:
+        kept = session.get(EmbeddingRunRow, "run-keep-0000001")
+        assert kept is not None
+        assert kept.count == 21
+        assert kept.npz_relpath == "cache/embeddings/run-keep-0000001.npz"
+    with engine.connect() as conn:
+        version = conn.execute(
+            text("SELECT value FROM meta WHERE key='schema_version'")
+        ).scalar_one()
+        tables = {
+            row[0]
+            for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
+        }
+    engine.dispose()
+    assert version == "3"
+    assert "projection_runs" in tables
+    assert "embedding_runs" in tables
+    backups = list(ctx.project_dir.glob("project.db.bak-*"))
+    assert len(backups) == 1
