@@ -2,8 +2,8 @@
  * UI state store (zustand is the single state manager — TZ §2.2).
  *
  * Stage 0: backend connection + diagnostics.
- * Later stages add projectStore (corpus/files/tasks) and experimentStore
- * (model, projection, slice, clusters) as separate stores.
+ * Stage 1: active section switching (corpus / diagnostics).
+ * Later stages add experimentStore (model, projection, slice, clusters).
  */
 
 import { create } from "zustand";
@@ -12,6 +12,7 @@ import { ApiError, api } from "../api/client";
 import type { HealthResponse } from "../api/types";
 
 export type ConnectionStatus = "idle" | "loading" | "online" | "offline";
+export type ActiveSection = "corpus" | "diagnostics";
 
 export interface UiError {
   code: string;
@@ -24,6 +25,8 @@ interface UiState {
   health: HealthResponse | null;
   error: UiError | null;
   lastCheckedAt: number | null;
+  activeSection: ActiveSection;
+  setActiveSection: (section: ActiveSection) => void;
   /**
    * Fetch backend health. Background polls call it without options;
    * a user-initiated retry passes `{ interactive: true }` so the loading
@@ -37,6 +40,9 @@ export const useUiStore = create<UiState>()((set, get) => ({
   health: null,
   error: null,
   lastCheckedAt: null,
+  activeSection: "corpus",
+
+  setActiveSection: (section) => set({ activeSection: section }),
 
   refreshHealth: async (opts) => {
     // Show the loading state on the first fetch or on an explicit user retry;

@@ -45,3 +45,168 @@ export interface HealthResponse {
   dependencies: DependencyInfo[];
   checks: CheckResult[];
 }
+
+/* ------------------------------------------------------------------ */
+/* Stage 1: projects, corpus, jobs                                     */
+/* ------------------------------------------------------------------ */
+
+export interface SplitOptions {
+  max_file_size_bytes: number;
+  max_fragment_lines: number;
+  fallback_chunk_lines: number;
+  fallback_overlap_lines: number;
+  include_hidden: boolean;
+  extra_include_patterns: string[];
+  extra_exclude_patterns: string[];
+  allow_symlinks_outside_root: boolean;
+}
+
+export interface ProjectStats {
+  files_indexed: number;
+  files_error: number;
+  fragments: number;
+  running_job_id: string | null;
+}
+
+export interface ProjectInfo {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  roots: string[];
+  split_options: SplitOptions;
+  stats: ProjectStats | null;
+}
+
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  updated_at: string;
+  roots: string[];
+  error: string | null;
+}
+
+export interface CreateProjectRequest {
+  name: string;
+  roots: string[];
+  split_options?: Partial<SplitOptions> | null;
+}
+
+export type JobState = "queued" | "running" | "done" | "failed" | "cancelled";
+
+export interface JobInfo {
+  id: string;
+  kind: string;
+  state: JobState;
+  progress_done: number;
+  progress_total: number;
+  message: string | null;
+  error: string | null;
+  warnings: string[];
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export type FileStatus = "indexed" | "skipped" | "error";
+
+export interface FileSummary {
+  id: string;
+  root: string;
+  rel_path: string;
+  size: number;
+  mtime: number;
+  language: string | null;
+  status: FileStatus;
+  skip_reason: string | null;
+  detail: string | null;
+  indexed_at: string | null;
+  fragment_count: number;
+}
+
+export interface FragmentMeta {
+  id: string;
+  file_id: string;
+  kind: string;
+  name: string | null;
+  symbol_path: string;
+  parent_symbol_path: string | null;
+  start_line: number;
+  end_line: number;
+  method: string;
+  language: string;
+  ordinal: number;
+}
+
+export interface FragmentDetail extends FragmentMeta {
+  rel_path: string;
+  start_offset: number;
+  end_offset: number;
+  content_hash: string;
+  text: string;
+}
+
+export interface FileDetail {
+  file: FileSummary;
+  fragments: FragmentMeta[];
+}
+
+export interface FileContent {
+  file_id: string;
+  rel_path: string;
+  language: string | null;
+  content: string;
+  total_lines: number;
+}
+
+export interface LocateResponse {
+  fragments: FragmentMeta[];
+  ambiguous: boolean;
+  note: string | null;
+}
+
+export interface FragmentSearchItem extends FragmentMeta {
+  rel_path: string;
+}
+
+export interface FragmentSearchResponse {
+  items: FragmentSearchItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface FileChangeDTO {
+  root: string;
+  rel_path: string;
+  size: number;
+  reason: "new" | "content" | "size";
+}
+
+export interface SkippedFileDTO {
+  path: string;
+  reason: string;
+  detail: string;
+}
+
+export interface ChangesReport {
+  new: FileChangeDTO[];
+  modified: FileChangeDTO[];
+  deleted: string[];
+  unchanged_count: number;
+  skipped: SkippedFileDTO[];
+  root_errors: string[];
+  warnings: string[];
+}
+
+export interface FsDirEntry {
+  name: string;
+  path: string;
+}
+
+export interface FsListResponse {
+  path: string | null;
+  parent: string | null;
+  entries: FsDirEntry[];
+  drives: boolean;
+}

@@ -14,16 +14,16 @@ export interface SectionDef {
 
 export const SECTIONS: SectionDef[] = [
   {
+    id: "corpus",
+    label: "CORPUS",
+    stage: null,
+    description: "Дерево файлов, фрагменты и просмотр исходника.",
+  },
+  {
     id: "space",
     label: "SPACE",
     stage: 3,
     description: "3D embedding-пространство и синхронная 2D-проекция — появятся на этапе 3.",
-  },
-  {
-    id: "corpus",
-    label: "CORPUS",
-    stage: 1,
-    description: "Дерево файлов, фрагменты и просмотр исходника — появятся на этапе 1.",
   },
   {
     id: "relations",

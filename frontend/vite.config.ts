@@ -10,6 +10,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      // Do not compute gzip sizes (saves time/memory on 8 GB machines);
+      // monaco makes chunks large by nature.
+      reportCompressedSize: false,
+      chunkSizeWarningLimit: 4096,
+    },
     server: {
       host: "127.0.0.1",
       port: 5173,

@@ -1,7 +1,7 @@
 {
   "name": "ese-frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Frontend for Embedding Space Explorer (local research tool for embedding spaces of source code)",
   "engines": {
@@ -17,6 +17,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "allotment": "^1.20.6",
+    "monaco-editor": "^0.57.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zustand": "^5.0.15"

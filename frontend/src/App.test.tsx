@@ -1,21 +1,24 @@
 /**
- * App-shell tests: diagnostics states (loading / online / offline), honest
- * disabled section tabs, the retry flow (TZ §12, §17.2), and a regression
- * test for the offline polling loop that once starved the event loop.
+ * App-shell tests: section switching, diagnostics states (loading / online /
+ * offline), honest section tabs, the retry flow (TZ §12, §17.2), and a
+ * regression test for the offline polling loop that once starved the event
+ * loop.
  */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
-import type { HealthResponse } from "./api/types";
+import type { HealthResponse, ProjectSummary } from "./api/types";
 import { useUiStore } from "./state/uiStore";
+import { useProjectStore } from "./state/projectStore";
+import { mockFetch, mockReject } from "./testUtils";
 
 const HEALTH_FIXTURE: HealthResponse = {
   status: "ok",
   app_name: "embedding-space-explorer",
-  app_version: "0.1.0",
-  schema_version: 1,
+  app_version: "0.2.0",
+  schema_version: 2,
   python_version: "3.12.7",
   platform: "Windows-11-10.0.26100-SP0",
   server_host: "127.0.0.1",
@@ -32,54 +35,68 @@ const HEALTH_FIXTURE: HealthResponse = {
   ],
 };
 
-function jsonResponse(body: unknown): Response {
-  return {
-    ok: true,
-    status: 200,
-    json: async () => body,
-  } as unknown as Response;
+const NO_PROJECTS: ProjectSummary[] = [];
+
+function stubOnline(): void {
+  const { fetchMock } = mockFetch({
+    "/api/health": HEALTH_FIXTURE,
+    "/api/projects": NO_PROJECTS,
+  });
+  vi.stubGlobal("fetch", fetchMock);
 }
 
-function stubFetchSuccess(): void {
-  vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(HEALTH_FIXTURE)));
+function stubOffline(): void {
+  const { fetchMock } = mockFetch({
+    "/api/health": mockReject(new TypeError("Failed to fetch")),
+    "/api/projects": mockReject(new TypeError("Failed to fetch")),
+  });
+  vi.stubGlobal("fetch", fetchMock);
 }
 
-function stubFetchNetworkError(): void {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => {
-      throw new TypeError("Failed to fetch");
-    }),
-  );
+function openDiagnostics(): void {
+  fireEvent.click(screen.getByRole("button", { name: "Диагностика" }));
 }
 
 beforeEach(() => {
   vi.unstubAllGlobals();
-  useUiStore.setState({ connection: "idle", health: null, error: null, lastCheckedAt: null });
+  useUiStore.setState({
+    connection: "idle",
+    health: null,
+    error: null,
+    lastCheckedAt: null,
+    activeSection: "corpus",
+  });
+  useProjectStore.setState({ current: null, projects: null, error: null });
 });
 
-// Vitest runs without globals, so RTL cannot auto-register cleanup.
 afterEach(() => {
   cleanup();
 });
 
 describe("App shell", () => {
-  it("shows backend diagnostics when health responds", async () => {
-    stubFetchSuccess();
+  it("shows the start screen by default (no project open)", async () => {
+    stubOnline();
     render(<App />);
+    expect(await screen.findByText("Начало работы")).toBeTruthy();
+    expect(await screen.findByLabelText(/backend онлайн/)).toBeTruthy();
+  });
 
-    // Wait for the online view via a unique checks entry.
+  it("opens diagnostics via the top-bar button and shows health", async () => {
+    stubOnline();
+    render(<App />);
+    expect(await screen.findByText("Начало работы")).toBeTruthy();
+
+    openDiagnostics();
     expect(await screen.findByText("data_dir_writable")).toBeTruthy();
     expect(screen.getByText("Проверки")).toBeTruthy();
-    // Planned dependency reported honestly as not installed.
     expect(screen.getByText("не установлена")).toBeTruthy();
     expect(screen.getByText("stage-2")).toBeTruthy();
-    expect(screen.getByLabelText(/backend онлайн/)).toBeTruthy();
   });
 
   it("shows a readable offline state with hint and retry button", async () => {
-    stubFetchNetworkError();
+    stubOffline();
     render(<App />);
+    openDiagnostics();
 
     expect(await screen.findByText("Backend недоступен")).toBeTruthy();
     expect(screen.getByText(/Запустите приложение скриптом/)).toBeTruthy();
@@ -88,17 +105,13 @@ describe("App shell", () => {
   });
 
   it("recovers via the retry button once backend comes up", async () => {
-    const fetchMock = vi
-      .fn<() => Promise<Response>>()
-      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
-      .mockResolvedValue(jsonResponse(HEALTH_FIXTURE));
-    vi.stubGlobal("fetch", fetchMock);
-
+    stubOffline();
     render(<App />);
+    openDiagnostics();
     expect(await screen.findByText("Backend недоступен")).toBeTruthy();
 
+    stubOnline();
     fireEvent.click(screen.getByRole("button", { name: "Повторить" }));
-
     expect(await screen.findByText("data_dir_writable")).toBeTruthy();
     expect(screen.queryByText("Backend недоступен")).toBeNull();
   });
@@ -107,26 +120,27 @@ describe("App shell", () => {
     // Regression: an effect that rescheduled polling on every connection
     // change created an infinite loading↔offline microtask loop when the
     // backend was down, starving timers and hammering the API.
-    stubFetchNetworkError();
+    stubOffline();
     render(<App />);
+    openDiagnostics();
     expect(await screen.findByText("Backend недоступен")).toBeTruthy();
 
-    // Timers must still fire while offline.
     const t0 = Date.now();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(Date.now() - t0).toBeGreaterThanOrEqual(15);
 
-    // Background polls must not flip the visible state to "loading".
     expect(useUiStore.getState().connection).toBe("offline");
   });
 
-  it("renders future sections as visibly disabled with their stage", async () => {
-    stubFetchSuccess();
+  it("CORPUS is available; future sections are visibly disabled with their stage", async () => {
+    stubOnline();
     render(<App />);
+
+    const corpus = screen.getByRole("button", { name: /CORPUS/ });
+    expect((corpus as HTMLButtonElement).disabled).toBe(false);
 
     for (const [name, stage] of [
       ["SPACE", "этап 3"],
-      ["CORPUS", "этап 1"],
       ["RELATIONS", "этап 4"],
       ["EXPERIMENTS", "этап 5"],
     ] as const) {

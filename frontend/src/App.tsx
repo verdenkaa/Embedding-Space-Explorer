@@ -1,8 +1,11 @@
 import { useEffect } from "react";
 
 import { DiagnosticsPanel } from "./components/DiagnosticsPanel";
+import { StartScreen } from "./components/StartScreen";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
+import { WorkspaceLayout } from "./components/WorkspaceLayout";
+import { useProjectStore } from "./state/projectStore";
 import { useUiStore } from "./state/uiStore";
 
 /**
@@ -15,6 +18,8 @@ const REFRESH_INTERVAL_MS = 5_000;
 
 export default function App() {
   const refreshHealth = useUiStore((s) => s.refreshHealth);
+  const activeSection = useUiStore((s) => s.activeSection);
+  const current = useProjectStore((s) => s.current);
 
   useEffect(() => {
     void refreshHealth();
@@ -26,7 +31,13 @@ export default function App() {
     <div className="app-shell">
       <TopBar />
       <main className="app-main">
-        <DiagnosticsPanel />
+        {activeSection === "diagnostics" ? (
+          <DiagnosticsPanel />
+        ) : current ? (
+          <WorkspaceLayout />
+        ) : (
+          <StartScreen />
+        )}
       </main>
       <StatusBar />
     </div>
