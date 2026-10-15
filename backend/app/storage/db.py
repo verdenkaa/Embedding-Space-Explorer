@@ -17,7 +17,7 @@ from pathlib import Path
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-CURRENT_DB_SCHEMA = 1
+CURRENT_DB_SCHEMA = 2
 
 
 class Base(DeclarativeBase):
@@ -65,14 +65,19 @@ def open_database(db_path: Path) -> tuple[Engine, sessionmaker[Session]]:
             f"v{CURRENT_DB_SCHEMA}; update the application to open this project"
         )
     if version is not None and version < CURRENT_DB_SCHEMA:
-        # Backup before migrating (TZ §9.4). No migrations exist yet below v1,
-        # so anything older is backed up and re-created.
+        # Backup before migrating (TZ §9.4), then apply ADDITIVE migrations:
+        # create_all only creates missing tables and never drops data.
         backup = db_path.with_suffix(f".db.bak-{int(time.time())}")
-        engine.dispose()
         shutil.copy2(db_path, backup)
-        db_path.unlink()
-        engine = _make_engine(db_path)
-        version = None
+        from app.storage import models
+
+        Base.metadata.create_all(engine)
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE meta SET value = :v WHERE key = 'schema_version'"),
+                {"v": str(CURRENT_DB_SCHEMA)},
+            )
+        version = CURRENT_DB_SCHEMA
 
     if version is None:
         from app.storage import models  # noqa: F401 - ensure mappers registered

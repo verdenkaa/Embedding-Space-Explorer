@@ -87,3 +87,27 @@ class JobRow(Base):
     created_at: Mapped[str] = mapped_column(String(40))
     started_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
     finished_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+
+class EmbeddingRunRow(Base):
+    """One embedding run configuration + its vector cache file.
+
+    Identity of a run = (model_id, mode, template, params_json): changing any
+    of these creates a NEW run instead of silently mixing vectors (TZ §2.3).
+    Vectors live in an .npz file next to the DB (see docs/data-model.md);
+    this row is the inventory + pointer.
+    """
+
+    __tablename__ = "embedding_runs"
+    __table_args__ = (Index("ix_emb_runs_project", "updated_at"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    model_id: Mapped[str] = mapped_column(String(256))
+    dim: Mapped[int] = mapped_column(Integer, default=0)
+    mode: Mapped[str] = mapped_column(String(32))
+    template: Mapped[str] = mapped_column(String(2048))
+    params_json: Mapped[str] = mapped_column(String(2048))
+    npz_relpath: Mapped[str] = mapped_column(String(512))
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[str] = mapped_column(String(40))
+    updated_at: Mapped[str] = mapped_column(String(40))

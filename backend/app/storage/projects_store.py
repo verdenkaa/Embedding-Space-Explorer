@@ -67,6 +67,8 @@ class ProjectContext:
     project_dir: Path
     engine: Engine
     session_factory: sessionmaker[Session]
+    #: Application data root (models cache lives in <data_dir>/models).
+    data_dir: Path
 
     @property
     def id(self) -> str:
@@ -143,7 +145,11 @@ class ProjectStore:
 
         engine, factory = open_database(project_dir / "project.db")
         ctx = ProjectContext(
-            manifest=manifest, project_dir=project_dir, engine=engine, session_factory=factory
+            manifest=manifest,
+            project_dir=project_dir,
+            engine=engine,
+            session_factory=factory,
+            data_dir=self.data_dir,
         )
         with self._lock:
             self._open[project_id] = ctx
@@ -200,7 +206,11 @@ class ProjectStore:
             raise ProjectValidationError(f"corrupted manifest for {project_id}: {exc}") from exc
         engine, factory = open_database(project_dir / "project.db")
         ctx = ProjectContext(
-            manifest=manifest, project_dir=project_dir, engine=engine, session_factory=factory
+            manifest=manifest,
+            project_dir=project_dir,
+            engine=engine,
+            session_factory=factory,
+            data_dir=self.data_dir,
         )
         with self._lock:
             self._open[project_id] = ctx
