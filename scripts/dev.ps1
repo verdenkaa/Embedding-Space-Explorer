@@ -1,17 +1,17 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Запуск Embedding Space Explorer: локальный backend (FastAPI) + frontend (Vite).
 
 .DESCRIPTION
-    Одна команда для старта всего приложения (TZ §2.1):
-      1. Проверяет версии Python (3.11–3.13) и Node.js (>= 22.12).
+    Одна команда для старта всего приложения:
+      1. Проверяет версии Python (3.11-3.13) и Node.js (>= 22.12).
       2. При первом запуске создаёт backend\.venv и устанавливает зависимости
          (pip install -r requirements*.txt, npm ci).
-      3. Запускает backend и frontend в двух отдельных окнах cmd.
-      4. Открывает http://localhost:5173 в браузере.
+      3. Запускает backend и frontend в двух отдельных окнах PowerShell.
+      4. Ждёт ответа backend и открывает http://localhost:5173 в браузере.
 
-    Остановка: закрыть окна «ESE backend» и «ESE frontend» (или Ctrl+C в них).
+    Остановка: закрыть окна 'ESE backend' и 'ESE frontend' (или Ctrl+C в них).
 
 .PARAMETER BackendPort
     Порт backend (по умолчанию 8000).
@@ -27,6 +27,12 @@
 
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev.ps1
+
+.NOTES
+    Совместимость: Windows PowerShell 5.1+ и PowerShell 7+.
+    ВАЖНО: файл должен сохраняться в UTF-8 with BOM, иначе Windows PowerShell
+    5.1 неверно прочитает кириллицу. Использовать только ASCII-пунктуацию
+    (обычные кавычки " и ', дефис -): "умные" кавычки и тире ломают разбор.
 #>
 [CmdletBinding()]
 param(
@@ -43,6 +49,11 @@ function Write-Step([string]$Message) { Write-Host "==> $Message" -ForegroundCol
 function Write-Ok([string]$Message)   { Write-Host "[ok] $Message" -ForegroundColor Green }
 function Write-Bad([string]$Message)  { Write-Host "[ошибка] $Message" -ForegroundColor Red }
 
+function Format-SingleQuoted([string]$Value) {
+    # Экранирование строки для встраивания в одинарные кавычки PowerShell.
+    return "'" + $Value.Replace("'", "''") + "'"
+}
+
 # ---------------------------------------------------------------------------
 # 1. Проверка окружения
 # ---------------------------------------------------------------------------
@@ -52,7 +63,8 @@ function Get-PythonCandidate([string]$Exe, [string[]]$Prefix) {
         if ($LASTEXITCODE -ne 0 -or -not $verOut) { return $null }
         $parts = "$verOut".Trim().Split('.')
         if ($parts.Count -lt 2) { return $null }
-        $major = [int]$parts[0]; $minor = [int]$parts[1]
+        $major = [int]$parts[0]
+        $minor = [int]$parts[1]
         if ($major -ne 3 -or $minor -lt 11 -or $minor -gt 13) { return $null }
         return [pscustomobject]@{ Exe = $Exe; Prefix = $Prefix; Version = "$verOut".Trim() }
     } catch {
@@ -73,11 +85,12 @@ foreach ($candidate in @(
     if ($python) { break }
 }
 if (-not $python) {
-    Write-Bad "Не найден Python 3.11–3.13."
+    Write-Bad "Не найден Python 3.11-3.13."
     Write-Host "Установите Python 3.12 с https://www.python.org/downloads/ (при установке отметьте 'Add python.exe to PATH') и повторите запуск."
     exit 1
 }
-Write-Ok "Python $($python.Version) ($($python.Exe) $($python.Prefix -join ' '))"
+$pythonArgs = ($python.Prefix -join ' ')
+Write-Ok "Python $($python.Version) ($($python.Exe) $pythonArgs)"
 
 try {
     $nodeVerRaw = & node --version 2>$null
@@ -103,23 +116,21 @@ Write-Ok "Node.js $nodeVerRaw"
 # ---------------------------------------------------------------------------
 $backendDir = Join-Path $RepoRoot "backend"
 $frontendDir = Join-Path $RepoRoot "frontend"
-$venvPython = Join-Path $backendDir ".venv\Scripts\python.exe"
+$venvPython = "$backendDir\.venv\Scripts\python.exe"
 
 if (-not $SkipInstall) {
     if (-not (Test-Path $venvPython)) {
         Write-Step "Создание виртуального окружения backend\.venv"
-        & $python.Exe @($python.Prefix) -m venv (Join-Path $backendDir ".venv")
+        & $python.Exe @($python.Prefix) -m venv "$backendDir\.venv"
         if ($LASTEXITCODE -ne 0) { Write-Bad "Не удалось создать venv"; exit 1 }
     }
 
-    Write-Step "Установка зависимостей backend (pip) — при первом запуске может занять пару минут"
-    & $venvPython -m pip install --disable-pip-version-check --quiet `
-        -r (Join-Path $backendDir "requirements.txt") `
-        -r (Join-Path $backendDir "requirements-dev.txt")
+    Write-Step "Установка зависимостей backend (pip) - при первом запуске может занять пару минут"
+    & $venvPython -m pip install --disable-pip-version-check --quiet -r (Join-Path $backendDir "requirements.txt") -r (Join-Path $backendDir "requirements-dev.txt")
     if ($LASTEXITCODE -ne 0) { Write-Bad "pip install завершился с ошибкой"; exit 1 }
     Write-Ok "Зависимости backend установлены"
 
-    Write-Step "Установка зависимостей frontend (npm ci) — при первом запуске может занять пару минут"
+    Write-Step "Установка зависимостей frontend (npm ci) - при первом запуске может занять пару минут"
     Push-Location $frontendDir
     try {
         if (Test-Path "package-lock.json") {
@@ -133,20 +144,46 @@ if (-not $SkipInstall) {
     }
     Write-Ok "Зависимости frontend установлены"
 } elseif (-not (Test-Path $venvPython)) {
-    Write-Bad "-SkipInstall указан, но backend\.venv не существует. Запустите без -SkipInstall."
+    Write-Bad "-SkipInstall указан, но backend\.venv не существует. Запустите сначала без -SkipInstall."
     exit 1
 }
 
 # ---------------------------------------------------------------------------
-# 3. Запуск backend и frontend
+# 3. Запуск backend и frontend (отдельные окна PowerShell)
 # ---------------------------------------------------------------------------
+# Примечание: команды для дочерних окон собираются как одна строка с ';' -
+# оператор '&&' недоступен в Windows PowerShell 5.1.
+$backendChildCmd = "`$Host.UI.RawUI.WindowTitle = 'ESE backend'; Set-Location $(Format-SingleQuoted $backendDir); & $(Format-SingleQuoted $venvPython) -m uvicorn app.main:app --host 127.0.0.1 --port $BackendPort"
+$frontendChildCmd = "`$Host.UI.RawUI.WindowTitle = 'ESE frontend'; Set-Location $(Format-SingleQuoted $frontendDir); `$env:ESE_BACKEND_URL = 'http://127.0.0.1:$BackendPort'; npm run dev -- --port $FrontendPort"
+
 Write-Step "Запуск backend (окно 'ESE backend', http://127.0.0.1:$BackendPort)"
-$backendCmd = "title ESE backend && cd /d `"$backendDir`" && `"$venvPython`" -m uvicorn app.main:app --host 127.0.0.1 --port $BackendPort"
-Start-Process -FilePath "cmd.exe" -ArgumentList "/k", $backendCmd | Out-Null
+Start-Process -FilePath "powershell.exe" -ArgumentList @('-NoProfile', '-NoExit', '-Command', $backendChildCmd)
 
 Write-Step "Запуск frontend (окно 'ESE frontend', http://localhost:$FrontendPort)"
-$frontendCmd = "title ESE frontend && cd /d `"$frontendDir`" && set ESE_BACKEND_URL=http://127.0.0.1:$BackendPort&& npm run dev -- --port $FrontendPort"
-Start-Process -FilePath "cmd.exe" -ArgumentList "/k", $frontendCmd | Out-Null
+Start-Process -FilePath "powershell.exe" -ArgumentList @('-NoProfile', '-NoExit', '-Command', $frontendChildCmd)
+
+# ---------------------------------------------------------------------------
+# 4. Ожидание backend и открытие браузера
+# ---------------------------------------------------------------------------
+Write-Step "Ожидание старта backend (до 25 секунд)..."
+$deadline = (Get-Date).AddSeconds(25)
+$backendReady = $false
+while ((Get-Date) -lt $deadline) {
+    Start-Sleep -Milliseconds 700
+    try {
+        $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$BackendPort/api/health" -UseBasicParsing -TimeoutSec 2
+        if ($probe.StatusCode -eq 200) { $backendReady = $true; break }
+    } catch {
+        # backend ещё не поднялся - продолжаем ждать
+    }
+}
+
+if ($backendReady) {
+    Write-Ok "backend отвечает: http://127.0.0.1:$BackendPort/api/health"
+} else {
+    Write-Bad "backend не ответил за 25 секунд. Смотрите окно 'ESE backend'."
+    Write-Host "Частые причины: занят порт $BackendPort (тогда запустите с -BackendPort 8001), ошибка установки зависимостей, блокировка антивирусом."
+}
 
 Write-Host ""
 Write-Ok "Приложение запускается."
@@ -157,6 +194,6 @@ Write-Host ""
 Write-Host "Остановка: закройте окна 'ESE backend' и 'ESE frontend'." -ForegroundColor Yellow
 
 if (-not $NoBrowser) {
-    Start-Sleep -Seconds 4
+    Start-Sleep -Seconds 2
     Start-Process "http://localhost:$FrontendPort"
 }
