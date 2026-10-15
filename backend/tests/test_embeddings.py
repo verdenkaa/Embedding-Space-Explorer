@@ -8,15 +8,13 @@ deselected by default (opt-in: `pytest -m real_model`) — it downloads
 
 from __future__ import annotations
 
-import hashlib
 import time
-from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import numpy as np
 import pytest
 from app.config import Settings
-from app.embedding_providers.base import EmbeddingProvider, ModelInfo, params_fingerprint
+from app.embedding_providers.base import ModelInfo, params_fingerprint
 from app.embedding_providers.preparation import (
     CONTEXT_TEMPLATE,
     MODE_CONTEXT,
@@ -30,98 +28,13 @@ from app.storage.db import open_database
 from app.vector_store.npz_cache import NpzEmbeddingCache
 from fastapi.testclient import TestClient
 
-from tests.conftest import wait_for_job
-
-FAKE_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"  # real catalog entry
-FAKE_DIM = 8
-
-
-class FakeProvider(EmbeddingProvider):
-    """Deterministic hash-based vectors; no heavy dependencies."""
-
-    def __init__(self, info: ModelInfo, *, downloaded: bool = True, slow: bool = False) -> None:
-        self._info = info
-        self._downloaded = downloaded
-        self._slow = slow
-        self.encode_calls = 0
-
-    def info(self) -> ModelInfo:
-        return self._info
-
-    def is_downloaded(self) -> bool:
-        return self._downloaded
-
-    def download(self, progress_message: Callable[[str], None] | None = None) -> None:
-        if progress_message:
-            progress_message("fake download")
-        self._downloaded = True
-
-    def encode(
-        self,
-        texts: Sequence[str],
-        *,
-        batch_size: int = 16,
-        normalize: bool = True,
-        progress_cb: Callable[[int, int], None] | None = None,
-        cancel_check: Callable[[], None] | None = None,
-    ) -> np.ndarray:
-        rows: list[np.ndarray] = []
-        done = 0
-        for start in range(0, len(texts), batch_size):
-            if cancel_check is not None:
-                cancel_check()
-            batch = list(texts[start : start + batch_size])
-            for text in batch:
-                digest = hashlib.sha256(text.encode("utf-8")).digest()
-                vec = np.array([b / 255.0 for b in digest[:FAKE_DIM]], dtype=np.float32)
-                if normalize:
-                    vec = vec / np.linalg.norm(vec)
-                rows.append(vec)
-            done += len(batch)
-            if progress_cb is not None:
-                progress_cb(done, len(texts))
-            if self._slow:
-                time.sleep(0.05)
-        self.encode_calls += 1
-        if not rows:
-            return np.zeros((0, FAKE_DIM), dtype=np.float32)
-        return np.vstack(rows)
-
-
-@pytest.fixture
-def fake_provider_factory(monkeypatch: pytest.MonkeyPatch) -> dict[str, FakeProvider]:
-    """Patch provider creation in jobs and routes with a shared fake."""
-    created: dict[str, FakeProvider] = {}
-
-    def factory(model_id: str, data_dir: Path) -> FakeProvider:
-        if model_id not in created:
-            info = ModelInfo(
-                model_id=model_id,
-                display_name=model_id.split("/")[-1],
-                dim=FAKE_DIM,
-                approx_download_mb=1,
-                description="fake",
-            )
-            created[model_id] = FakeProvider(info)
-        return created[model_id]
-
-    import app.api.routes_embeddings as routes_mod
-    import app.jobs.embedding as jobs_mod
-
-    monkeypatch.setattr(jobs_mod, "create_provider", factory)
-    monkeypatch.setattr(routes_mod, "create_provider", factory)
-    return created
-
-
-def _create_indexed_project(client: TestClient, sample_project: Path) -> str:
-    response = client.post("/api/projects", json={"name": "Emb", "roots": [str(sample_project)]})
-    assert response.status_code == 201, response.text
-    pid: str = str(response.json()["id"])
-    job = client.post(f"/api/projects/{pid}/index").json()
-    info = wait_for_job(client, pid, job["id"])
-    assert info["state"] == "done", info
-    return pid
-
+from tests.conftest import (
+    FAKE_DIM,
+    FAKE_MODEL_ID,
+    FakeProvider,
+    create_indexed_project,
+    wait_for_job,
+)
 
 # ---------------------------------------------------------------------------
 # Preparation modes
@@ -272,7 +185,7 @@ def test_models_catalog_reports_download_status(
 def test_embed_flow_compute_cache_and_incremental(
     client: TestClient, sample_project: Path, fake_provider_factory: dict[str, FakeProvider]
 ) -> None:
-    pid = _create_indexed_project(client, sample_project)
+    pid = create_indexed_project(client, sample_project)
 
     # Not downloaded -> job fails with an actionable error.
     fake_provider_factory[FAKE_MODEL_ID] = FakeProvider(
@@ -352,7 +265,7 @@ def test_embed_flow_compute_cache_and_incremental(
 def test_reindex_prunes_stale_vectors(
     client: TestClient, sample_project: Path, fake_provider_factory: dict[str, FakeProvider]
 ) -> None:
-    pid = _create_indexed_project(client, sample_project)
+    pid = create_indexed_project(client, sample_project)
     job = client.post(
         f"/api/projects/{pid}/embeddings/compute",
         json={"model_id": FAKE_MODEL_ID, "mode": MODE_RAW},
@@ -399,7 +312,7 @@ def test_embed_cancel_keeps_partial_results(
     fake_provider_factory: dict[str, FakeProvider],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    pid = _create_indexed_project(client, sample_project)
+    pid = create_indexed_project(client, sample_project)
 
     # Slow provider + batch_size=1 gives time to cancel mid-run.
     def factory(model_id: str, data_dir: Path) -> FakeProvider:
@@ -431,7 +344,7 @@ def test_embed_cancel_keeps_partial_results(
 
 
 def test_embed_validation_errors(client: TestClient, sample_project: Path) -> None:
-    pid = _create_indexed_project(client, sample_project)
+    pid = create_indexed_project(client, sample_project)
 
     unknown = client.post(
         f"/api/projects/{pid}/embeddings/compute",

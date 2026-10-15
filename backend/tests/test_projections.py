@@ -1,0 +1,648 @@
+"""Stage-3 projection tests.
+
+Unit tests cover the mathematics on known synthetic vectors (TZ §15.1),
+cache/fingerprint rules and validation. API tests drive the full flow with
+the shared fake embedding provider: index → embed → project → points →
+staleness after reindex → recompute. UMAP is exercised on small data with a
+fixed seed (deterministic; the first fit pays the numba JIT warm-up once).
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+import pytest
+from app.config import Settings
+from app.embedding_providers.base import ModelInfo
+from app.projection_methods.base import (
+    ProjectionParamsError,
+    UnknownProjectionMethodError,
+    normalize_components,
+    projection_fingerprint,
+)
+from app.projection_methods.cache import ProjectionCache
+from app.projection_methods.pca_method import PcaMethod
+from app.projection_methods.registry import get_method, require_method
+from app.projection_methods.umap_method import UmapMethod
+from app.storage.models import EmbeddingRunRow
+from app.storage.projects_store import ProjectStore
+from app.vector_store.npz_cache import NpzEmbeddingCache
+from fastapi.testclient import TestClient
+
+from tests.conftest import (
+    FAKE_DIM,
+    FAKE_MODEL_ID,
+    FakeProvider,
+    create_indexed_project,
+    wait_for_job,
+)
+
+# ---------------------------------------------------------------------------
+# PCA mathematics on known synthetic vectors
+# ---------------------------------------------------------------------------
+
+
+def _line_data(n: int = 20, dim: int = 8, seed: int = 7) -> np.ndarray:
+    """Points exactly on a line: PC1 must capture ~100% of the variance and
+    PC2+ must be ~0 (known geometry, TZ §15.1)."""
+    rng = np.random.default_rng(seed)
+    direction = rng.normal(size=dim)
+    direction /= np.linalg.norm(direction)
+    t = np.linspace(-3.0, 3.0, n)[:, None]
+    return (t * direction[None, :]).astype(np.float32)
+
+
+def test_pca_collinear_data_geometry() -> None:
+    data = _line_data()
+    result = PcaMethod().fit(data, n_components=3, params={"whiten": False}, seed=42)
+    assert result.coords.shape == (20, 3)
+    assert result.coords.dtype == np.float32
+    assert result.axis_labels == ("PC1", "PC2", "PC3")
+    ratios = result.axis_info
+    assert ratios is not None
+    assert ratios[0] == pytest.approx(1.0, abs=1e-4)
+    assert ratios[1] == pytest.approx(0.0, abs=1e-4)
+    # PC1 coordinates follow the line parameter; later components are dust.
+    assert np.max(np.abs(result.coords[:, 0])) > 1.0
+    assert np.max(np.abs(result.coords[:, 1])) == pytest.approx(0.0, abs=1e-4)
+
+
+def test_pca_is_deterministic_without_seed() -> None:
+    rng = np.random.default_rng(1)
+    data = rng.normal(size=(30, 8)).astype(np.float32)
+    a = PcaMethod().fit(data, n_components=3, params={}, seed=42)
+    b = PcaMethod().fit(data, n_components=3, params={}, seed=99)
+    # Same data + params → identical coordinates (seed does not influence PCA).
+    np.testing.assert_array_equal(a.coords, b.coords)
+
+
+def test_pca_ratios_sorted_and_bounded() -> None:
+    rng = np.random.default_rng(2)
+    data = rng.normal(size=(40, 8)).astype(np.float32)
+    result = PcaMethod().fit(data, n_components=3, params={}, seed=42)
+    ratios = result.axis_info
+    assert ratios is not None
+    assert list(ratios) == sorted(ratios, reverse=True)
+    assert 0.0 <= sum(ratios) <= 1.0 + 1e-6
+    assert all(0.0 <= r <= 1.0 for r in ratios)
+
+
+def test_pca_identical_vectors_degenerate_but_honest() -> None:
+    data = np.ones((5, 8), dtype=np.float32)
+    result = PcaMethod().fit(data, n_components=2, params={}, seed=42)
+    ratios = result.axis_info
+    assert ratios is not None
+    assert not any(np.isnan(r) for r in ratios)  # zeros, not NaN
+
+
+def test_pca_guards() -> None:
+    method = PcaMethod()
+    with pytest.raises(ProjectionParamsError, match="at least 2 vectors"):
+        method.fit(np.zeros((1, 8), dtype=np.float32), n_components=2, params={}, seed=0)
+    with pytest.raises(ProjectionParamsError, match="exceeds"):
+        method.fit(np.zeros((3, 8), dtype=np.float32), n_components=4, params={}, seed=0)
+    # 3 samples, 8 dims → min is 3 → n_components=3 is allowed
+    result = method.fit(
+        np.random.default_rng(3).normal(size=(3, 8)).astype(np.float32),
+        n_components=3,
+        params={},
+        seed=0,
+    )
+    assert result.coords.shape == (3, 3)
+
+
+# ---------------------------------------------------------------------------
+# UMAP (small data, fixed seed → deterministic)
+# ---------------------------------------------------------------------------
+
+
+def test_umap_deterministic_with_seed() -> None:
+    rng = np.random.default_rng(5)
+    data = rng.normal(size=(30, 8)).astype(np.float32)
+    method = UmapMethod()
+    if not method.is_available():  # pragma: no cover - umap is a pinned dep
+        pytest.skip("umap-learn not installed")
+    params = method.validate_params({"n_neighbors": 5, "min_dist": 0.1, "metric": "cosine"})
+    a = method.fit(data, n_components=2, params=params, seed=123)
+    b = method.fit(data, n_components=2, params=params, seed=123)
+    assert a.coords.shape == (30, 2)
+    assert a.axis_labels == ("UMAP1", "UMAP2")
+    assert a.axis_info is None
+    np.testing.assert_allclose(a.coords, b.coords, rtol=1e-5, atol=1e-6)
+    # A different seed gives a different (but equally valid) layout.
+    c = method.fit(data, n_components=2, params=params, seed=777)
+    assert not np.allclose(a.coords, c.coords)
+
+
+def test_umap_guards() -> None:
+    method = UmapMethod()
+    with pytest.raises(ProjectionParamsError, match="at least 3 vectors"):
+        method.fit(np.zeros((2, 8), dtype=np.float32), n_components=2, params={}, seed=0)
+    with pytest.raises(ProjectionParamsError, match="n_neighbors"):
+        method.fit(
+            np.zeros((10, 8), dtype=np.float32),
+            n_components=2,
+            params={"n_neighbors": 15, "min_dist": 0.1, "metric": "cosine"},
+            seed=0,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Parameter validation, fingerprints, components
+# ---------------------------------------------------------------------------
+
+
+def test_validate_params_defaults_and_errors() -> None:
+    umap = UmapMethod()
+    normalized = umap.validate_params({})
+    assert normalized == {"n_neighbors": 15, "min_dist": 0.1, "metric": "cosine"}
+    # int-valued float is coerced; fractional is rejected
+    assert umap.validate_params({"n_neighbors": 7.0})["n_neighbors"] == 7
+    with pytest.raises(ProjectionParamsError, match="integer"):
+        umap.validate_params({"n_neighbors": 7.5})
+    with pytest.raises(ProjectionParamsError, match=">="):
+        umap.validate_params({"n_neighbors": 1})
+    with pytest.raises(ProjectionParamsError, match="<="):
+        umap.validate_params({"n_neighbors": 501})
+    with pytest.raises(ProjectionParamsError, match="one of"):
+        umap.validate_params({"metric": "manhattan"})
+    with pytest.raises(ProjectionParamsError, match="unknown parameter"):
+        umap.validate_params({"nope": 1})
+    with pytest.raises(ProjectionParamsError, match="boolean"):
+        PcaMethod().validate_params({"whiten": "yes"})
+
+
+def test_projection_fingerprint_sensitivity() -> None:
+    base = projection_fingerprint("emb1", "pca", 3, {"whiten": False}, 42)
+    assert base == projection_fingerprint("emb1", "pca", 3, {"whiten": False}, 42)
+    assert base != projection_fingerprint("emb2", "pca", 3, {"whiten": False}, 42)
+    assert base != projection_fingerprint("emb1", "umap", 3, {"whiten": False}, 42)
+    assert base != projection_fingerprint("emb1", "pca", 2, {"whiten": False}, 42)
+    assert base != projection_fingerprint("emb1", "pca", 3, {"whiten": True}, 42)
+    assert base != projection_fingerprint("emb1", "pca", 3, {"whiten": False}, 43)
+
+
+def test_normalize_components() -> None:
+    assert normalize_components([]) == [3, 2]
+    assert normalize_components([2, 2]) == [2]
+    assert normalize_components([2, 3]) == [2, 3]
+    with pytest.raises(ProjectionParamsError):
+        normalize_components([4])
+
+
+def test_registry_lookup() -> None:
+    assert get_method("pca") is not None
+    assert get_method("nope") is None
+    with pytest.raises(UnknownProjectionMethodError):
+        require_method("nope")
+
+
+# ---------------------------------------------------------------------------
+# Caches
+# ---------------------------------------------------------------------------
+
+
+def test_projection_cache_roundtrip_and_damage(tmp_path: Path) -> None:
+    path = tmp_path / "proj.npz"
+    assert ProjectionCache.load(path) is None  # absent
+
+    coords = np.arange(12, dtype=np.float32).reshape(4, 3)
+    cache = ProjectionCache(
+        path=path,
+        ids=["a", "b", "c", "d"],
+        coords=coords,
+        axis_info=np.array([0.7, 0.2, 0.1], dtype=np.float32),
+    )
+    cache.save()
+    loaded = ProjectionCache.load(path)
+    assert loaded is not None
+    assert loaded.ids == ["a", "b", "c", "d"]
+    assert loaded.n_components == 3
+    np.testing.assert_allclose(loaded.coords, coords)
+    assert loaded.axis_info is not None
+    np.testing.assert_allclose(loaded.axis_info, [0.7, 0.2, 0.1], atol=1e-6)
+
+    path.write_bytes(b"definitely not an npz archive")
+    assert ProjectionCache.load(path) is None  # damaged ≠ empty cloud
+
+
+def test_embedding_signature_tracks_content(tmp_path: Path) -> None:
+    path = tmp_path / "run.npz"
+    cache = NpzEmbeddingCache.load(path)
+    vecs = np.eye(3, 4, dtype=np.float32)
+    cache.upsert(["a", "b", "c"], ["ha", "hb", "hc"], ["fa", "fb", "fc"], vecs)
+    sig = cache.signature()
+    cache.save()
+
+    reloaded = NpzEmbeddingCache.load(path)
+    assert reloaded is not None
+    assert reloaded.signature() == sig  # stable across save/load
+
+    reloaded.upsert(["d"], ["hd"], ["fd"], np.ones((1, 4), dtype=np.float32))
+    changed = reloaded.signature()
+    assert changed != sig  # added vector → dependents stale
+
+    # Prune drops "d" (content changed) → the cache is EXACTLY the original
+    # set again → the signature must return to `sig` (no false staleness for
+    # projections computed before the upsert).
+    reloaded.prune({"a": "fa", "b": "fb", "c": "fc", "d": "fd-CHANGED"})
+    assert len(reloaded) == 3
+    assert reloaded.signature() == sig
+
+
+# ---------------------------------------------------------------------------
+# API: catalog
+# ---------------------------------------------------------------------------
+
+
+def test_methods_catalog(client: TestClient) -> None:
+    response = client.get("/api/projections/methods")
+    assert response.status_code == 200
+    methods = {m["method_id"]: m for m in response.json()}
+    assert set(methods) == {"pca", "umap"}
+
+    pca = methods["pca"]
+    assert pca["available"] is True
+    assert pca["supported_components"] == [2, 3]
+    assert pca["caveat"]  # honest interpretation note is present
+    assert {p["name"] for p in pca["params"]} == {"whiten"}
+
+    umap = methods["umap"]
+    spec = {p["name"]: p for p in umap["params"]}
+    assert set(spec) == {"n_neighbors", "min_dist", "metric"}
+    assert spec["n_neighbors"]["type"] == "int"
+    assert spec["n_neighbors"]["default"] == 15
+    assert spec["metric"]["choices"] == ["cosine", "euclidean"]
+    assert "искажает расстояния" in umap["caveat"]
+
+
+# ---------------------------------------------------------------------------
+# API: full projection flow with the fake provider
+# ---------------------------------------------------------------------------
+
+
+def _embedded_project(client: TestClient, sample_project: Path) -> tuple[str, str]:
+    """Index + embed the fixture corpus; returns (project_id, run_id)."""
+    pid = create_indexed_project(client, sample_project)
+    job = client.post(
+        f"/api/projects/{pid}/embeddings/compute",
+        json={"model_id": FAKE_MODEL_ID, "mode": "raw_fragment"},
+    ).json()
+    info = wait_for_job(client, pid, job["id"])
+    assert info["state"] == "done", info
+    runs = client.get(f"/api/projects/{pid}/embeddings").json()
+    assert len(runs) == 1 and runs[0]["count"] == 21
+    return pid, runs[0]["id"]
+
+
+def test_projection_flow_pca(
+    client: TestClient,
+    sample_project: Path,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+
+    # Compute default components [3, 2] in one job.
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca", "seed": 42},
+    )
+    assert job.status_code == 202, job.text
+    info = wait_for_job(client, pid, job.json()["id"])
+    assert info["state"] == "done", info
+    assert "PCA-3D" in str(info["message"]) and "PCA-2D" in str(info["message"])
+
+    inventory = client.get(f"/api/projects/{pid}/projections").json()
+    assert len(inventory) == 2
+    by_nc = {r["n_components"]: r for r in inventory}
+    assert set(by_nc) == {2, 3}
+    for run in inventory:
+        assert run["method"] == "pca"
+        assert run["method_display_name"] == "PCA"
+        assert run["embedding_run_id"] == run_id
+        assert run["stale"] is False
+        assert run["cache_ok"] is True
+        assert run["count"] == 21
+        assert run["seed"] == 42
+        assert run["versions"].get("numpy")
+        assert run["versions"].get("scikit-learn")
+    assert by_nc[3]["axis_labels"] == ["PC1", "PC2", "PC3"]
+    ratios = by_nc[3]["axis_info"]
+    assert ratios is not None and len(ratios) == 3
+    assert sum(ratios) <= 1.0 + 1e-6
+
+    # Points: full traceability metadata, coordinates of the right dimension.
+    points = client.get(f"/api/projects/{pid}/projections/{by_nc[3]['id']}/points").json()
+    assert points["count"] == 21
+    assert points["dropped_orphans"] == 0
+    assert points["stale"] is False
+    assert points["axis_labels"] == ["PC1", "PC2", "PC3"]
+    for point in points["points"]:
+        assert len(point["coords"]) == 3
+        assert all(np.isfinite(c) for c in point["coords"])
+        assert point["rel_path"] and point["symbol_path"]
+        assert point["start_line"] >= 1 and point["end_line"] >= point["start_line"]
+
+    # Cross-check one point against the corpus API (traceability contract):
+    # point → fragment → file and lines (TZ §1, §3 scenario B).
+    sample = points["points"][0]
+    frag = client.get(f"/api/projects/{pid}/fragments/{sample['fragment_id']}").json()
+    assert frag["rel_path"] == sample["rel_path"]
+    assert frag["start_line"] == sample["start_line"]
+    assert frag["end_line"] == sample["end_line"]
+    assert frag["symbol_path"] == sample["symbol_path"]
+
+    # 2D map of the same job serves 2-component coordinates.
+    points2d = client.get(f"/api/projects/{pid}/projections/{by_nc[2]['id']}/points").json()
+    assert points2d["count"] == 21
+    assert all(len(p["coords"]) == 2 for p in points2d["points"])
+    # PCA nesting: the XY of the 3D run equals the standalone 2D run.
+    coords3d = {p["fragment_id"]: p["coords"] for p in points["points"]}
+    for p in points2d["points"]:
+        assert p["coords"] == pytest.approx(coords3d[p["fragment_id"]][:2], abs=1e-5)
+
+    # Recompute with identical config = same fingerprints, no duplicates.
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca", "seed": 42},
+    ).json()
+    info = wait_for_job(client, pid, job["id"])
+    assert info["state"] == "done", info
+    assert len(client.get(f"/api/projects/{pid}/projections").json()) == 2
+
+    # A different seed is a different run (explicit, never mixed).
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca", "seed": 7},
+    ).json()
+    wait_for_job(client, pid, job["id"])
+    assert len(client.get(f"/api/projects/{pid}/projections").json()) == 4
+
+
+def test_projection_flow_umap_2d(
+    client: TestClient,
+    sample_project: Path,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={
+            "embedding_run_id": run_id,
+            "method": "umap",
+            "components": [2],
+            "params": {"n_neighbors": 5, "min_dist": 0.1, "metric": "cosine"},
+            "seed": 11,
+        },
+    )
+    assert job.status_code == 202, job.text
+    info = wait_for_job(client, pid, job.json()["id"], timeout=180)
+    assert info["state"] == "done", info
+
+    inventory = client.get(f"/api/projects/{pid}/projections").json()
+    assert len(inventory) == 1
+    run = inventory[0]
+    assert run["method"] == "umap" and run["n_components"] == 2
+    assert run["axis_labels"] == ["UMAP1", "UMAP2"]
+    assert run["axis_info"] is None
+    assert run["params"] == {"n_neighbors": 5, "min_dist": 0.1, "metric": "cosine"}
+    assert run["versions"].get("umap-learn")
+    assert run["stale"] is False
+
+    points = client.get(f"/api/projects/{pid}/projections/{run['id']}/points").json()
+    assert points["count"] == 21
+    assert all(len(p["coords"]) == 2 for p in points["points"])
+    assert all(np.isfinite(c) for p in points["points"] for c in p["coords"])
+
+
+def test_projection_stale_after_reindex_and_recompute(
+    client: TestClient,
+    sample_project: Path,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca", "components": [3]},
+    ).json()
+    wait_for_job(client, pid, job["id"])
+    proj_id = client.get(f"/api/projects/{pid}/projections").json()[0]["id"]
+
+    # Modify one file and delete another → reindex prunes vectors.
+    utils = sample_project / "src" / "utils.js"
+    utils.write_text(
+        utils.read_text(encoding="utf-8") + "\nfunction added() {}\n", encoding="utf-8"
+    )
+    (sample_project / "web" / "types.ts").unlink()
+    job = client.post(f"/api/projects/{pid}/index").json()
+    info = wait_for_job(client, pid, job["id"])
+    assert info["state"] == "done", info
+
+    # Projection is now STALE (vectors changed) — inventory says so honestly.
+    run = client.get(f"/api/projects/{pid}/projections").json()[0]
+    assert run["id"] == proj_id
+    assert run["stale"] is True
+    assert run["cache_ok"] is True
+
+    # Points still served (with a stale flag) minus orphans of removed
+    # fragments — the map never shows ghosts.
+    points = client.get(f"/api/projects/{pid}/projections/{proj_id}/points").json()
+    assert points["stale"] is True
+    assert points["dropped_orphans"] > 0
+    assert points["count"] == 21 - points["dropped_orphans"]
+
+    # Recompute embeddings, then the projection → fresh again, full coverage.
+    job = client.post(
+        f"/api/projects/{pid}/embeddings/compute",
+        json={"model_id": FAKE_MODEL_ID, "mode": "raw_fragment"},
+    ).json()
+    wait_for_job(client, pid, job["id"])
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca", "components": [3]},
+    ).json()
+    wait_for_job(client, pid, job["id"])
+    run = client.get(f"/api/projects/{pid}/projections").json()[0]
+    assert run["stale"] is False
+    coverage = client.get(f"/api/projects/{pid}/embeddings").json()[0]["coverage"]
+    assert run["count"] == coverage["fragments_total"]
+    points = client.get(f"/api/projects/{pid}/projections/{proj_id}/points").json()
+    assert points["dropped_orphans"] == 0
+    assert points["count"] == coverage["fragments_total"]
+
+
+def test_projection_validation_errors(
+    client: TestClient,
+    sample_project: Path,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+    base = f"/api/projects/{pid}/projections/compute"
+
+    unknown_method = client.post(base, json={"embedding_run_id": run_id, "method": "tsne"})
+    assert unknown_method.status_code == 404
+    assert unknown_method.json()["error"]["code"] == "unknown_projection_method"
+    assert "/api/projections/methods" in str(unknown_method.json()["error"]["hint"])
+
+    unknown_run = client.post(base, json={"embedding_run_id": "deadbeefdeadbeef", "method": "pca"})
+    assert unknown_run.status_code == 404
+    assert unknown_run.json()["error"]["code"] == "unknown_embedding_run"
+
+    bad_params = client.post(
+        base,
+        json={"embedding_run_id": run_id, "method": "umap", "params": {"n_neighbors": 9999}},
+    )
+    assert bad_params.status_code == 400
+    assert bad_params.json()["error"]["code"] == "invalid_projection_params"
+
+    typo_params = client.post(
+        base,
+        json={"embedding_run_id": run_id, "method": "pca", "params": {"whitenn": True}},
+    )
+    assert typo_params.status_code == 400
+
+    bad_components = client.post(
+        base, json={"embedding_run_id": run_id, "method": "pca", "components": [5]}
+    )
+    assert bad_components.status_code == 422
+
+    bad_seed = client.post(base, json={"embedding_run_id": run_id, "method": "pca", "seed": -1})
+    assert bad_seed.status_code == 422
+
+
+def test_projection_points_errors(
+    client: TestClient,
+    sample_project: Path,
+    settings: Settings,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+
+    missing = client.get(f"/api/projects/{pid}/projections/nosuchprojection/points")
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "projection_not_found"
+
+    # Compute, then corrupt the coordinate cache → explicit 409 instead of an
+    # empty cloud served as a result (TZ §17.2).
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca", "components": [2]},
+    ).json()
+    wait_for_job(client, pid, job["id"])
+    run = client.get(f"/api/projects/{pid}/projections").json()[0]
+
+    npz_path = settings.data_dir / "projects" / pid / "cache" / "projections" / f"{run['id']}.npz"
+    assert npz_path.exists()
+    npz_path.write_bytes(b"corrupted")
+
+    damaged = client.get(f"/api/projects/{pid}/projections/{run['id']}/points")
+    assert damaged.status_code == 409
+    assert damaged.json()["error"]["code"] == "projection_cache_unavailable"
+    assert "Recompute" in str(damaged.json()["error"]["hint"])
+
+    inventory = client.get(f"/api/projects/{pid}/projections").json()
+    assert inventory[0]["cache_ok"] is False
+
+
+def test_projection_no_vectors_409(
+    client: TestClient, sample_project: Path, settings: Settings
+) -> None:
+    """An embedding run WITHOUT vectors must be rejected before queueing."""
+    pid = create_indexed_project(client, sample_project)
+
+    # Deterministic setup: insert an empty run row directly (a real one is
+    # created by a compute job before the first batch — same observable state).
+    store = ProjectStore(settings.data_dir)
+    ctx = store.open(pid)
+    with ctx.session_factory() as session:
+        session.add(
+            EmbeddingRunRow(
+                id="emptyrun00000001",
+                model_id=FAKE_MODEL_ID,
+                dim=0,
+                mode="raw_fragment",
+                template="",
+                params_json="{}",
+                npz_relpath="cache/embeddings/emptyrun00000001.npz",
+                count=0,
+                created_at="2026-01-01T00:00:00+00:00",
+                updated_at="2026-01-01T00:00:00+00:00",
+            )
+        )
+        session.commit()
+
+    response = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": "emptyrun00000001", "method": "pca", "components": [2]},
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "no_vectors"
+    assert "Compute embeddings first" in str(response.json()["error"]["hint"])
+
+
+def test_projection_rejected_while_embedding_runs(
+    client: TestClient, sample_project: Path, fake_provider_factory: dict[str, FakeProvider]
+) -> None:
+    """Projection must not race an active embed job (coordinates over
+    vectors mid-flight are meaningless)."""
+    pid, run_id = _embedded_project(client, sample_project)
+
+    # Swap in a slow provider and start a SECOND run (context mode) so the
+    # first run keeps count=21 while an embed job is active.
+    fake_provider_factory[FAKE_MODEL_ID] = FakeProvider(
+        ModelInfo(FAKE_MODEL_ID, "all-MiniLM-L6-v2", FAKE_DIM, 1, "fake"), slow=True
+    )
+    embed_job = client.post(
+        f"/api/projects/{pid}/embeddings/compute",
+        json={"model_id": FAKE_MODEL_ID, "mode": "context_enriched", "batch_size": 1},
+    ).json()
+
+    response = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca"},
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "projection_job_active"
+
+    client.post(f"/api/projects/{pid}/jobs/{embed_job['id']}/cancel")
+    info = wait_for_job(client, pid, embed_job["id"], timeout=30)
+    assert info["state"] == "cancelled"
+
+    # After the job is gone, compute proceeds normally.
+    response = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca", "components": [2]},
+    )
+    assert response.status_code == 202
+    wait_for_job(client, pid, response.json()["id"])
+
+
+def test_projection_job_is_observable(
+    client: TestClient,
+    sample_project: Path,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={
+            "embedding_run_id": run_id,
+            "method": "pca",
+            "components": [2],
+            "params": {"whiten": True},
+            "seed": 5,
+        },
+    ).json()
+    info = wait_for_job(client, pid, job["id"])
+    assert info["state"] == "done"
+    assert info["kind"] == "projection"
+
+    listed = client.get(f"/api/projects/{pid}/jobs").json()
+    assert any(j["id"] == job["id"] and j["kind"] == "projection" for j in listed)
+
+    run = client.get(f"/api/projects/{pid}/projections").json()[0]
+    assert run["params"] == {"whiten": True}
+    assert run["seed"] == 5
+    assert json.dumps(run["params"], sort_keys=True)  # serializable as stored
