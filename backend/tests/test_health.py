@@ -48,12 +48,15 @@ def test_health_required_dependencies_installed(client: TestClient) -> None:
         "tree-sitter-python",
         "tree-sitter-javascript",
         "tree-sitter-typescript",
+        "numpy",
+        "torch",
+        "sentence-transformers",
     ):
         assert deps[name]["required"] is True
         assert deps[name]["installed"] is True
         assert deps[name]["version"]
     # Planned heavy dependencies must be reported honestly, not faked.
-    for name in ("torch", "sentence-transformers", "umap-learn"):
+    for name in ("scikit-learn", "umap-learn"):
         assert deps[name]["required"] is False
         assert deps[name]["planned_stage"]
         if not deps[name]["installed"]:
