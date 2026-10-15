@@ -1,8 +1,8 @@
 # Архитектура Embedding Space Explorer
 
 > Документ фиксирует архитектурные решения. Он обновляется на каждом этапе разработки.
-> Текущий статус: **Этап 0 (каркас)**. Решения будущих этапов помечены как «план» и
-> могут уточняться; уже реализованные — как «реализовано».
+> Текущий статус: **Этап 1 (корпус и трассировка)**. Решения будущих этапов помечены
+> как «план» и могут уточняться; уже реализованные — как «реализовано».
 
 ## 1. Обзор
 
@@ -67,9 +67,10 @@ backend/
 
 | Модуль | Назначение | Этап |
 |---|---|---|
-| `core/source_registry` | безопасное сканирование корней, исключения, обнаружение изменений, fingerprint | 1 |
-| `fragmentation/` | интерфейс сегментации + адаптеры: tree-sitter (Python/JS/TS), Markdown, fallback-чанки | 1 |
-| `storage/` | SQLAlchemy + SQLite: метаданные проектов, файлов, фрагментов, задач; миграции; версионирование схемы | 1 |
+| `source_registry/` ✅ | безопасное сканирование корней (симлинки, секреты, бинарники, лимиты), детектор изменений (size/mtime → sha256) | 1 |
+| `fragmentation/` ✅ | интерфейс сегментации + адаптеры: tree-sitter (Python/JS/TS/TSX), Markdown-секции, fallback-чанки; стабильные ID | 1 |
+| `storage/` ✅ | SQLAlchemy + SQLite (WAL): files/fragments/jobs/meta, версионирование схемы, бэкап перед миграцией | 1 |
+| `jobs/` ✅ | JobManager: очередь, один worker-поток, прогресс, отмена, предупреждения | 1 |
 | `embedding_providers/` | интерфейс провайдера + sentence-transformers (CPU, batching, прогресс, отмена) | 2 |
 | `vector_store/` | хранение векторов (.npy/.npz) + кэш с явными cache keys | 2 |
 | `projection_methods/` | PCA, UMAP (параметры + seed + версии библиотек сохраняются) | 3 |
@@ -80,7 +81,6 @@ backend/
 | `metrics/` | trustworthiness, neighbor retention, precision/recall по размеченным отношениям | 5 |
 | `experiment_manager/` | конфиги экспериментов, сохранение/загрузка/сравнение, ручные группы | 5 |
 | `exporters/` | JSON/CSV/PNG экспорт с параметрами для интерпретации | 5 |
-| `tasks/` | фоновые задачи: id, статус, прогресс, отмена; polling с фронтенда | 1+ |
 
 Правило границ: `api/` содержит только HTTP-слой и DTO; доменные модули не знают про
 FastAPI; хранение изолировано за интерфейсами. Панели фронтенда не обращаются к
@@ -136,16 +136,22 @@ FastAPI; хранение изолировано за интерфейсами. 
 
 ```
 frontend/src/
-  main.tsx              # точка входа
-  App.tsx               # app-shell: TopBar / основная область / StatusBar
-  api/
-    types.ts            # DTO, зеркалящие backend-схемы (единый источник правды — backend)
-    client.ts           # типизированный fetch-клиент, ApiError с code/hint
+  main.tsx              # точка входа (+ monaco/setup — офлайн, slim)
+  App.tsx               # app-shell: TopBar / (Corpus | Diagnostics | Start) / StatusBar
+  api/                  # types.ts (зеркало DTO backend), client.ts (ApiError code/hint)
   state/
-    uiStore.ts          # zustand: состояние подключения и диагностики
-  components/           # TopBar, SectionTabs, ConnectionIndicator, DiagnosticsPanel, StatusBar
+    uiStore.ts          # подключение, диагностика, активная секция
+    projectStore.ts     # проект, файлы, выделение (activeFragmentId), changes, задачи
+  monaco/
+    setup.ts            # loader.config(monaco) — без CDN; editor.api + 4 языка; тема ese-dark
+    helpers.ts          # чистые функции: язык, декорации, бейджи kind (тестируются без monaco)
+  components/
+    corpus/             # CorpusPanel, FileTree, FragmentList, SelectedFragmentCard, JobProgress
+    inspector/          # SourceInspector (Monaco read-only + locator-бар)
+    TopBar / SectionTabs / StatusBar / DiagnosticsPanel / ConnectionIndicator
+    StartScreen / FolderPickerDialog / ChangesDialog / WorkspaceLayout (Allotment)
   theme/tokens.css      # дизайн-токены (цвета/шрифты/отступы из UI-ТЗ)
-  styles/global.css     # базовые стили, состояния фокуса, скроллбары
+  styles/global.css     # базовые стили + корпус/инспектор/модалки/декорации Monaco
 ```
 
 ### 4.2. Состояние
@@ -153,20 +159,21 @@ frontend/src/
 Единственный state-менеджер — **zustand** (выбран на этапе 0, конкурирующие подходы не
 вводятся). Планируемое разделение store'ов по назначению (ТЗ §2.2):
 
-- `uiStore` — интерфейс: подключение, активные панели, выделение (selection state);
-- `projectStore` (этап 1) — открытый проект, файлы, фрагменты, задачи;
+- `uiStore` ✅ — подключение, диагностика, активная секция;
+- `projectStore` ✅ (этап 1) — открытый проект, файлы, `activeFragmentId` (общий selection
+  state), located-фрагменты, changes, активная задача;
 - `experimentStore` (этап 2+) — активный эксперимент: модель, проекция, срез, кластеры.
 
-Общий selection state синхронизирует 3D-сцену, 2D-проекцию, список фрагментов и Monaco
-по **id фрагмента** (этап 3).
+`activeFragmentId` — будущая точка синхронизации 3D-сцены, 2D-проекции, списка фрагментов
+и Monaco по **id фрагмента** (этап 3).
 
 ### 4.3. Модули UI (план по этапам)
 
-`app-shell` (0) → `fragment-explorer` + `source-inspector` (1, Monaco) →
+`app-shell` ✅(0) → `fragment-explorer` + `source-inspector` ✅(1, Monaco read-only,
+обратная трассировка выделения) → `task-status` ✅(1, JobProgress + polling) →
 `space-view` (3, R3F: батчинг точек через instanced-буферы, без компонента на точку) →
 `projection-view` (3, 2D canvas) → `relations-panel` (4) → `experiment-controls` (2–5) →
-`task-status` (1+) → `export-panel` (5). Панели размещаются через Allotment (добавляется
-на этапе 1, когда появятся раздвигаемые панели).
+`export-panel` (5). Панели размещаются через Allotment ✅(1).
 
 ### 4.4. Честность интерфейса (ТЗ §17.2)
 
@@ -181,7 +188,9 @@ frontend/src/
 | Python | 3.11–3.13 (целевая у пользователя — 3.12) | проверяется скриптом запуска |
 | Node.js | ≥ 20 (у пользователя 24) | проверяется скриптом запуска |
 | fastapi / pydantic / uvicorn | 0.143.1 / 2.14.1 / 0.54.0 | точные пины в requirements.txt |
+| sqlalchemy / tree-sitter | 2.1.4 / 0.26.0 (+ языки: python 0.25.0, javascript 0.25.0, typescript 0.23.2) | Windows-колёса cp312/abi3 проверены по PyPI |
 | react / vite / typescript | 19.3.1 / 8.3.4 / 5.9.3 | package-lock.json; TS7 пока не поддерживается typescript-eslint (<6.1.0), поэтому 5.9 |
+| monaco-editor / allotment | 0.57.0 / 1.20.6 | monaco — «slim»: editor.api + monarch-токенайзеры python/js/ts/md, без TS/JSON/CSS/HTML language-сервисов (read-only просмотр, экономия RAM/сборки) |
 | torch / sentence-transformers | CPU-сборка, 2.14.x / 6.1.x (план, этап 2) | 8 ГБ RAM: консервативный batch size (по умолчанию 16), прогресс и отмена |
 | umap-learn / scikit-learn / tree-sitter-language-pack | 0.5.12 / 1.9.1 / 1.22.1 (план) | |
 
@@ -201,7 +210,7 @@ lock-файлами. Приложение не требует GPU, Docker, об�
 | Этап | Содержание | Критерий приёмки |
 |---|---|---|
 | **0** | Каркас, запуск одной командой, health, диагностика, lint/typecheck/test | ✅ интерфейс открывается на localhost; backend только локально; диагностика показывает версии и статус |
-| 1 | Корпус и трассировка: сканирование, tree-sitter-сегментация, stable IDs, Monaco, изменения файлов с подтверждением | фрагменты видны в UI, ведут к корректным строкам; тесты ID/line mapping |
+| **1** | Корпус и трассировка: сканирование, tree-sitter-сегментация (Python/JS/TS/TSX), Markdown, fallback, stable IDs, SQLite, Monaco-инспектор, обратная трассировка строк, изменения файлов с подтверждением, фоновые задачи | ✅ фрагменты видны в UI и ведут к корректным строкам; тесты ID/line mapping/инкрементальности проходят |
 | 2 | Embeddings: провайдер ST, CPU batching, raw / context-enriched, кэш и инвалидирование | повторный запуск не пересчитывает неизменившиеся фрагменты |
 | 3 | Пространство: PCA/UMAP, R3F-сцена, 2D-проекция, selection-синхронизация | точка выбирается в обеих сценах, инспектор открывает исходник |
 | 4 | Срезы, соседи, структурные отношения, кластеры, ручные группы | математические тесты срезов; UI разделяет слой/проекцию и связь/близость |
