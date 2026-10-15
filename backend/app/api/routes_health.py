@@ -32,9 +32,9 @@ DEPENDENCY_PLAN: tuple[tuple[str, bool, str | None], ...] = (
     ("tree-sitter-python", True, None),
     ("tree-sitter-javascript", True, None),
     ("tree-sitter-typescript", True, None),
-    ("numpy", False, "stage-2"),
-    ("torch", False, "stage-2"),
-    ("sentence-transformers", False, "stage-2"),
+    ("numpy", True, None),
+    ("torch", True, None),
+    ("sentence-transformers", True, None),
     ("scikit-learn", False, "stage-3"),
     ("umap-learn", False, "stage-3"),
 )

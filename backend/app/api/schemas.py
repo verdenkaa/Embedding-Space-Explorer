@@ -269,3 +269,58 @@ class FsListResponse(BaseModel):
     parent: str | None
     entries: list[FsDirEntry]
     drives: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Embeddings (stage 2)
+# ---------------------------------------------------------------------------
+
+PrepMode = Literal["raw_fragment", "context_enriched"]
+
+
+class ModelInfoDTO(BaseModel):
+    model_id: str
+    display_name: str
+    dim: int
+    approx_download_mb: int
+    description: str
+    is_default: bool
+    downloaded: bool
+
+
+class DownloadModelRequest(BaseModel):
+    model_id: str = Field(min_length=1, max_length=256)
+
+
+class ComputeEmbeddingsRequest(BaseModel):
+    model_id: str = Field(min_length=1, max_length=256)
+    mode: PrepMode
+    batch_size: int = Field(default=16, ge=1, le=128)
+
+
+class CoverageDTO(BaseModel):
+    fragments_total: int
+    embedded: int
+    stale: int
+    missing: int
+
+
+class EmbeddingRunDTO(BaseModel):
+    id: str
+    model_id: str
+    model_display_name: str
+    dim: int
+    mode: PrepMode
+    template_preview: str
+    params: dict[str, int | bool | str]
+    count: int
+    coverage: CoverageDTO
+    created_at: str
+    updated_at: str
+
+
+class PreparationPreviewsDTO(BaseModel):
+    """Exact prepared-text previews per mode (single source of truth for UI)."""
+
+    raw_fragment: str
+    context_enriched: str

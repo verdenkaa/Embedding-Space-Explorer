@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, func, select
 
 from app.fragmentation.registry import fragment_file
+from app.jobs.embedding import prune_embedding_caches
 from app.jobs.manager import JobContext
 from app.source_registry.changes import (
     ChangesPlan,
@@ -183,6 +184,9 @@ def run_index_job(ctx: JobContext) -> str:
 
         session.commit()
         total_fragments = session.execute(select(func.count(FragmentRow.id))).scalar_one()
+
+    # Embedding caches must not keep vectors of deleted/changed fragments.
+    prune_embedding_caches(project, ctx.warn)
 
     # Force-flush the final progress so the finished job shows 100%.
     ctx.progress(total, total, "finalizing", force=True)

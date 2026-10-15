@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.api.errors import install_error_handlers
+from app.api.routes_embeddings import embeddings_router, models_router, preparation_router
 from app.api.routes_files import router as files_router
 from app.api.routes_fragments import router as fragments_router
 from app.api.routes_fs import router as fs_router
@@ -88,6 +89,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(fragments_router)
     app.include_router(jobs_router)
     app.include_router(fs_router)
+    app.include_router(models_router)
+    app.include_router(preparation_router)
+    app.include_router(embeddings_router)
     return app
 
 
