@@ -5,7 +5,8 @@ Rules:
 - WAL journal for concurrent reads while the indexer writes;
 - `meta.schema_version` is checked on open: newer than supported → clear
   error (project not broken globally); older → backup file, then migrate
-  (migrations are additive: v1 corpus, v2 embedding_runs, v3 projection_runs;
+  (migrations are additive: v1 corpus, v2 embedding_runs, v3 projection_runs,
+    v4 projection_presets;
     the pre-migration .bak copy guards against surprises).
 """
 
@@ -18,7 +19,7 @@ from pathlib import Path
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-CURRENT_DB_SCHEMA = 3
+CURRENT_DB_SCHEMA = 4
 
 
 class Base(DeclarativeBase):

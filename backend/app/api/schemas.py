@@ -330,7 +330,10 @@ class PreparationPreviewsDTO(BaseModel):
 # Projections (stage 3)
 # ---------------------------------------------------------------------------
 
-ProjectionParamType = Literal["int", "float", "bool", "choice"]
+ProjectionParamType = Literal["int", "float", "bool", "choice", "int_list"]
+
+#: Parameter values: scalars or an integer list (raw-axes selection).
+ProjectionParamValue = bool | int | float | str | list[int]
 
 
 class ProjectionParamSpecDTO(BaseModel):
@@ -338,12 +341,14 @@ class ProjectionParamSpecDTO(BaseModel):
 
     name: str
     type: ProjectionParamType
-    default: bool | int | float | str
+    default: ProjectionParamValue
     description: str
     min_value: float | None = None
     max_value: float | None = None
     step: float | None = None
     choices: list[str] | None = None
+    min_items: int | None = None
+    max_items: int | None = None
 
 
 class ProjectionMethodInfoDTO(BaseModel):
@@ -361,9 +366,10 @@ class ProjectionMethodInfoDTO(BaseModel):
 class ComputeProjectionRequest(BaseModel):
     embedding_run_id: str = Field(min_length=1, max_length=32)
     method: str = Field(min_length=1, max_length=32)
-    #: which display spaces to compute: 3 (3D scene), 2 (2D map); both by default
+    #: which display spaces to compute: 3 (3D scene), 2 (2D map); both by
+    #: default. Ignored (derived from `axes`) for the raw_axes method.
     components: list[int] = Field(default_factory=lambda: [3, 2], min_length=1, max_length=2)
-    params: dict[str, bool | int | float | str] = Field(default_factory=dict)
+    params: dict[str, ProjectionParamValue] = Field(default_factory=dict)
     seed: int = Field(default=42, ge=0, le=2_147_483_647)
 
     @field_validator("components")
@@ -390,7 +396,7 @@ class ProjectionRunDTO(BaseModel):
     method: str
     method_display_name: str
     n_components: int
-    params: dict[str, bool | int | float | str]
+    params: dict[str, ProjectionParamValue]
     seed: int
     axis_labels: list[str]
     #: PCA explained variance ratio per axis; None for methods without it
@@ -431,3 +437,22 @@ class ProjectionPointsDTO(BaseModel):
     #: points whose fragments were deleted since compute (not served)
     dropped_orphans: int
     points: list[ProjectionPointDTO]
+
+
+class ProjectionPresetDTO(BaseModel):
+    """Named projection form state (method + params + seed), project-scoped."""
+
+    id: str
+    name: str
+    method: str
+    method_display_name: str
+    params: dict[str, ProjectionParamValue]
+    seed: int
+    created_at: str
+
+
+class CreatePresetRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    method: str = Field(min_length=1, max_length=32)
+    params: dict[str, ProjectionParamValue] = Field(default_factory=dict)
+    seed: int = Field(default=42, ge=0, le=2_147_483_647)

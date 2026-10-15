@@ -261,7 +261,7 @@ def test_methods_catalog(client: TestClient) -> None:
     response = client.get("/api/projections/methods")
     assert response.status_code == 200
     methods = {m["method_id"]: m for m in response.json()}
-    assert set(methods) == {"pca", "umap"}
+    assert set(methods) == {"pca", "umap", "raw_axes"}
 
     pca = methods["pca"]
     assert pca["available"] is True
@@ -276,6 +276,17 @@ def test_methods_catalog(client: TestClient) -> None:
     assert spec["n_neighbors"]["default"] == 15
     assert spec["metric"]["choices"] == ["cosine", "euclidean"]
     assert "искажает расстояния" in umap["caveat"]
+
+    raw = methods["raw_axes"]
+    assert raw["available"] is True
+    raw_spec = {p["name"]: p for p in raw["params"]}
+    assert set(raw_spec) == {"axes", "standardize"}
+    assert raw_spec["axes"]["type"] == "int_list"
+    assert raw_spec["axes"]["min_items"] == 2
+    assert raw_spec["axes"]["max_items"] == 3
+    # honest labeling: model dimensions have no human semantics (TZ 5.1)
+    assert "не имеют" in raw["description"]
+    assert "игнорируются" in raw["caveat"]
 
 
 # ---------------------------------------------------------------------------
@@ -786,8 +797,320 @@ def test_db_migration_v2_to_v3_keeps_embedding_runs(settings: Settings) -> None:
             for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
         }
     engine.dispose()
-    assert version == "3"
+    # v2 opens into whatever the CURRENT schema is (additively), never older
+    from app.storage.db import CURRENT_DB_SCHEMA
+
+    assert version == str(CURRENT_DB_SCHEMA)
     assert "projection_runs" in tables
+    assert "projection_presets" in tables
     assert "embedding_runs" in tables
     backups = list(ctx.project_dir.glob("project.db.bak-*"))
     assert len(backups) == 1
+
+
+# ---------------------------------------------------------------------------
+# Raw axes method (stage-3 rework: user-selected original-space dimensions)
+# ---------------------------------------------------------------------------
+
+
+def test_raw_axes_fit_selects_exact_columns() -> None:
+    from app.projection_methods.raw_axes_method import RawAxesMethod
+
+    rng = np.random.default_rng(9)
+    data = rng.normal(size=(10, 8)).astype(np.float32)
+    method = RawAxesMethod()
+    params = method.validate_params({"axes": [2, 5, 0]})
+    result = method.fit(data, n_components=3, params=params, seed=0)
+    np.testing.assert_array_equal(result.coords, data[:, [2, 5, 0]])
+    assert result.axis_labels == ("dim 2", "dim 5", "dim 0")
+    # axis_info = original per-axis std (interpretation aid, not variance %)
+    assert result.axis_info is not None
+    np.testing.assert_allclose(result.axis_info, np.std(data[:, [2, 5, 0]], axis=0), atol=1e-5)
+
+
+def test_raw_axes_standardize() -> None:
+    from app.projection_methods.raw_axes_method import RawAxesMethod
+
+    # axis 0 has a large scale, axis 1 a tiny one
+    data = np.column_stack([np.linspace(-100, 100, 20), np.linspace(-0.01, 0.01, 20)]).astype(
+        np.float32
+    )
+    method = RawAxesMethod()
+
+    plain = method.fit(
+        data, n_components=2, params=method.validate_params({"axes": [0, 1]}), seed=0
+    )
+    assert np.max(np.abs(plain.coords[:, 0])) > 50  # untouched raw values
+
+    std = method.fit(
+        data,
+        n_components=2,
+        params=method.validate_params({"axes": [0, 1], "standardize": True}),
+        seed=0,
+    )
+    for col in range(2):
+        assert abs(float(std.coords[:, col].mean())) < 1e-3
+        assert abs(float(std.coords[:, col].std()) - 1.0) < 1e-3
+    # axis_info still reports the ORIGINAL scale
+    assert std.axis_info is not None
+    assert std.axis_info[0] > 10 * std.axis_info[1]
+
+
+def test_raw_axes_degenerate_axis_standardize_no_nan() -> None:
+    from app.projection_methods.raw_axes_method import RawAxesMethod
+
+    data = np.zeros((5, 4), dtype=np.float32)
+    data[:, 1] = np.arange(5)
+    method = RawAxesMethod()
+    result = method.fit(
+        data,
+        n_components=2,
+        params=method.validate_params({"axes": [0, 1], "standardize": True}),
+        seed=0,
+    )
+    assert np.all(np.isfinite(result.coords))
+    np.testing.assert_allclose(result.coords[:, 0], 0.0, atol=1e-6)
+
+
+def test_raw_axes_guards() -> None:
+    from app.projection_methods.raw_axes_method import RawAxesMethod
+
+    method = RawAxesMethod()
+    data = np.random.default_rng(4).normal(size=(10, 8)).astype(np.float32)
+    ok = method.validate_params({"axes": [0, 1]})
+    with pytest.raises(ProjectionParamsError, match="must equal n_components"):
+        method.fit(data, n_components=3, params=ok, seed=0)
+    with pytest.raises(ProjectionParamsError, match="out of range"):
+        method.fit(data, n_components=2, params=method.validate_params({"axes": [0, 99]}), seed=0)
+    with pytest.raises(ProjectionParamsError, match="at least 2 items"):
+        method.validate_params({"axes": [3]})
+    with pytest.raises(ProjectionParamsError, match="at most 3 items"):
+        method.validate_params({"axes": [0, 1, 2, 3]})
+    with pytest.raises(ProjectionParamsError, match="duplicates"):
+        method.validate_params({"axes": [2, 2]})
+    with pytest.raises(ProjectionParamsError, match="list of integers"):
+        method.validate_params({"axes": "not-a-list-object"})
+
+
+def test_int_list_param_coercion() -> None:
+    from app.projection_methods.raw_axes_method import RawAxesMethod
+
+    method = RawAxesMethod()
+    # comma-separated string is tolerated (hand-edited clients)
+    assert method.validate_params({"axes": "12, 57"})["axes"] == [12, 57]
+    # integer-valued floats coerce; fractional rejected
+    assert method.validate_params({"axes": [3.0, 4.0]})["axes"] == [3, 4]
+    with pytest.raises(ProjectionParamsError):
+        method.validate_params({"axes": [1.5, 2]})
+    with pytest.raises(ProjectionParamsError):
+        method.validate_params({"axes": [True, 2]})
+
+
+def test_raw_axes_api_flow(
+    client: TestClient,
+    sample_project: Path,
+    settings: Settings,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+
+    # 2 axes → ONE 2-component run (components derived, request value ignored)
+    response = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={
+            "embedding_run_id": run_id,
+            "method": "raw_axes",
+            "components": [3, 2],  # deliberately wrong — must be ignored
+            "params": {"axes": [0, 3]},
+            "seed": 7,
+        },
+    )
+    assert response.status_code == 202, response.text
+    info = wait_for_job(client, pid, response.json()["id"])
+    assert info["state"] == "done", info
+
+    inventory = client.get(f"/api/projects/{pid}/projections").json()
+    assert len(inventory) == 1, "raw_axes must create exactly one run"
+    run = inventory[0]
+    assert run["method"] == "raw_axes"
+    assert run["n_components"] == 2
+    assert run["axis_labels"] == ["dim 0", "dim 3"]
+    assert run["params"] == {"axes": [0, 3], "standardize": False}
+
+    # Served coordinates == exact columns of the stored vectors (rounding aside)
+    emb_npz = settings.data_dir / "projects" / pid / "cache" / "embeddings" / f"{run_id}.npz"
+    cache = NpzEmbeddingCache.load(emb_npz)
+    assert cache is not None
+    vectors_by_id = {fid: cache.vectors[i] for i, fid in enumerate(cache.ids)}
+    points = client.get(f"/api/projects/{pid}/projections/{run['id']}/points").json()
+    assert points["count"] == 21
+    for point in points["points"]:
+        expected = vectors_by_id[point["fragment_id"]][[0, 3]]
+        np.testing.assert_allclose(point["coords"], expected, atol=1e-5)
+
+    # 3 axes → 3D run
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={
+            "embedding_run_id": run_id,
+            "method": "raw_axes",
+            "params": {"axes": [1, 2, 5]},
+        },
+    ).json()
+    info = wait_for_job(client, pid, job["id"])
+    assert info["state"] == "done", info
+    inv = client.get(f"/api/projects/{pid}/projections").json()
+    assert {r["n_components"] for r in inv} == {2, 3}
+
+    # Out-of-range axis is rejected before queueing (dim known from the run)
+    bad = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={
+            "embedding_run_id": run_id,
+            "method": "raw_axes",
+            "params": {"axes": [0, 99]},
+        },
+    )
+    assert bad.status_code == 400
+    assert bad.json()["error"]["code"] == "invalid_projection_params"
+    assert "out of range" in bad.json()["error"]["message"]
+
+
+# ---------------------------------------------------------------------------
+# Projection presets
+# ---------------------------------------------------------------------------
+
+
+def test_preset_crud_and_apply(
+    client: TestClient, sample_project: Path, fake_provider_factory: dict[str, FakeProvider]
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+    base = f"/api/projects/{pid}/projection-presets"
+
+    assert client.get(base).json() == []
+
+    created = client.post(
+        base,
+        json={
+            "name": "Оси 0/3 + standardize",
+            "method": "raw_axes",
+            "params": {"axes": [0, 3], "standardize": True},
+            "seed": 7,
+        },
+    )
+    assert created.status_code == 201, created.text
+    preset = created.json()
+    assert preset["method_display_name"] == "Сырые оси"
+    assert preset["params"] == {"axes": [0, 3], "standardize": True}
+
+    # duplicate name → 409 with an actionable hint
+    dup = client.post(base, json={"name": "Оси 0/3 + standardize", "method": "pca", "params": {}})
+    assert dup.status_code == 409
+    assert dup.json()["error"]["code"] == "preset_name_taken"
+
+    # validation identical to compute: unknown method / bad params / blank name
+    assert client.post(base, json={"name": "x", "method": "tsne", "params": {}}).status_code == 404
+    assert (
+        client.post(
+            base, json={"name": "x", "method": "raw_axes", "params": {"axes": [1]}}
+        ).status_code
+        == 400
+    )
+    assert client.post(base, json={"name": "   ", "method": "pca", "params": {}}).status_code == 400
+
+    # applying the preset = posting its params → works end-to-end
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={
+            "embedding_run_id": run_id,
+            "method": preset["method"],
+            "params": preset["params"],
+            "seed": preset["seed"],
+        },
+    )
+    assert job.status_code == 202, job.text
+    info = wait_for_job(client, pid, job.json()["id"])
+    assert info["state"] == "done", info
+    run = client.get(f"/api/projects/{pid}/projections").json()[0]
+    assert run["params"]["standardize"] is True
+
+    listed = client.get(base).json()
+    assert len(listed) == 1
+
+    deleted = client.delete(f"{base}/{preset['id']}")
+    assert deleted.status_code == 200
+    assert client.get(base).json() == []
+    assert client.delete(f"{base}/{preset['id']}").status_code == 404
+
+
+def test_db_migration_v3_to_v4_keeps_projections(settings: Settings) -> None:
+    """Upgrade path for existing stage-3 projects: opening a v3 database
+    adds projection_presets without touching projection runs."""
+    from app.storage.db import open_database
+    from app.storage.projects_store import ProjectStore
+    from sqlalchemy import text
+
+    store = ProjectStore(settings.data_dir)
+    ctx = store.create_project("up34", [str(Path(__file__).parent)])
+    db_path = ctx.project_dir / "project.db"
+
+    from app.storage.models import ProjectionRunRow
+
+    with ctx.session_factory() as session:
+        session.add(
+            EmbeddingRunRow(
+                id="emb-parent-0001",
+                model_id="m",
+                dim=8,
+                mode="raw_fragment",
+                template="",
+                params_json="{}",
+                npz_relpath="cache/embeddings/emb-parent-0001.npz",
+                count=5,
+                created_at="2026-10-15T10:00:00+00:00",
+                updated_at="2026-10-15T10:00:00+00:00",
+            )
+        )
+        session.add(
+            ProjectionRunRow(
+                id="proj-keep-0001",
+                embedding_run_id="emb-parent-0001",
+                method="pca",
+                n_components=3,
+                params_json="{}",
+                seed=42,
+                axis_labels_json='["PC1","PC2","PC3"]',
+                versions_json="{}",
+                npz_relpath="cache/projections/proj-keep-0001.npz",
+                count=5,
+                source_signature="sig",
+                created_at="2026-10-15T10:00:00+00:00",
+                updated_at="2026-10-15T10:00:00+00:00",
+            )
+        )
+        session.commit()
+
+    # Simulate a stage-3 (v3) database.
+    with ctx.engine.begin() as conn:
+        conn.execute(text("DROP TABLE projection_presets"))
+        conn.execute(text("UPDATE meta SET value='3' WHERE key='schema_version'"))
+    store.close_all()
+
+    engine, factory = open_database(db_path)
+    with factory() as session:
+        kept = session.get(ProjectionRunRow, "proj-keep-0001")
+        assert kept is not None and kept.count == 5
+    with engine.connect() as conn:
+        version = conn.execute(
+            text("SELECT value FROM meta WHERE key='schema_version'")
+        ).scalar_one()
+        tables = {
+            row[0]
+            for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
+        }
+    engine.dispose()
+    from app.storage.db import CURRENT_DB_SCHEMA
+
+    assert version == str(CURRENT_DB_SCHEMA)
+    assert "projection_presets" in tables
+    assert "projection_runs" in tables

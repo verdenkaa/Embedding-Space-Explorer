@@ -399,6 +399,7 @@ def test_db_migration_from_v1_is_additive(settings: Settings) -> None:
     with ctx.engine.begin() as conn:
         conn.execute(text("DROP TABLE embedding_runs"))
         conn.execute(text("DROP TABLE projection_runs"))
+        conn.execute(text("DROP TABLE projection_presets"))
         conn.execute(text("UPDATE meta SET value='1' WHERE key='schema_version'"))
     store.close_all()
 
@@ -417,9 +418,12 @@ def test_db_migration_from_v1_is_additive(settings: Settings) -> None:
             for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
         }
     engine.dispose()
-    assert version == "3"
+    from app.storage.db import CURRENT_DB_SCHEMA
+
+    assert version == str(CURRENT_DB_SCHEMA)
     assert "embedding_runs" in tables
     assert "projection_runs" in tables
+    assert "projection_presets" in tables
     assert "files" in tables
     backups = list(ctx.project_dir.glob("project.db.bak-*"))
     assert len(backups) == 1

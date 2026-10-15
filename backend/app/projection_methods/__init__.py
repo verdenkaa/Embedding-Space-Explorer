@@ -1,7 +1,8 @@
 """Projection methods package (stage 3).
 
 Public surface used by jobs/api:
-- `registry`: METHODS catalog, get_method/require_method, library_versions;
+- `registry`: METHODS catalog (PCA / UMAP / raw axes), get_method/require_method,
+  library_versions;
 - `base`: ProjectionMethod interface, ParamSpec, fingerprint, errors;
 - `cache`: ProjectionCache (.npz coordinate store).
 """

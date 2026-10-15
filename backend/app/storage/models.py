@@ -1,4 +1,4 @@
-"""SQLAlchemy models for a project database (db schema v3).
+"""SQLAlchemy models for a project database (db schema v4).
 
 Entities and ID rules are documented in docs/data-model.md.
 """
@@ -144,3 +144,22 @@ class ProjectionRunRow(Base):
     source_signature: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[str] = mapped_column(String(40))
     updated_at: Mapped[str] = mapped_column(String(40))
+
+
+class ProjectionPresetRow(Base):
+    """A named, reusable projection form state (method + params + seed).
+
+    Presets make found axis combinations/method settings returnable in one
+    click (research workflow). They do NOT pin an embedding run: a preset is
+    applied to whichever run the user selects. Names are unique per project.
+    """
+
+    __tablename__ = "projection_presets"
+    __table_args__ = (UniqueConstraint("name", name="uq_proj_preset_name"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    method: Mapped[str] = mapped_column(String(32))
+    params_json: Mapped[str] = mapped_column(String(2048))
+    seed: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[str] = mapped_column(String(40))

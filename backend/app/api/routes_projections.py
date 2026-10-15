@@ -8,21 +8,26 @@ selected point (TZ §3, scenario B).
 from __future__ import annotations
 
 import json
+import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import get_job_manager, get_project
 from app.api.errors import ApiError
 from app.api.routes_embeddings import reject_if_active_job
 from app.api.schemas import (
     ComputeProjectionRequest,
+    CreatePresetRequest,
     JobInfo,
     ProjectionMethodInfoDTO,
     ProjectionParamSpecDTO,
     ProjectionPointDTO,
     ProjectionPointsDTO,
+    ProjectionPresetDTO,
     ProjectionRunDTO,
 )
 from app.api.serialization import job_info_from_row
@@ -35,7 +40,14 @@ from app.projection_methods.base import (
 )
 from app.projection_methods.cache import ProjectionCache
 from app.projection_methods.registry import METHODS, get_method
-from app.storage.models import EmbeddingRunRow, FileRow, FragmentRow, JobRow, ProjectionRunRow
+from app.storage.models import (
+    EmbeddingRunRow,
+    FileRow,
+    FragmentRow,
+    JobRow,
+    ProjectionPresetRow,
+    ProjectionRunRow,
+)
 from app.storage.projects_store import ProjectContext
 from app.vector_store.npz_cache import NpzEmbeddingCache
 
@@ -69,6 +81,8 @@ def list_projection_methods() -> list[ProjectionMethodInfoDTO]:
                         max_value=spec.max_value,
                         step=spec.step,
                         choices=list(spec.choices) if spec.choices else None,
+                        min_items=spec.min_items,
+                        max_items=spec.max_items,
                     )
                     for spec in method.param_specs
                 ],
@@ -89,6 +103,21 @@ def _parse_json(raw: str | None, fallback: object) -> object:
 def _method_display_name(method_id: str) -> str:
     method = get_method(method_id)
     return method.display_name if method else method_id
+
+
+def _validated_axes(normalized: dict[str, object], run_dim: int) -> list[int]:
+    """Range-check the selected raw axes against the run's dimensionality."""
+    raw = normalized.get("axes", [])
+    if not isinstance(raw, list):
+        raise ProjectionParamsError("parameter 'axes' must be a list of integers")
+    axes = [int(a) for a in raw]
+    if run_dim > 0:
+        out_of_range = [a for a in axes if a < 0 or a >= run_dim]
+        if out_of_range:
+            raise ProjectionParamsError(
+                f"axis indices out of range 0..{run_dim - 1}: {out_of_range}"
+            )
+    return axes
 
 
 @projections_router.post("/projections/compute", response_model=JobInfo, status_code=202)
@@ -119,12 +148,6 @@ def compute_projection(
             "Reinstall backend dependencies (scripts\\dev.bat or "
             "pip install -r backend/requirements.txt).",
         )
-    try:
-        components = normalize_components(payload.components)
-        normalized = method.validate_params(payload.params)
-    except ProjectionParamsError as exc:
-        raise ApiError(400, "invalid_projection_params", str(exc)) from None
-
     with ctx.session_factory() as session:
         emb_run = session.get(EmbeddingRunRow, payload.embedding_run_id)
         if emb_run is None:
@@ -141,6 +164,19 @@ def compute_projection(
                 "The embedding run has no vectors yet.",
                 "Compute embeddings first, then build the projection.",
             )
+        run_dim = emb_run.dim
+
+    try:
+        normalized = method.validate_params(payload.params)
+        if method.method_id == "raw_axes":
+            axes = _validated_axes(normalized, run_dim)
+            # One display coordinate per selected axis — components are
+            # DERIVED, never guessed (a 2-axis preset cannot fill the 3D view).
+            components = [len(axes)]
+        else:
+            components = normalize_components(payload.components)
+    except ProjectionParamsError as exc:
+        raise ApiError(400, "invalid_projection_params", str(exc)) from None
 
     # A projection must not race embedding recomputation or another fit.
     reject_if_active_job(ctx, ("projection", "embed", "model_download"), "projection_job_active")
@@ -297,3 +333,107 @@ def get_projection_points(
         dropped_orphans=dropped,
         points=points,
     )
+
+
+# ---------------------------------------------------------------------------
+# Projection presets (named form states — research workflow)
+# ---------------------------------------------------------------------------
+
+
+def _utc_now() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+@projections_router.get("/projection-presets", response_model=list[ProjectionPresetDTO])
+def list_presets(
+    ctx: Annotated[ProjectContext, Depends(get_project)],
+) -> list[ProjectionPresetDTO]:
+    with ctx.session_factory() as session:
+        rows = (
+            session.execute(select(ProjectionPresetRow).order_by(ProjectionPresetRow.name))
+            .scalars()
+            .all()
+        )
+    return [
+        ProjectionPresetDTO(
+            id=row.id,
+            name=row.name,
+            method=row.method,
+            method_display_name=_method_display_name(row.method),
+            params=_parse_json(row.params_json, {}),  # type: ignore[arg-type]
+            seed=row.seed,
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]
+
+
+@projections_router.post("/projection-presets", response_model=ProjectionPresetDTO, status_code=201)
+def create_preset(
+    ctx: Annotated[ProjectContext, Depends(get_project)],
+    payload: CreatePresetRequest,
+) -> ProjectionPresetDTO:
+    """Save the current form (method + params + seed) under a name.
+
+    Parameters are validated exactly like a compute request; axis ranges are
+    checked at compute time (a preset is not bound to one embedding run).
+    """
+    method = get_method(payload.method)
+    if method is None:
+        raise ApiError(
+            404,
+            "unknown_projection_method",
+            f"Projection method '{payload.method}' is not in the catalog.",
+            "See GET /api/projections/methods for available methods.",
+        )
+    name = payload.name.strip()
+    if not name:
+        raise ApiError(400, "invalid_preset_name", "Preset name must not be empty.")
+    try:
+        normalized = method.validate_params(payload.params)
+    except ProjectionParamsError as exc:
+        raise ApiError(400, "invalid_projection_params", str(exc)) from None
+
+    row = ProjectionPresetRow(
+        id=uuid.uuid4().hex[:12],
+        name=name,
+        method=method.method_id,
+        params_json=json.dumps(normalized, sort_keys=True),
+        seed=payload.seed,
+        created_at=_utc_now(),
+    )
+    with ctx.session_factory() as session:
+        session.add(row)
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            raise ApiError(
+                409,
+                "preset_name_taken",
+                f"A preset named '{name}' already exists in this project.",
+                "Choose another name or delete the existing preset first.",
+            ) from None
+    return ProjectionPresetDTO(
+        id=row.id,
+        name=row.name,
+        method=row.method,
+        method_display_name=_method_display_name(row.method),
+        params=normalized,  # type: ignore[arg-type]
+        seed=row.seed,
+        created_at=row.created_at,
+    )
+
+
+@projections_router.delete("/projection-presets/{preset_id}")
+def delete_preset(
+    ctx: Annotated[ProjectContext, Depends(get_project)],
+    preset_id: str,
+) -> dict[str, str]:
+    with ctx.session_factory() as session:
+        row = session.get(ProjectionPresetRow, preset_id)
+        if row is None:
+            raise ApiError(404, "preset_not_found", f"Preset '{preset_id}' does not exist.")
+        session.delete(row)
+        session.commit()
+    return {"deleted": preset_id}

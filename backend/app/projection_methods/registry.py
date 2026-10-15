@@ -12,9 +12,10 @@ from __future__ import annotations
 
 from app.projection_methods.base import ProjectionMethod, UnknownProjectionMethodError
 from app.projection_methods.pca_method import PcaMethod
+from app.projection_methods.raw_axes_method import RawAxesMethod
 from app.projection_methods.umap_method import UmapMethod
 
-METHODS: tuple[ProjectionMethod, ...] = (PcaMethod(), UmapMethod())
+METHODS: tuple[ProjectionMethod, ...] = (PcaMethod(), UmapMethod(), RawAxesMethod())
 
 
 def get_method(method_id: str) -> ProjectionMethod | None:

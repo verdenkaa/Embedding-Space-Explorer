@@ -24,7 +24,7 @@ from typing import Literal
 
 import numpy as np
 
-ParamType = Literal["int", "float", "bool", "choice"]
+ParamType = Literal["int", "float", "bool", "choice", "int_list"]
 
 #: Display components a projection can be computed for (2D map / 3D scene).
 SUPPORTED_COMPONENTS: tuple[int, ...] = (2, 3)
@@ -56,12 +56,15 @@ class ParamSpec:
 
     name: str
     type: ParamType
-    default: bool | int | float | str
+    default: bool | int | float | str | list[int]
     description: str
     min_value: float | None = None
     max_value: float | None = None
     step: float | None = None
     choices: tuple[str, ...] | None = None
+    #: int_list bounds (number of items)
+    min_items: int | None = None
+    max_items: int | None = None
 
 
 @dataclass(frozen=True)
@@ -128,7 +131,37 @@ class ProjectionMethod:
         raise NotImplementedError
 
 
-def _coerce_param(spec: ParamSpec, value: object) -> bool | int | float | str:
+def _coerce_param(spec: ParamSpec, value: object) -> bool | int | float | str | list[int]:
+    if spec.type == "int_list":
+        if isinstance(value, str):
+            # Tolerate "12, 57" from hand-edited JSON clients; the UI sends lists.
+            parts = [p.strip() for p in value.split(",") if p.strip()]
+            try:
+                value = [int(p) for p in parts]
+            except ValueError:
+                raise ProjectionParamsError(
+                    f"parameter '{spec.name}' must be a list of integers"
+                ) from None
+        if not isinstance(value, (list, tuple)):
+            raise ProjectionParamsError(f"parameter '{spec.name}' must be a list of integers")
+        items: list[int] = []
+        for item in value:
+            if isinstance(item, bool) or not isinstance(item, (int, float)):
+                raise ProjectionParamsError(f"parameter '{spec.name}' must be a list of integers")
+            if isinstance(item, float) and not float(item).is_integer():
+                raise ProjectionParamsError(f"parameter '{spec.name}' must be a list of integers")
+            items.append(int(item))
+        if spec.min_items is not None and len(items) < spec.min_items:
+            raise ProjectionParamsError(
+                f"parameter '{spec.name}' needs at least {spec.min_items} items"
+            )
+        if spec.max_items is not None and len(items) > spec.max_items:
+            raise ProjectionParamsError(
+                f"parameter '{spec.name}' accepts at most {spec.max_items} items"
+            )
+        if len(set(items)) != len(items):
+            raise ProjectionParamsError(f"parameter '{spec.name}' contains duplicates")
+        return items
     if spec.type == "bool":
         if not isinstance(value, bool):
             raise ProjectionParamsError(f"parameter '{spec.name}' must be a boolean")
