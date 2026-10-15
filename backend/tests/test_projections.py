@@ -646,3 +646,91 @@ def test_projection_job_is_observable(
     assert run["params"] == {"whiten": True}
     assert run["seed"] == 5
     assert json.dumps(run["params"], sort_keys=True)  # serializable as stored
+
+
+# ---------------------------------------------------------------------------
+# Real model integration (opt-in: pytest -m real_model)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.real_model
+def test_real_model_projection_e2e(
+    client: TestClient, sample_project: Path, settings: Settings
+) -> None:
+    """Stage-3 acceptance on REAL data: model → embeddings → PCA/UMAP →
+    points; served coordinates are recomputed from the stored .npz vectors
+    and must match (proves the map is built from saved embeddings, not
+    fabricated). Downloads ~90 MB of weights on first run.
+    """
+    from app.embedding_providers.registry import create_provider
+
+    provider = create_provider(FAKE_MODEL_ID, settings.data_dir)
+    if not provider.is_downloaded():
+        provider.download()
+
+    pid = create_indexed_project(client, sample_project)
+    job = client.post(
+        f"/api/projects/{pid}/embeddings/compute",
+        json={"model_id": FAKE_MODEL_ID, "mode": "raw_fragment", "batch_size": 8},
+    ).json()
+    info = wait_for_job(client, pid, job["id"], timeout=600)
+    assert info["state"] == "done", info
+    runs = client.get(f"/api/projects/{pid}/embeddings").json()
+    assert runs[0]["coverage"]["embedded"] == 21
+    run_id = runs[0]["id"]
+    assert runs[0]["dim"] == 384
+
+    # PCA over the real vectors.
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca"},
+    ).json()
+    info = wait_for_job(client, pid, job["id"], timeout=300)
+    assert info["state"] == "done", info
+
+    inventory = client.get(f"/api/projects/{pid}/projections").json()
+    by_nc = {r["n_components"]: r for r in inventory}
+    assert set(by_nc) == {2, 3}
+    assert all(not r["stale"] for r in inventory)
+
+    points = client.get(f"/api/projects/{pid}/projections/{by_nc[3]['id']}/points").json()
+    assert points["count"] == 21
+
+    # Independently recompute PCA from the vectors stored on disk and
+    # compare against what the API served (JSON rounding 1e-6 aside).
+    from sklearn.decomposition import PCA
+
+    emb_npz = settings.data_dir / "projects" / pid / "cache" / "embeddings" / f"{run_id}.npz"
+    cache = NpzEmbeddingCache.load(emb_npz)
+    assert cache is not None and len(cache) == 21
+    pca = PCA(n_components=3, svd_solver="full")
+    expected = pca.fit_transform(cache.vectors)
+    order = {fid: i for i, fid in enumerate(cache.ids)}
+    ratios = points["axis_info"]
+    assert ratios is not None
+    np.testing.assert_allclose(ratios, list(pca.explained_variance_ratio_), atol=1e-5)
+    for point in points["points"]:
+        row = expected[order[point["fragment_id"]]]
+        np.testing.assert_allclose(point["coords"], row, atol=1e-4)
+
+    # UMAP-2D over the same real vectors (seeded → deterministic).
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={
+            "embedding_run_id": run_id,
+            "method": "umap",
+            "components": [2],
+            "params": {"n_neighbors": 5},
+            "seed": 42,
+        },
+    ).json()
+    info = wait_for_job(client, pid, job["id"], timeout=600)
+    assert info["state"] == "done", info
+    umap_runs = [
+        r for r in client.get(f"/api/projects/{pid}/projections").json() if r["method"] == "umap"
+    ]
+    assert len(umap_runs) == 1
+    pts = client.get(f"/api/projects/{pid}/projections/{umap_runs[0]['id']}/points").json()
+    assert pts["count"] == 21
+    assert all(len(p["coords"]) == 2 for p in pts["points"])
+    assert all(np.isfinite(c) for p in pts["points"] for c in p["coords"])
