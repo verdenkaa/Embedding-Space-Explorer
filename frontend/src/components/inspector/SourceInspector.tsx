@@ -148,6 +148,8 @@ export function SourceInspector() {
           options={{
             readOnly: true,
             domReadOnly: true,
+            // Follow container resizes (Allotment sash drags, window resize).
+            automaticLayout: true,
             minimap: { enabled: false },
             fontSize: 12,
             fontFamily: "'Cascadia Code', 'Cascadia Mono', Consolas, 'JetBrains Mono', monospace",

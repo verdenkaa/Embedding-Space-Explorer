@@ -1,4 +1,5 @@
 import { Allotment } from "allotment";
+import "allotment/dist/style.css";
 
 import { useProjectStore } from "../state/projectStore";
 import { CorpusPanel } from "./corpus/CorpusPanel";
