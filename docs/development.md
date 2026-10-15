@@ -65,7 +65,7 @@ scripts\checks.bat            # Windows (или scripts/checks.ps1 из PowerShe
 проекта может не быть:
 
 ```powershell
-.venv\Scripts\python -m pytest          # юнит-тесты (129)
+.venv\Scripts\python -m pytest          # юнит-тесты (138)
 .venv\Scripts\python -m ruff check .    # линтер
 .venv\Scripts\python -m ruff format --check .   # форматирование
 .venv\Scripts\python -m mypy .          # строгая типизация
@@ -93,7 +93,7 @@ UMAP-тестов медленнее: numba компилирует kernel'ы (~1
 Из каталога `frontend/` (в корне репозитория нет `package.json`):
 
 ```powershell
-npm run test        # vitest (jsdom, 123 теста)
+npm run test        # vitest (jsdom, 133 теста)
 npm run lint        # eslint (flat config, typescript-eslint)
 npm run typecheck   # tsc --noEmit, strict
 npm run build       # production-сборка
