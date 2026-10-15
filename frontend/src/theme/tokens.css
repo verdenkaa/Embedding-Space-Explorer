@@ -1,0 +1,62 @@
+/* ============================================================
+   Design tokens — «тёмная исследовательская IDE» (UI-ТЗ §2)
+   ============================================================ */
+
+:root {
+  /* Surfaces */
+  --color-bg: #101316;
+  --color-surface: #151a1f;
+  --color-surface-2: #191e23;
+  --color-surface-3: #1e242a;
+
+  /* Borders & separators */
+  --color-border: #232a31;
+  --color-border-strong: #2e3841;
+
+  /* Text */
+  --color-text: #d7dee5;
+  --color-text-dim: #8a97a3;
+  --color-text-faint: #5c6873;
+
+  /* Accents */
+  --color-accent: #45d6c5; /* teal: selection, interactive accents */
+  --color-accent-blue: #63a9ff; /* third data group */
+  --color-accent-amber: #e8b45a; /* warnings / second data group */
+
+  /* Statuses */
+  --color-ok: #4fbf67;
+  --color-warn: #e8b45a;
+  --color-error: #e5534b;
+
+  /* Typography */
+  --font-ui:
+    "Segoe UI", system-ui, -apple-system, "Roboto", "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    "Cascadia Code", "Cascadia Mono", "Consolas", "JetBrains Mono", "Fira Code", ui-monospace,
+    "SF Mono", Menlo, monospace;
+
+  --text-xs: 10px;
+  --text-sm: 11.5px;
+  --text-md: 13px;
+  --text-lg: 15px;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Shape */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  /* Layout */
+  --topbar-height: 44px;
+  --statusbar-height: 26px;
+
+  /* Focus */
+  --focus-ring: 0 0 0 1.5px var(--color-accent);
+}
