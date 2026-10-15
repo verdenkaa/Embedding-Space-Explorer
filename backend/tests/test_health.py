@@ -51,16 +51,12 @@ def test_health_required_dependencies_installed(client: TestClient) -> None:
         "numpy",
         "torch",
         "sentence-transformers",
+        "scikit-learn",
+        "umap-learn",
     ):
         assert deps[name]["required"] is True
         assert deps[name]["installed"] is True
         assert deps[name]["version"]
-    # Planned heavy dependencies must be reported honestly, not faked.
-    for name in ("scikit-learn", "umap-learn"):
-        assert deps[name]["required"] is False
-        assert deps[name]["planned_stage"]
-        if not deps[name]["installed"]:
-            assert deps[name]["version"] is None
 
 
 def test_health_reports_degraded_for_non_loopback_host(tmp_path: Path) -> None:

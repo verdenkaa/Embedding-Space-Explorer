@@ -35,8 +35,8 @@ DEPENDENCY_PLAN: tuple[tuple[str, bool, str | None], ...] = (
     ("numpy", True, None),
     ("torch", True, None),
     ("sentence-transformers", True, None),
-    ("scikit-learn", False, "stage-3"),
-    ("umap-learn", False, "stage-3"),
+    ("scikit-learn", True, None),
+    ("umap-learn", True, None),
 )
 
 
