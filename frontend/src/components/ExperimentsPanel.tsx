@@ -7,9 +7,10 @@ import { JobProgress } from "./corpus/JobProgress";
 const JOB_POLL_MS = 1000;
 
 /**
- * EXPERIMENTS section (stage 2 scope): embedding model, text-preparation
- * mode, compute runs and coverage. Neighbors/projections/metrics arrive at
- * stages 3–5 — stated honestly, no fake controls (TZ §17.2).
+ * EXPERIMENTS section: embedding model, text-preparation mode, compute runs
+ * and coverage. Projections live in the SPACE section (stage 3);
+ * neighbors/clusters/metrics arrive at stages 4–5 — stated honestly, no
+ * fake controls (TZ §17.2).
  */
 export function ExperimentsPanel() {
   const current = useProjectStore((s) => s.current);
@@ -59,10 +60,10 @@ export function ExperimentsPanel() {
   return (
     <div className="experiments">
       <div className="diagnostics__header">
-        <h1 className="diagnostics__title">Эксперименты — Этап 2: эмбеддинги</h1>
+        <h1 className="diagnostics__title">Эксперименты: эмбеддинги и запуски</h1>
         <p className="diagnostics__subtitle">
-          Модель, режим подготовки текста и расчёт векторов. Соседи, проекции и метрики
-          появятся на этапах 3–5.
+          Модель, режим подготовки текста и расчёт векторов. Проекции строятся и
+          исследуются в разделе SPACE; соседи, кластеры и метрики появятся на этапах 4–5.
         </p>
       </div>
 
