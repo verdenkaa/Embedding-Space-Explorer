@@ -267,3 +267,89 @@ export interface PreparationPreviews {
   raw_fragment: string;
   context_enriched: string;
 }
+
+/* ------------------------------------------------------------------ */
+/* Stage 3: projections                                                */
+/* ------------------------------------------------------------------ */
+
+export type ProjectionParamType = "int" | "float" | "bool" | "choice";
+
+/** Declarative parameter spec — drives the projection form (single source
+ *  of truth is the backend catalog; no hidden values). */
+export interface ProjectionParamSpec {
+  name: string;
+  type: ProjectionParamType;
+  default: number | boolean | string;
+  description: string;
+  min_value: number | null;
+  max_value: number | null;
+  step: number | null;
+  choices: string[] | null;
+}
+
+export interface ProjectionMethodInfo {
+  method_id: string;
+  display_name: string;
+  description: string;
+  /** Honest interpretation caveat shown next to the method (TZ §5.2). */
+  caveat: string;
+  available: boolean;
+  supported_components: number[];
+  params: ProjectionParamSpec[];
+}
+
+export interface ComputeProjectionRequest {
+  embedding_run_id: string;
+  method: string;
+  /** 3 = 3D scene, 2 = 2D map; both by default. */
+  components: number[];
+  params: Record<string, number | boolean | string>;
+  seed: number;
+}
+
+export interface ProjectionRunDTO {
+  id: string;
+  embedding_run_id: string;
+  method: string;
+  method_display_name: string;
+  n_components: number;
+  params: Record<string, number | boolean | string>;
+  seed: number;
+  axis_labels: string[];
+  /** PCA explained variance ratio per axis; null for methods without it. */
+  axis_info: number[] | null;
+  count: number;
+  /** Vectors changed since compute → the map is outdated, recompute. */
+  stale: boolean;
+  /** Coordinate cache readable; false → points endpoint 409s. */
+  cache_ok: boolean;
+  versions: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One point: display coordinates + full traceability to the source. */
+export interface ProjectionPoint {
+  fragment_id: string;
+  file_id: string;
+  rel_path: string;
+  kind: string;
+  name: string | null;
+  symbol_path: string;
+  start_line: number;
+  end_line: number;
+  coords: number[];
+}
+
+export interface ProjectionPoints {
+  projection_id: string;
+  method: string;
+  method_display_name: string;
+  n_components: number;
+  axis_labels: string[];
+  axis_info: number[] | null;
+  stale: boolean;
+  count: number;
+  dropped_orphans: number;
+  points: ProjectionPoint[];
+}

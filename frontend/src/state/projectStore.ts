@@ -2,9 +2,10 @@
  * Project/corpus store (zustand — the single state manager, TZ §2.2).
  *
  * Holds: project list & current project, file list, selected file (detail +
- * content), selection state (active fragment — shared with future 3D/2D views
- * by fragment id, TZ §4.4), located fragments from editor selection, changes
- * report, active background job with polling.
+ * content), selection state (active fragment + multi-selection — shared by
+ * the 3D scene, 2D map, fragment lists and Monaco by fragment id, TZ §4.4),
+ * located fragments from editor selection, changes report, active background
+ * job with polling.
  */
 
 import { create } from "zustand";
@@ -39,6 +40,8 @@ interface ProjectState {
   fileDetail: FileDetail | null;
   fileContent: FileContent | null;
   activeFragmentId: string | null;
+  /** Multi/area selection (superset may differ from active; syncs all views). */
+  selectedFragmentIds: string[];
   locatedFragments: FragmentMeta[] | null;
   locatedNote: string | null;
   searchQuery: string;
@@ -60,6 +63,10 @@ interface ProjectState {
   refreshFiles: () => Promise<void>;
   selectFile: (fileId: string) => Promise<void>;
   selectFragment: (fragment: FragmentMeta | null) => Promise<void>;
+  /** Ctrl/Cmd-click semantics: toggle membership, active follows the click. */
+  toggleFragmentSelection: (fragment: FragmentMeta) => Promise<void>;
+  /** Area (marquee) selection: replaces the multi-set, keeps the active one. */
+  setSelectedFragments: (ids: string[]) => void;
   clearSelection: () => void;
   locateFromEditorSelection: (startLine: number, endLine: number) => Promise<void>;
   setSearchQuery: (query: string) => void;
@@ -90,6 +97,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   fileDetail: null,
   fileContent: null,
   activeFragmentId: null,
+  selectedFragmentIds: [],
   locatedFragments: null,
   locatedNote: null,
   searchQuery: "",
@@ -132,6 +140,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       fileDetail: null,
       fileContent: null,
       activeFragmentId: null,
+      selectedFragmentIds: [],
       locatedFragments: null,
       locatedNote: null,
       searchQuery: "",
@@ -160,6 +169,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       fileDetail: null,
       fileContent: null,
       activeFragmentId: null,
+      selectedFragmentIds: [],
       locatedFragments: null,
       locatedNote: null,
       searchQuery: "",
@@ -224,6 +234,8 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         locatedNote: null,
         loading: false,
       });
+      // NOTE: multi-selection is intentionally kept — browsing files must not
+      // destroy an area selection made in the space views.
     } catch (err) {
       set({ loading: false, error: toError(err) });
     }
@@ -238,11 +250,40 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     if (fragment.file_id !== selectedFileId) {
       await get().selectFile(fragment.file_id);
     }
-    set({ activeFragmentId: fragment.id });
+    // Single selection: the multi-set follows (all views highlight one point).
+    set({ activeFragmentId: fragment.id, selectedFragmentIds: [fragment.id] });
+  },
+
+  toggleFragmentSelection: async (fragment) => {
+    const { selectedFragmentIds, selectedFileId } = get();
+    const has = selectedFragmentIds.includes(fragment.id);
+    const next = has
+      ? selectedFragmentIds.filter((id) => id !== fragment.id)
+      : [...selectedFragmentIds, fragment.id];
+    if (!has && fragment.file_id !== selectedFileId) {
+      await get().selectFile(fragment.file_id);
+    }
+    // Active follows the click; removing the active one leaves the last
+    // remaining selected fragment active (or nothing).
+    const active = has
+      ? next.length > 0
+        ? next[next.length - 1]
+        : null
+      : fragment.id;
+    set({ selectedFragmentIds: next, activeFragmentId: active });
+  },
+
+  setSelectedFragments: (ids) => {
+    set({ selectedFragmentIds: ids });
   },
 
   clearSelection: () => {
-    set({ activeFragmentId: null, locatedFragments: null, locatedNote: null });
+    set({
+      activeFragmentId: null,
+      selectedFragmentIds: [],
+      locatedFragments: null,
+      locatedNote: null,
+    });
   },
 
   locateFromEditorSelection: async (startLine, endLine) => {

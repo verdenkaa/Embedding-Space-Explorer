@@ -7,10 +7,14 @@
 import type {
   ChangesReport,
   ComputeEmbeddingsRequest,
+  ComputeProjectionRequest,
   CreateProjectRequest,
   EmbeddingRunDTO,
   ModelInfo,
   PreparationPreviews,
+  ProjectionMethodInfo,
+  ProjectionPoints,
+  ProjectionRunDTO,
   FileContent,
   FileDetail,
   FileSummary,
@@ -164,6 +168,16 @@ export const api = {
     request<JobInfo>(`/api/projects/${pid}/embeddings/compute`, jsonInit("POST", payload)),
   listEmbeddingRuns: (pid: string): Promise<EmbeddingRunDTO[]> =>
     request<EmbeddingRunDTO[]>(`/api/projects/${pid}/embeddings`),
+
+  /* projections (stage 3) */
+  listProjectionMethods: (): Promise<ProjectionMethodInfo[]> =>
+    request<ProjectionMethodInfo[]>("/api/projections/methods"),
+  computeProjection: (pid: string, payload: ComputeProjectionRequest): Promise<JobInfo> =>
+    request<JobInfo>(`/api/projects/${pid}/projections/compute`, jsonInit("POST", payload)),
+  listProjections: (pid: string): Promise<ProjectionRunDTO[]> =>
+    request<ProjectionRunDTO[]>(`/api/projects/${pid}/projections`),
+  getProjectionPoints: (pid: string, projectionId: string): Promise<ProjectionPoints> =>
+    request<ProjectionPoints>(`/api/projects/${pid}/projections/${projectionId}/points`),
 
   /* filesystem browser (root picker) */
   listDirs: (path?: string): Promise<FsListResponse> =>
