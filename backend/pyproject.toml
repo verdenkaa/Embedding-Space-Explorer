@@ -1,0 +1,40 @@
+[project]
+name = "ese-backend"
+version = "0.1.0"
+description = "Local backend for Embedding Space Explorer (research tool for embedding spaces of source code)"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "fastapi==0.143.1",
+    "pydantic==2.14.1",
+    "uvicorn==0.54.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "RUF", # ruff-specific
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["app", "tests"]
