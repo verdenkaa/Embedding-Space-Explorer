@@ -5,6 +5,7 @@ import type { Monaco } from "@monaco-editor/react";
 import type { editor as MonacoEditor } from "monaco-editor";
 
 import { useProjectStore } from "../../state/projectStore";
+import { useUiStore } from "../../state/uiStore";
 import {
   ESE_THEME,
   computeDecorations,
@@ -28,6 +29,7 @@ export function SourceInspector() {
   const locatedNote = useProjectStore((s) => s.locatedNote);
   const selectFragment = useProjectStore((s) => s.selectFragment);
   const locateFromEditorSelection = useProjectStore((s) => s.locateFromEditorSelection);
+  const setInspectorVisible = useUiStore((s) => s.setInspectorVisible);
 
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
@@ -91,6 +93,15 @@ export function SourceInspector() {
         <span className="source-inspector__meta mono">
           {fileContent.total_lines} строк · {language} · только просмотр
         </span>
+        <button
+          type="button"
+          className="source-inspector__close"
+          onClick={() => setInspectorVisible(false)}
+          aria-label="Закрыть инспектор исходного кода"
+          title="Закрыть панель (можно открыть снова кнопкой справа)"
+        >
+          ✕
+        </button>
       </header>
 
       {locatedFragments !== null && (

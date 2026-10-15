@@ -15,6 +15,8 @@ import type {
   PrepMode,
   PreparationPreviews,
   ProjectionMethodInfo,
+  ProjectionParamValue,
+  ProjectionPresetDTO,
   ProjectionRunDTO,
 } from "../api/types";
 import { useProjectStore } from "./projectStore";
@@ -25,7 +27,7 @@ export interface ExperimentError {
   hint?: string;
 }
 
-export type ProjectionParamValues = Record<string, number | boolean | string>;
+export type ProjectionParamValues = Record<string, ProjectionParamValue>;
 
 interface ExperimentState {
   models: ModelInfo[] | null;
@@ -39,6 +41,8 @@ interface ExperimentState {
   /* projections (stage 3) */
   projectionMethods: ProjectionMethodInfo[] | null;
   projections: ProjectionRunDTO[] | null;
+  presets: ProjectionPresetDTO[] | null;
+  presetName: string;
   /** Source embedding run for the projection form (null = pick newest). */
   projRunId: string | null;
   projMethod: string;
@@ -58,9 +62,14 @@ interface ExperimentState {
   loadProjections: () => Promise<void>;
   setProjRunId: (id: string | null) => void;
   setProjMethod: (methodId: string) => void;
-  setProjParam: (name: string, value: number | boolean | string) => void;
+  setProjParam: (name: string, value: ProjectionParamValue) => void;
   setProjSeed: (seed: number) => void;
   startProjection: () => Promise<void>;
+  loadPresets: () => Promise<void>;
+  savePreset: () => Promise<void>;
+  deletePreset: (id: string) => Promise<void>;
+  applyPreset: (id: string) => void;
+  setPresetName: (name: string) => void;
   tickActiveJob: () => Promise<void>;
   cancelActiveJob: () => Promise<void>;
 }
@@ -93,6 +102,8 @@ export const useExperimentStore = create<ExperimentState>()((set, get) => ({
   batchSize: 16,
   projectionMethods: null,
   projections: null,
+  presets: null,
+  presetName: "",
   projRunId: null,
   projMethod: "pca",
   projParams: {},
@@ -195,10 +206,17 @@ export const useExperimentStore = create<ExperimentState>()((set, get) => ({
     }
     set({ error: null });
     try {
+      // raw_axes: one coordinate per selected axis — the component count is
+      // derived from the axes, never [3,2] (backend enforces the same rule).
+      const axes = projParams["axes"];
+      const components =
+        projMethod === "raw_axes" && Array.isArray(axes) && axes.length >= 2
+          ? [axes.length]
+          : [3, 2];
       const job = await api.computeProjection(project.id, {
         embedding_run_id: embeddingRunId,
         method: projMethod,
-        components: [3, 2],
+        components,
         params: projParams,
         seed: projSeed,
       });
@@ -207,6 +225,60 @@ export const useExperimentStore = create<ExperimentState>()((set, get) => ({
       set({ error: toError(err) });
     }
   },
+
+  loadPresets: async () => {
+    const project = useProjectStore.getState().current;
+    if (!project) return;
+    try {
+      const presets = await api.listPresets(project.id);
+      set({ presets, error: null });
+    } catch (err) {
+      set({ error: toError(err) });
+    }
+  },
+
+  savePreset: async () => {
+    const project = useProjectStore.getState().current;
+    const { presetName, projMethod, projParams, projSeed } = get();
+    const name = presetName.trim();
+    if (!project || !name) return;
+    set({ error: null });
+    try {
+      await api.createPreset(project.id, {
+        name,
+        method: projMethod,
+        params: projParams,
+        seed: projSeed,
+      });
+      set({ presetName: "" });
+      await get().loadPresets();
+    } catch (err) {
+      set({ error: toError(err) });
+    }
+  },
+
+  deletePreset: async (id) => {
+    const project = useProjectStore.getState().current;
+    if (!project) return;
+    try {
+      await api.deletePreset(project.id, id);
+      await get().loadPresets();
+    } catch (err) {
+      set({ error: toError(err) });
+    }
+  },
+
+  applyPreset: (id) => {
+    const preset = get().presets?.find((p) => p.id === id);
+    if (!preset) return;
+    set({
+      projMethod: preset.method,
+      projParams: { ...preset.params },
+      projSeed: preset.seed,
+    });
+  },
+
+  setPresetName: (name) => set({ presetName: name }),
 
   startDownload: async (modelId) => {
     const project = useProjectStore.getState().current;

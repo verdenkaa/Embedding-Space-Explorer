@@ -167,6 +167,20 @@ describe("Scene3D with a cloud", () => {
     expect(legend.textContent).toContain("1"); // count per kind
   });
 
+  it("legend is collapsible (many kinds can never cover the scene)", () => {
+    seedCloud();
+    render(<Scene3D />);
+    const legend = screen.getByLabelText(/Легенда/);
+    expect(legend.textContent).toContain("method");
+    const toggle = screen.getByRole("button", { name: /Легенда/ });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByLabelText(/Легенда/).textContent).not.toContain("method");
+    fireEvent.click(toggle);
+    expect(screen.getByLabelText(/Легенда/).textContent).toContain("method");
+  });
+
   it("toolbar switches the interaction mode", () => {
     seedCloud();
     render(<Scene3D />);

@@ -28,6 +28,9 @@ interface UiState {
   lastCheckedAt: number | null;
   activeSection: ActiveSection;
   setActiveSection: (section: ActiveSection) => void;
+  /** Right-hand source inspector pane visibility (close button in its header). */
+  inspectorVisible: boolean;
+  setInspectorVisible: (visible: boolean) => void;
   /**
    * Fetch backend health. Background polls call it without options;
    * a user-initiated retry passes `{ interactive: true }` so the loading
@@ -42,8 +45,10 @@ export const useUiStore = create<UiState>()((set, get) => ({
   error: null,
   lastCheckedAt: null,
   activeSection: "corpus",
+  inspectorVisible: true,
 
   setActiveSection: (section) => set({ activeSection: section }),
+  setInspectorVisible: (visible) => set({ inspectorVisible: visible }),
 
   refreshHealth: async (opts) => {
     // Show the loading state on the first fetch or on an explicit user retry;

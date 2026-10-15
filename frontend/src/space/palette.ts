@@ -16,7 +16,7 @@ export const COLORS = {
   teal: "#45d6c5",
   blue: "#63a9ff",
   amber: "#e8b45a",
-  gray: "#7d8994",
+  gray: "#8fa0ae",
   selected: "#e8b45a", // amber ring for multi-selection
   active: "#45d6c5", // teal ring for the active fragment
   hover: "#ffffff",

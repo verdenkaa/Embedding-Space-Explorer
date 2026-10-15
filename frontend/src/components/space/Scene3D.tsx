@@ -184,30 +184,24 @@ function SceneContents({
         onPointerOut={() => onHover(null)}
         onClick={(e) => {
           e.stopPropagation();
+          // R3F fires click even after an orbit drag: e.delta is the pointer
+          // travel in px — a real pick requires a near-stationary click.
+          if (e.delta > DRAG_SLOP_PX) return;
           const index = e.intersections[0]?.index;
           if (index !== undefined) {
             onPick(index, e.nativeEvent.ctrlKey || e.nativeEvent.metaKey);
           }
         }}
       >
-        <pointsMaterial
-          vertexColors
-          size={0.014 * pointSize}
-          sizeAttenuation
-          transparent
-          opacity={0.92}
-          depthWrite={false}
-        />
+        <pointsMaterial vertexColors size={0.021 * pointSize} sizeAttenuation />
       </points>
 
       {selectedIds.length > 0 && (
         <points geometry={selectedGeometry} raycast={() => null}>
           <pointsMaterial
             color={COLORS.selected}
-            size={0.03 * pointSize}
+            size={0.034 * pointSize}
             sizeAttenuation
-            transparent
-            opacity={0.9}
             depthWrite={false}
           />
         </points>
@@ -262,6 +256,7 @@ export function Scene3D() {
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const draggedRef = useRef(false);
   const [shiftDown, setShiftDown] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(true);
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(
     null,
   );
@@ -328,7 +323,7 @@ export function Scene3D() {
   /* Marquee: container-level pointer tracking (the rect DOM overlay lives
      outside the Canvas; selection math projects points with the camera). */
   const finishMarquee = useCallback(
-    (rectPx: { x0: number; y0: number; x1: number; y1: number }) => {
+    (rectPx: { x0: number; y0: number; x1: number; y1: number }, additive: boolean) => {
       const container = containerRef.current;
       const camera = cameraRef.current;
       if (!container || !camera || !cloud) return;
@@ -353,7 +348,13 @@ export function Scene3D() {
         ndc[i * 2 + 1] = v.y;
       }
       const indices = indicesInNdcRect(ndc, ndcRect);
-      setSelectedFragments(indices.map((i) => cloud.metas[i].fragmentId));
+      const picked = indices.map((i) => cloud.metas[i].fragmentId);
+      if (additive) {
+        const current = useProjectStore.getState().selectedFragmentIds;
+        setSelectedFragments([...new Set([...current, ...picked])]);
+      } else {
+        setSelectedFragments(picked);
+      }
     },
     [cloud, setSelectedFragments],
   );
@@ -385,9 +386,9 @@ export function Scene3D() {
     }
   };
 
-  const onContainerPointerUp = () => {
+  const onContainerPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (marquee) {
-      finishMarquee(marquee);
+      finishMarquee(marquee, e.ctrlKey || e.metaKey);
       setMarquee(null);
     }
     dragStartRef.current = null;
@@ -447,7 +448,7 @@ export function Scene3D() {
       aria-label="3D embedding-пространство (проекция)"
     >
       <Canvas
-        dpr={[1, 1.5]}
+        dpr={[1, 2]}
         camera={{ position: [1.9, 1.35, 1.9], fov: 50, near: 0.01, far: 60 }}
         onCreated={({ raycaster, gl }) => {
           raycaster.params.Points.threshold = HIT_THRESHOLD;
@@ -495,7 +496,7 @@ export function Scene3D() {
           type="button"
           className={`btn btn--small${interactionMode === "marquee" ? " btn--primary" : ""}`}
           onClick={() => setInteractionMode("marquee")}
-          title="Выделение области прямоугольником (или удерживайте Shift)"
+          title="Выделение области прямоугольником (или удерживайте Shift); Ctrl добавляет область к текущему выделению"
           aria-pressed={interactionMode === "marquee"}
         >
           ▭ Область
@@ -531,16 +532,34 @@ export function Scene3D() {
         </label>
       </div>
 
-      {/* Legend: color + text badge (never color-only, TZ §4.1) */}
+      {/* Legend: color + text badge (never color-only, TZ §4.1); collapsible
+          and scrollable so many kinds can never cover the scene */}
       <div className="scene3d__legend" aria-label="Легенда: цвет по типу фрагмента">
-        {legend.map((entry) => (
-          <span key={entry.kind} className="legend-item" title={`${entry.count} фрагментов`}>
-            <span className="legend-item__dot" style={{ background: entry.color }} aria-hidden="true" />
-            <span className="legend-item__badge mono">{kindBadge(entry.kind)}</span>
-            <span className="mono">{entry.kind}</span>
-            <span className="legend-item__count mono">{entry.count}</span>
-          </span>
-        ))}
+        <button
+          type="button"
+          className="scene3d__legend-toggle"
+          onClick={() => setLegendOpen((v) => !v)}
+          aria-expanded={legendOpen}
+          title="Свернуть/развернуть легенду"
+        >
+          Легенда · {legend.length} {legendOpen ? "▾" : "▸"}
+        </button>
+        {legendOpen && (
+          <div className="scene3d__legend-items">
+            {legend.map((entry) => (
+              <span key={entry.kind} className="legend-item" title={`${entry.count} фрагментов`}>
+                <span
+                  className="legend-item__dot"
+                  style={{ background: entry.color }}
+                  aria-hidden="true"
+                />
+                <span className="legend-item__badge mono">{kindBadge(entry.kind)}</span>
+                <span className="mono">{entry.kind}</span>
+                <span className="legend-item__count mono">{entry.count}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Hover tooltip */}

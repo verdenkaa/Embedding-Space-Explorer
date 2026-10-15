@@ -6,7 +6,7 @@
  * client code under test are the production ones).
  */
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EmbeddingRunDTO, ProjectionPoints, ProjectionRunDTO } from "../../api/types";
@@ -14,6 +14,7 @@ import { mockFetch } from "../../testUtils";
 import { useProjectStore } from "../../state/projectStore";
 import { useExperimentStore } from "../../state/experimentStore";
 import { useSpaceStore } from "../../state/spaceStore";
+import { useUiStore } from "../../state/uiStore";
 
 vi.mock("allotment", () => {
   const Allotment = ({ children }: { children: React.ReactNode }) => (
@@ -28,6 +29,7 @@ vi.mock("./ProjectionControls", () => ({
   ProjectionControls: () => <div data-testid="projection-controls" />,
   ExperimentJobPoller: () => null,
 }));
+// keep the real ViewModeToggle (it is part of SpaceSection module itself)
 vi.mock("../corpus/CorpusPanel", () => ({ CorpusPanel: () => <div data-testid="corpus" /> }));
 vi.mock("../inspector/SourceInspector", () => ({
   SourceInspector: () => <div data-testid="inspector" />,
@@ -120,6 +122,7 @@ function stubBackend() {
     "/api/projects/p1/projections/p3old/points": pointsFor("p3old", 3),
     "/api/projects/p1/projections/p2fresh/points": pointsFor("p2fresh", 2),
     "/api/projects/p1/projections": INVENTORY,
+    "/api/projects/p1/projection-presets": [],
     "/api/projects/p1/embeddings": [EMB_RUN],
     "/api/projections/methods": [],
   });
@@ -128,6 +131,7 @@ function stubBackend() {
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  useUiStore.setState({ inspectorVisible: true });
   stubBackend();
   useProjectStore.setState({ current: { id: "p1", name: "Sample" } as never, error: null });
   useExperimentStore.setState({
@@ -144,12 +148,42 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("SpaceSection", () => {
-  it("mounts the full layout: corpus | 3D / controls / 2D | inspector", async () => {
+  it("mounts the layout: corpus | toggle + 3D + controls(bottom) | inspector", async () => {
     render(<SpaceSection />);
     expect(screen.getByTestId("corpus")).toBeTruthy();
     expect(screen.getByTestId("scene3d")).toBeTruthy();
     expect(screen.getByTestId("projection-controls")).toBeTruthy();
+    expect(screen.getByTestId("inspector")).toBeTruthy();
+    // default view mode is 3D-only: the 2D map is not rendered
+    expect(screen.queryByTestId("projection2d")).toBeNull();
+  });
+
+  it("view-mode toggle switches between 3D, 2D and both", () => {
+    render(<SpaceSection />);
+    const toggle = screen.getByRole("group", { name: "Режим представления" });
+    expect(toggle.textContent).toContain("3D");
+
+    fireEvent.click(screen.getByRole("button", { name: "3D+2D" }));
+    expect(screen.getByTestId("scene3d")).toBeTruthy();
     expect(screen.getByTestId("projection2d")).toBeTruthy();
+    expect(useSpaceStore.getState().viewMode).toBe("split");
+
+    fireEvent.click(screen.getByRole("button", { name: /^2D$/ }));
+    expect(screen.queryByTestId("scene3d")).toBeNull();
+    expect(screen.getByTestId("projection2d")).toBeTruthy();
+  });
+
+  it("inspector pane follows uiStore visibility with a reopen strip", () => {
+    render(<SpaceSection />);
+    expect(screen.getByTestId("inspector")).toBeTruthy();
+
+    // the close button lives in the inspector header (mocked here) — the
+    // section must react to the store flag and offer a way back
+    act(() => useUiStore.setState({ inspectorVisible: false }));
+    expect(screen.queryByTestId("inspector")).toBeNull();
+    const reopen = screen.getByLabelText("Открыть инспектор исходного кода");
+    fireEvent.click(reopen);
+    expect(useUiStore.getState().inspectorVisible).toBe(true);
     expect(screen.getByTestId("inspector")).toBeTruthy();
   });
 

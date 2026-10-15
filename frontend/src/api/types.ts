@@ -272,19 +272,24 @@ export interface PreparationPreviews {
 /* Stage 3: projections                                                */
 /* ------------------------------------------------------------------ */
 
-export type ProjectionParamType = "int" | "float" | "bool" | "choice";
+export type ProjectionParamType = "int" | "float" | "bool" | "choice" | "int_list";
+
+/** Parameter values: scalars or an integer list (raw-axes selection). */
+export type ProjectionParamValue = number | boolean | string | number[];
 
 /** Declarative parameter spec — drives the projection form (single source
  *  of truth is the backend catalog; no hidden values). */
 export interface ProjectionParamSpec {
   name: string;
   type: ProjectionParamType;
-  default: number | boolean | string;
+  default: ProjectionParamValue;
   description: string;
   min_value: number | null;
   max_value: number | null;
   step: number | null;
   choices: string[] | null;
+  min_items: number | null;
+  max_items: number | null;
 }
 
 export interface ProjectionMethodInfo {
@@ -301,9 +306,10 @@ export interface ProjectionMethodInfo {
 export interface ComputeProjectionRequest {
   embedding_run_id: string;
   method: string;
-  /** 3 = 3D scene, 2 = 2D map; both by default. */
+  /** 3 = 3D scene, 2 = 2D map; both by default. Derived from `axes` for
+   *  the raw_axes method (backend ignores the sent value then). */
   components: number[];
-  params: Record<string, number | boolean | string>;
+  params: Record<string, ProjectionParamValue>;
   seed: number;
 }
 
@@ -313,10 +319,11 @@ export interface ProjectionRunDTO {
   method: string;
   method_display_name: string;
   n_components: number;
-  params: Record<string, number | boolean | string>;
+  params: Record<string, ProjectionParamValue>;
   seed: number;
   axis_labels: string[];
-  /** PCA explained variance ratio per axis; null for methods without it. */
+  /** PCA: explained variance ratio per axis; raw_axes: per-axis std;
+   *  UMAP: null. Meaning depends on the method — the UI labels it. */
   axis_info: number[] | null;
   count: number;
   /** Vectors changed since compute → the map is outdated, recompute. */
@@ -352,4 +359,22 @@ export interface ProjectionPoints {
   count: number;
   dropped_orphans: number;
   points: ProjectionPoint[];
+}
+
+/** Named projection form state (method + params + seed), project-scoped. */
+export interface ProjectionPresetDTO {
+  id: string;
+  name: string;
+  method: string;
+  method_display_name: string;
+  params: Record<string, ProjectionParamValue>;
+  seed: number;
+  created_at: string;
+}
+
+export interface CreatePresetRequest {
+  name: string;
+  method: string;
+  params: Record<string, ProjectionParamValue>;
+  seed: number;
 }

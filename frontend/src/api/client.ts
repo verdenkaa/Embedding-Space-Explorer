@@ -12,8 +12,10 @@ import type {
   EmbeddingRunDTO,
   ModelInfo,
   PreparationPreviews,
+  CreatePresetRequest,
   ProjectionMethodInfo,
   ProjectionPoints,
+  ProjectionPresetDTO,
   ProjectionRunDTO,
   FileContent,
   FileDetail,
@@ -178,6 +180,17 @@ export const api = {
     request<ProjectionRunDTO[]>(`/api/projects/${pid}/projections`),
   getProjectionPoints: (pid: string, projectionId: string): Promise<ProjectionPoints> =>
     request<ProjectionPoints>(`/api/projects/${pid}/projections/${projectionId}/points`),
+  listPresets: (pid: string): Promise<ProjectionPresetDTO[]> =>
+    request<ProjectionPresetDTO[]>(`/api/projects/${pid}/projection-presets`),
+  createPreset: (pid: string, payload: CreatePresetRequest): Promise<ProjectionPresetDTO> =>
+    request<ProjectionPresetDTO>(
+      `/api/projects/${pid}/projection-presets`,
+      jsonInit("POST", payload),
+    ),
+  deletePreset: (pid: string, presetId: string): Promise<{ deleted: string }> =>
+    request<{ deleted: string }>(`/api/projects/${pid}/projection-presets/${presetId}`, {
+      method: "DELETE",
+    }),
 
   /* filesystem browser (root picker) */
   listDirs: (path?: string): Promise<FsListResponse> =>

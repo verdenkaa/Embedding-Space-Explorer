@@ -291,4 +291,30 @@ describe("Projection2D", () => {
       expect(selected).not.toContain("fragC"); // opposite corner, outside
     });
   });
+
+  it("ctrl+drag marquee ADDS the area to the current selection", async () => {
+    const dto = pointsDTO();
+    seedCloud(dto);
+    useProjectStore.setState({ selectedFragmentIds: ["fragC"] });
+    render(<Projection2D />);
+    const canvas = screen.getByRole("img", { name: /2D-проекция/ });
+
+    const a = pixelOf(0, dto); // fragA only
+    fireEvent.pointerDown(canvas, {
+      clientX: a.cx - 5,
+      clientY: a.cy - 5,
+      button: 0,
+      shiftKey: true,
+      ctrlKey: true,
+    });
+    fireEvent.pointerMove(canvas, { clientX: a.cx + 5, clientY: a.cy + 5, ctrlKey: true });
+    fireEvent.pointerUp(canvas, { clientX: a.cx + 5, clientY: a.cy + 5, ctrlKey: true });
+
+    await waitFor(() => {
+      const selected = useProjectStore.getState().selectedFragmentIds;
+      expect(selected).toContain("fragC"); // previous selection kept
+      expect(selected).toContain("fragA"); // area added
+      expect(selected).not.toContain("fragB");
+    });
+  });
 });

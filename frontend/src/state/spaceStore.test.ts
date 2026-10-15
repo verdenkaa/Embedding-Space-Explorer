@@ -244,6 +244,18 @@ describe("view state", () => {
     expect(useSpaceStore.getState().hoverScreen).toBeNull();
   });
 
+  it("view mode defaults to 3D and switches", () => {
+    expect(useSpaceStore.getState().viewMode).toBe("3d");
+    useSpaceStore.getState().setViewMode("split");
+    expect(useSpaceStore.getState().viewMode).toBe("split");
+    useSpaceStore.getState().setViewMode("2d");
+    expect(useSpaceStore.getState().viewMode).toBe("2d");
+    // reset() drops DATA (clouds/hover) but keeps the user's view preference
+    useSpaceStore.getState().reset();
+    expect(useSpaceStore.getState().viewMode).toBe("2d");
+    useSpaceStore.getState().setViewMode("3d");
+  });
+
   it("point size clamps to the supported range", () => {
     useSpaceStore.getState().setPointSize(99);
     expect(useSpaceStore.getState().pointSize).toBe(8);

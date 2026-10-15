@@ -304,7 +304,14 @@ export function Projection2D() {
           minY: d.y, // canvas y grows down → data y grows up
           maxY: c.y,
         });
-        setSelectedFragments(indices.map((i) => cloud.metas[i].fragmentId));
+        const picked = indices.map((i) => cloud.metas[i].fragmentId);
+        if (e.ctrlKey || e.metaKey) {
+          // Ctrl+marquee ADDS the area to the current selection (like ctrl-click)
+          const current = useProjectStore.getState().selectedFragmentIds;
+          setSelectedFragments([...new Set([...current, ...picked])]);
+        } else {
+          setSelectedFragments(picked);
+        }
       }
       setMarquee(null);
       return;

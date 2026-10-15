@@ -51,6 +51,8 @@ export interface SpaceError {
 
 export type CloudKind = "3d" | "2d";
 export type InteractionMode = "orbit" | "marquee";
+/** Which views the center column shows (top toggle in the SPACE section). */
+export type ViewMode = "3d" | "2d" | "split";
 
 interface SpaceState {
   cloud3d: PointCloud | null;
@@ -64,7 +66,9 @@ interface SpaceState {
   hoverScreen: { kind: CloudKind; x: number; y: number } | null;
   interactionMode: InteractionMode;
   pointSize: number;
+  viewMode: ViewMode;
 
+  setViewMode: (mode: ViewMode) => void;
   setActiveProjection: (
     kind: CloudKind,
     projectionId: string | null,
@@ -150,7 +154,10 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
   hoveredId: null,
   hoverScreen: null,
   interactionMode: "orbit",
-  pointSize: 3,
+  pointSize: 4,
+  viewMode: "3d",
+
+  setViewMode: (mode) => set({ viewMode: mode }),
 
   setActiveProjection: async (kind, projectionId, opts) => {
     const project = useProjectStore.getState().current;

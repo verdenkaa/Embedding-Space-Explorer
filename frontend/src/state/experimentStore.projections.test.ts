@@ -32,6 +32,8 @@ const METHODS: ProjectionMethodInfo[] = [
         max_value: null,
         step: null,
         choices: null,
+        min_items: null,
+        max_items: null,
       },
     ],
   },
@@ -52,6 +54,8 @@ const METHODS: ProjectionMethodInfo[] = [
         max_value: 500,
         step: 1,
         choices: null,
+        min_items: null,
+        max_items: null,
       },
       {
         name: "metric",
@@ -62,6 +66,8 @@ const METHODS: ProjectionMethodInfo[] = [
         max_value: null,
         step: null,
         choices: ["cosine", "euclidean"],
+        min_items: null,
+        max_items: null,
       },
     ],
   },
@@ -127,6 +133,8 @@ beforeEach(() => {
     projMethod: "pca",
     projParams: {},
     projSeed: 42,
+    presets: null,
+    presetName: "",
     error: null,
   });
 });
@@ -220,6 +228,83 @@ describe("startProjection", () => {
     await useExperimentStore.getState().startProjection();
     expect(useExperimentStore.getState().error?.code).toBe("projection_job_active");
     expect(useExperimentStore.getState().activeJob).toBeNull();
+  });
+
+  it("raw_axes: components derive from the axes count, never [3,2]", async () => {
+    const { fetchMock, calls } = mockFetch({
+      "POST /projections/compute": mockResponse(202, jobInfo("queued")),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    useExperimentStore.setState({
+      runs: [EMB_RUN],
+      projMethod: "raw_axes",
+      projParams: { axes: [12, 57], standardize: false },
+      projSeed: 3,
+    });
+
+    await useExperimentStore.getState().startProjection();
+    const post = calls.find((c) => c.method === "POST");
+    expect(post?.body).toMatchObject({ method: "raw_axes", components: [2] });
+
+    useExperimentStore.setState({ projParams: { axes: [1, 2, 3], standardize: true } });
+    await useExperimentStore.getState().startProjection();
+    const posts = calls.filter((c) => c.method === "POST");
+    expect(posts[1].body).toMatchObject({ components: [3] });
+  });
+
+  it("raw_axes with <2 axes falls back to the safe default and backend rejects", async () => {
+    // UI disables the build button; the store stays honest if called anyway:
+    // components fall back to [3,2] and the backend answers 400 (min_items).
+    const { fetchMock, calls } = mockFetch({
+      "POST /projections/compute": mockResponse(400, {
+        error: { code: "invalid_projection_params", message: "needs at least 2", hint: null },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    useExperimentStore.setState({
+      runs: [EMB_RUN],
+      projMethod: "raw_axes",
+      projParams: { axes: [5], standardize: false },
+    });
+    await useExperimentStore.getState().startProjection();
+    expect(calls[0].body).toMatchObject({ components: [3, 2] });
+    expect(useExperimentStore.getState().error?.code).toBe("invalid_projection_params");
+  });
+
+  it("presets: save posts the form, apply fills it, delete refreshes the list", async () => {
+    const PRESET = {
+      id: "pre1",
+      name: "Оси 0/3",
+      method: "raw_axes",
+      method_display_name: "Сырые оси",
+      params: { axes: [0, 3], standardize: true },
+      seed: 7,
+      created_at: "",
+    };
+    const { fetchMock, calls } = mockFetch({
+      "/api/projects/p1/projection-presets": [PRESET],
+      "POST /api/projects/p1/projection-presets": mockResponse(201, PRESET),
+      "DELETE /api/projects/p1/projection-presets/pre1": { deleted: "pre1" },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useExperimentStore.getState().loadPresets();
+    expect(useExperimentStore.getState().presets).toEqual([PRESET]);
+
+    useExperimentStore.setState({ presetName: "Оси 0/3", projMethod: "raw_axes" });
+    await useExperimentStore.getState().savePreset();
+    const post = calls.find((c) => c.method === "POST");
+    expect(post?.body).toMatchObject({ name: "Оси 0/3", method: "raw_axes", seed: 42 });
+    expect(useExperimentStore.getState().presetName).toBe(""); // cleared on success
+
+    useExperimentStore.getState().applyPreset("pre1");
+    const s = useExperimentStore.getState();
+    expect(s.projMethod).toBe("raw_axes");
+    expect(s.projParams).toEqual({ axes: [0, 3], standardize: true });
+    expect(s.projSeed).toBe(7);
+
+    await useExperimentStore.getState().deletePreset("pre1");
+    expect(calls.some((c) => c.method === "DELETE")).toBe(true);
   });
 
   it("tickActiveJob refreshes runs, catalog and projections on completion", async () => {
