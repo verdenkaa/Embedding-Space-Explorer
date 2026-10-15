@@ -19,6 +19,8 @@ pythonpath = ["."]
 line-length = 100
 target-version = "py311"
 src = ["app", "tests"]
+# Test fixtures are frozen sample data with known line numbers - never reformat.
+exclude = ["tests/fixtures"]
 
 [tool.ruff.lint]
 select = [
@@ -40,3 +42,4 @@ select = [
 python_version = "3.11"
 strict = true
 files = ["app", "tests"]
+exclude = ["tests/fixtures/"]

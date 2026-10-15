@@ -39,7 +39,16 @@ def test_health_checks_are_ok(client: TestClient) -> None:
 def test_health_required_dependencies_installed(client: TestClient) -> None:
     body = client.get("/api/health").json()
     deps = {d["name"]: d for d in body["dependencies"]}
-    for name in ("fastapi", "pydantic", "uvicorn"):
+    for name in (
+        "fastapi",
+        "pydantic",
+        "uvicorn",
+        "sqlalchemy",
+        "tree-sitter",
+        "tree-sitter-python",
+        "tree-sitter-javascript",
+        "tree-sitter-typescript",
+    ):
         assert deps[name]["required"] is True
         assert deps[name]["installed"] is True
         assert deps[name]["version"]

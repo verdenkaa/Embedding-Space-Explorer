@@ -237,3 +237,8 @@ ese-data/
 
 # Windows / editor noise
 Thumbs.db
+
+# Test fixtures intentionally contain "forbidden" entries (secret-like file,
+# node_modules) to exercise scanner exclusions — keep them in git:
+!backend/tests/fixtures/sample_project/.env
+!backend/tests/fixtures/sample_project/node_modules/
