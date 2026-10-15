@@ -8,4 +8,5 @@ __version__ = "0.3.0"
 # or on-disk formats; migrations live in the storage module.
 # v2: stage 1 — introduces project.db (its own internal db_schema_version = 1).
 # v3: stage 2 — embeddings (db schema v2: additive embedding_runs table).
-SCHEMA_VERSION = 3
+# v4: stage 3 — projections (db schema v3: additive projection_runs table).
+SCHEMA_VERSION = 4

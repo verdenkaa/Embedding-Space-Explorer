@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.fragmentation.base import SplitOptions
 
@@ -324,3 +324,110 @@ class PreparationPreviewsDTO(BaseModel):
 
     raw_fragment: str
     context_enriched: str
+
+
+# ---------------------------------------------------------------------------
+# Projections (stage 3)
+# ---------------------------------------------------------------------------
+
+ProjectionParamType = Literal["int", "float", "bool", "choice"]
+
+
+class ProjectionParamSpecDTO(BaseModel):
+    """One tunable parameter of a projection method (drives the UI form)."""
+
+    name: str
+    type: ProjectionParamType
+    default: bool | int | float | str
+    description: str
+    min_value: float | None = None
+    max_value: float | None = None
+    step: float | None = None
+    choices: list[str] | None = None
+
+
+class ProjectionMethodInfoDTO(BaseModel):
+    """Catalog entry: what the method is, its caveats and parameters."""
+
+    method_id: str
+    display_name: str
+    description: str
+    caveat: str
+    available: bool
+    supported_components: list[int]
+    params: list[ProjectionParamSpecDTO]
+
+
+class ComputeProjectionRequest(BaseModel):
+    embedding_run_id: str = Field(min_length=1, max_length=32)
+    method: str = Field(min_length=1, max_length=32)
+    #: which display spaces to compute: 3 (3D scene), 2 (2D map); both by default
+    components: list[int] = Field(default_factory=lambda: [3, 2], min_length=1, max_length=2)
+    params: dict[str, bool | int | float | str] = Field(default_factory=dict)
+    seed: int = Field(default=42, ge=0, le=2_147_483_647)
+
+    @field_validator("components")
+    @classmethod
+    def _check_components(cls, value: list[int]) -> list[int]:
+        from app.projection_methods.base import SUPPORTED_COMPONENTS
+
+        seen: list[int] = []
+        for item in value:
+            if item not in SUPPORTED_COMPONENTS:
+                raise ValueError(
+                    f"components must be a subset of {list(SUPPORTED_COMPONENTS)}, got {item}"
+                )
+            if item not in seen:
+                seen.append(item)
+        return seen
+
+
+class ProjectionRunDTO(BaseModel):
+    """Inventory entry: one cached projection of one embedding run."""
+
+    id: str
+    embedding_run_id: str
+    method: str
+    method_display_name: str
+    n_components: int
+    params: dict[str, bool | int | float | str]
+    seed: int
+    axis_labels: list[str]
+    #: PCA explained variance ratio per axis; None for methods without it
+    axis_info: list[float] | None = None
+    count: int
+    #: vectors changed since compute (or embedding run gone) → recompute
+    stale: bool
+    #: coordinate .npz readable; false → serve 409 on points, offer recompute
+    cache_ok: bool
+    versions: dict[str, str]
+    created_at: str
+    updated_at: str
+
+
+class ProjectionPointDTO(BaseModel):
+    """One point: display coordinates + full traceability to the source."""
+
+    fragment_id: str
+    file_id: str
+    rel_path: str
+    kind: str
+    name: str | None = None
+    symbol_path: str
+    start_line: int
+    end_line: int
+    coords: list[float]
+
+
+class ProjectionPointsDTO(BaseModel):
+    projection_id: str
+    method: str
+    method_display_name: str
+    n_components: int
+    axis_labels: list[str]
+    axis_info: list[float] | None = None
+    stale: bool
+    count: int
+    #: points whose fragments were deleted since compute (not served)
+    dropped_orphans: int
+    points: list[ProjectionPointDTO]

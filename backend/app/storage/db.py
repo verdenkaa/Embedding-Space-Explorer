@@ -5,7 +5,8 @@ Rules:
 - WAL journal for concurrent reads while the indexer writes;
 - `meta.schema_version` is checked on open: newer than supported → clear
   error (project not broken globally); older → backup file, then migrate
-  (stage 1 introduces db schema v1; destructive fallback keeps a .bak copy).
+  (migrations are additive: v1 corpus, v2 embedding_runs, v3 projection_runs;
+    the pre-migration .bak copy guards against surprises).
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from pathlib import Path
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-CURRENT_DB_SCHEMA = 2
+CURRENT_DB_SCHEMA = 3
 
 
 class Base(DeclarativeBase):

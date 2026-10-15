@@ -65,7 +65,7 @@ def list_models(
     return result
 
 
-def _reject_if_active_job(ctx: ProjectContext, kinds: tuple[str, ...], code: str) -> None:
+def reject_if_active_job(ctx: ProjectContext, kinds: tuple[str, ...], code: str) -> None:
     with ctx.session_factory() as session:
         active = (
             session.execute(
@@ -99,7 +99,7 @@ def download_model(
             f"Model '{payload.model_id}' is not in the catalog.",
             "See GET /api/models for available models.",
         )
-    _reject_if_active_job(ctx, ("model_download", "embed"), "embedding_job_active")
+    reject_if_active_job(ctx, ("model_download", "embed", "projection"), "embedding_job_active")
     job_id = manager.submit(
         ctx,
         "model_download",
@@ -122,7 +122,7 @@ def compute_embeddings(
 ) -> JobInfo:
     if get_model_info(payload.model_id) is None:
         raise ApiError(404, "unknown_model", f"Model '{payload.model_id}' is not in the catalog.")
-    _reject_if_active_job(ctx, ("model_download", "embed"), "embedding_job_active")
+    reject_if_active_job(ctx, ("model_download", "embed", "projection"), "embedding_job_active")
     job_id = manager.submit(
         ctx,
         "embed",

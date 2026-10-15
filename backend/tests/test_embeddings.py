@@ -458,7 +458,7 @@ def test_embed_validation_errors(client: TestClient, sample_project: Path) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_db_migration_v1_to_v2_is_additive(settings: Settings) -> None:
+def test_db_migration_from_v1_is_additive(settings: Settings) -> None:
     from app.storage.models import FileRow
     from app.storage.projects_store import ProjectStore
     from sqlalchemy import text
@@ -482,9 +482,10 @@ def test_db_migration_v1_to_v2_is_additive(settings: Settings) -> None:
         )
         session.commit()
 
-    # Downgrade: simulate a v1 database (drop the v2 table, set meta=1).
+    # Downgrade: simulate a v1 database (drop later tables, set meta=1).
     with ctx.engine.begin() as conn:
         conn.execute(text("DROP TABLE embedding_runs"))
+        conn.execute(text("DROP TABLE projection_runs"))
         conn.execute(text("UPDATE meta SET value='1' WHERE key='schema_version'"))
     store.close_all()
 
@@ -503,8 +504,9 @@ def test_db_migration_v1_to_v2_is_additive(settings: Settings) -> None:
             for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
         }
     engine.dispose()
-    assert version == "2"
+    assert version == "3"
     assert "embedding_runs" in tables
+    assert "projection_runs" in tables
     assert "files" in tables
     backups = list(ctx.project_dir.glob("project.db.bak-*"))
     assert len(backups) == 1

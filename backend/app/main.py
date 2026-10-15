@@ -20,6 +20,8 @@ from app.api.routes_fragments import router as fragments_router
 from app.api.routes_fs import router as fs_router
 from app.api.routes_health import router as health_router
 from app.api.routes_jobs import router as jobs_router
+from app.api.routes_projections import methods_router as projection_methods_router
+from app.api.routes_projections import projections_router
 from app.api.routes_projects import router as projects_router
 from app.config import Settings, ensure_data_dir
 from app.core.logging import get_logger, setup_logging
@@ -92,6 +94,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(models_router)
     app.include_router(preparation_router)
     app.include_router(embeddings_router)
+    app.include_router(projection_methods_router)
+    app.include_router(projections_router)
     return app
 
 

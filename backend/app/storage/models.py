@@ -1,4 +1,4 @@
-"""SQLAlchemy models for a project database (db schema v1).
+"""SQLAlchemy models for a project database (db schema v3).
 
 Entities and ID rules are documented in docs/data-model.md.
 """
@@ -69,7 +69,7 @@ class FragmentRow(Base):
 
 
 class JobRow(Base):
-    """A background task (indexing now; embeddings/projections later)."""
+    """A background task (index | model_download | embed | projection)."""
 
     __tablename__ = "jobs"
     __table_args__ = (Index("ix_jobs_created", "created_at"),)
@@ -109,5 +109,38 @@ class EmbeddingRunRow(Base):
     params_json: Mapped[str] = mapped_column(String(2048))
     npz_relpath: Mapped[str] = mapped_column(String(512))
     count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[str] = mapped_column(String(40))
+    updated_at: Mapped[str] = mapped_column(String(40))
+
+
+class ProjectionRunRow(Base):
+    """One projection run: method+params+seed over one embedding run.
+
+    Identity = fingerprint(embedding_run, method, n_components, params, seed);
+    coordinates live in a .npz file (cache/projections/). `source_signature`
+    is the embedding cache signature at compute time: mismatch ⇒ the vectors
+    changed since (recompute/prune/reindex) ⇒ the projection is STALE and the
+    UI must say so instead of silently showing an outdated map (TZ §9.3).
+    """
+
+    __tablename__ = "projection_runs"
+    __table_args__ = (Index("ix_proj_runs_emb", "embedding_run_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    embedding_run_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("embedding_runs.id", ondelete="CASCADE")
+    )
+    method: Mapped[str] = mapped_column(String(32))
+    n_components: Mapped[int] = mapped_column(Integer, default=3)
+    params_json: Mapped[str] = mapped_column(String(2048))
+    seed: Mapped[int] = mapped_column(Integer, default=0)
+    axis_labels_json: Mapped[str] = mapped_column(String(512))
+    #: PCA explained variance ratios (JSON list) or null (UMAP)
+    axis_info_json: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    #: library versions that produced the coordinates (TZ §9.2)
+    versions_json: Mapped[str] = mapped_column(String(512))
+    npz_relpath: Mapped[str] = mapped_column(String(512))
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    source_signature: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[str] = mapped_column(String(40))
     updated_at: Mapped[str] = mapped_column(String(40))
