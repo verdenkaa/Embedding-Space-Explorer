@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { DiagnosticsPanel } from "./components/DiagnosticsPanel";
 import { ExperimentsPanel } from "./components/ExperimentsPanel";
 import { StartScreen } from "./components/StartScreen";
+import { SpaceSection } from "./components/space/SpaceSection";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
 import { WorkspaceLayout } from "./components/WorkspaceLayout";
@@ -38,6 +39,8 @@ export default function App() {
           <StartScreen />
         ) : activeSection === "experiments" ? (
           <ExperimentsPanel />
+        ) : activeSection === "space" ? (
+          <SpaceSection />
         ) : (
           <WorkspaceLayout />
         )}

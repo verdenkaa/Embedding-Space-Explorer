@@ -132,19 +132,16 @@ describe("App shell", () => {
     expect(useUiStore.getState().connection).toBe("offline");
   });
 
-  it("CORPUS and EXPERIMENTS are available; future sections are visibly disabled", async () => {
+  it("CORPUS, SPACE and EXPERIMENTS are available; future sections are visibly disabled", async () => {
     stubOnline();
     render(<App />);
 
-    for (const name of ["CORPUS", "EXPERIMENTS"]) {
+    for (const name of ["CORPUS", "SPACE", "EXPERIMENTS"]) {
       const tab = screen.getByRole("button", { name: new RegExp(name) });
       expect((tab as HTMLButtonElement).disabled).toBe(false);
     }
 
-    for (const [name, stage] of [
-      ["SPACE", "этап 3"],
-      ["RELATIONS", "этап 4"],
-    ] as const) {
+    for (const [name, stage] of [["RELATIONS", "этап 4"]] as const) {
       const tab = screen.getByRole("button", { name: new RegExp(name) });
       expect((tab as HTMLButtonElement).disabled).toBe(true);
       expect(tab.textContent).toContain(stage);

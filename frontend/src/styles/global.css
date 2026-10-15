@@ -1619,3 +1619,346 @@ code,
   border-radius: var(--radius-md);
   margin-bottom: var(--space-3);
 }
+
+/* ============================================================
+   Stage 3: SPACE section — 3D scene, 2D projection, controls
+   ============================================================ */
+
+.space-section {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.space-section > .workspace-error {
+  flex: 0 0 auto;
+}
+
+.space-section > :last-child {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Shared warning badge (color + text, never color-only) */
+.badge--warn {
+  color: var(--color-warn);
+  border-color: color-mix(in srgb, var(--color-warn) 45%, transparent);
+}
+
+/* ---------- 3D scene ---------- */
+
+.scene3d {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.scene3d--state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.scene3d--hover canvas {
+  cursor: pointer;
+}
+
+.scene3d--marquee canvas {
+  cursor: crosshair;
+}
+
+.scene3d canvas {
+  display: block;
+  outline: none;
+}
+
+.scene3d__badge {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  padding: 2px 8px;
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.scene3d__toolbar {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px 6px;
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.scene3d__size {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+}
+
+.scene3d__size input[type="range"] {
+  width: 74px;
+  accent-color: var(--color-accent);
+}
+
+.scene3d__legend {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 8px;
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  pointer-events: none;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-item__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.legend-item__badge {
+  min-width: 22px;
+  text-align: center;
+  color: var(--color-text);
+  font-size: var(--text-xs);
+}
+
+.legend-item__count {
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--color-text-faint);
+}
+
+/* Hover tooltip (both views) */
+.scene-tooltip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 12px));
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 320px;
+  padding: 5px 8px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 5;
+  font-size: var(--text-xs);
+}
+
+.scene-tooltip__kind {
+  color: var(--color-accent);
+}
+
+.scene-tooltip__name {
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scene-tooltip__path {
+  color: var(--color-text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Marquee selection rectangle (3D view) */
+.marquee-rect {
+  position: absolute;
+  border: 1px dashed var(--color-accent);
+  background: rgba(69, 214, 197, 0.07);
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* ---------- 2D projection ---------- */
+
+.projection2d {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-bg);
+}
+
+.projection2d__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px 10px;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.projection2d__title {
+  color: var(--color-text);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.projection2d__axes {
+  color: var(--color-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.projection2d__spacer {
+  flex: 1;
+}
+
+.projection2d__note {
+  color: var(--color-text-faint);
+  font-style: italic;
+  cursor: help;
+}
+
+.projection2d__canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.projection2d__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.projection2d__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  text-align: center;
+  background: color-mix(in srgb, var(--color-bg) 72%, transparent);
+}
+
+/* ---------- projection controls strip ---------- */
+
+.proj-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 7px 10px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.proj-controls__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.proj-controls__field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+}
+
+.proj-controls__field > span {
+  white-space: nowrap;
+}
+
+.proj-controls__field--bool input[type="checkbox"] {
+  accent-color: var(--color-accent);
+}
+
+.proj-controls__select,
+.proj-controls__input {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  padding: 2px 5px;
+  min-width: 74px;
+}
+
+.proj-controls__select--wide {
+  min-width: 190px;
+  max-width: 320px;
+}
+
+.proj-controls__input {
+  width: 78px;
+}
+
+.proj-controls__select:disabled,
+.proj-controls__input:disabled {
+  opacity: 0.55;
+}
+
+.proj-controls__caveat {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 46%;
+  cursor: help;
+}
+
+.proj-controls__error {
+  font-size: var(--text-xs);
+  color: var(--color-error);
+}
+
+.proj-controls .job-progress {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* Multi-selection marker in fragment lists (shape+color, TZ §4.1) */
+.fragment-row--selected {
+  box-shadow: inset 2px 0 0 var(--color-accent-amber);
+  background: color-mix(in srgb, var(--color-accent-amber) 6%, transparent);
+}

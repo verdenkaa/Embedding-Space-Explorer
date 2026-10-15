@@ -4,6 +4,8 @@ import { kindBadge, kindColorClass } from "../../monaco/helpers";
 interface FragmentListProps {
   fragments: FragmentMeta[];
   activeFragmentId: string | null;
+  /** Multi-selection from the space views (amber marker, TZ §4.4). */
+  selectedIds?: string[];
   showPath?: boolean;
   /** Search-result mode entries carry rel_path. */
   paths?: Record<string, string>;
@@ -14,11 +16,13 @@ interface FragmentListProps {
 export function FragmentList({
   fragments,
   activeFragmentId,
+  selectedIds,
   showPath,
   paths,
   onSelect,
   emptyHint,
 }: FragmentListProps) {
+  const selectedSet = new Set(selectedIds ?? []);
   if (fragments.length === 0) {
     return <div className="empty-hint">{emptyHint}</div>;
   }
@@ -26,12 +30,15 @@ export function FragmentList({
     <ul className="fragment-list" aria-label="Фрагменты">
       {fragments.map((fragment) => {
         const active = fragment.id === activeFragmentId;
+        const selected = selectedSet.has(fragment.id) && !active;
         const path = paths?.[fragment.id];
         return (
           <li key={fragment.id}>
             <button
               type="button"
-              className={`fragment-row${active ? " fragment-row--active" : ""}`}
+              className={`fragment-row${active ? " fragment-row--active" : ""}${
+                selected ? " fragment-row--selected" : ""
+              }`}
               onClick={() => onSelect(fragment)}
               title={`${fragment.symbol_path}\nстроки ${fragment.start_line}-${fragment.end_line}\nметод: ${fragment.method}`}
             >

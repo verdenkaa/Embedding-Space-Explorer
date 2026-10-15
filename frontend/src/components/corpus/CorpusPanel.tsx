@@ -24,6 +24,7 @@ export function CorpusPanel() {
   const selectedFileId = useProjectStore((s) => s.selectedFileId);
   const fileDetail = useProjectStore((s) => s.fileDetail);
   const activeFragmentId = useProjectStore((s) => s.activeFragmentId);
+  const selectedIds = useProjectStore((s) => s.selectedFragmentIds);
   const searchQuery = useProjectStore((s) => s.searchQuery);
   const searchResults = useProjectStore((s) => s.searchResults);
   const changes = useProjectStore((s) => s.changes);
@@ -185,6 +186,7 @@ export function CorpusPanel() {
             <FragmentList
               fragments={searchResults?.items ?? []}
               activeFragmentId={activeFragmentId}
+              selectedIds={selectedIds}
               showPath
               paths={searchPaths}
               onSelect={(fragment) => void selectFragment(fragment)}
@@ -194,6 +196,7 @@ export function CorpusPanel() {
             <FragmentList
               fragments={fileFragments}
               activeFragmentId={activeFragmentId}
+              selectedIds={selectedIds}
               onSelect={(fragment) => void selectFragment(fragment)}
               emptyHint={
                 selectedFileId

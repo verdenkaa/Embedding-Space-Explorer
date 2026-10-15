@@ -2,8 +2,9 @@
  * UI state store (zustand is the single state manager — TZ §2.2).
  *
  * Stage 0: backend connection + diagnostics.
- * Stage 1: active section switching (corpus / diagnostics).
- * Later stages add experimentStore (model, projection, slice, clusters).
+ * Stage 1: active section switching.
+ * Stage 3: corpus / space / experiments / diagnostics (experiment state
+ * lives in experimentStore, space view state in spaceStore).
  */
 
 import { create } from "zustand";
@@ -12,7 +13,7 @@ import { ApiError, api } from "../api/client";
 import type { HealthResponse } from "../api/types";
 
 export type ConnectionStatus = "idle" | "loading" | "online" | "offline";
-export type ActiveSection = "corpus" | "diagnostics" | "experiments";
+export type ActiveSection = "corpus" | "space" | "diagnostics" | "experiments";
 
 export interface UiError {
   code: string;
