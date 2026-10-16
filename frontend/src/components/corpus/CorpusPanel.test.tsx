@@ -1,6 +1,7 @@
 /**
  * CorpusPanel tests: file tree rendering and selection, fragment list,
- * disabled future tabs, changes dialog with confirmed re-index (scenario D).
+ * live research tabs (stage 4), changes dialog with confirmed re-index
+ * (scenario D).
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -182,20 +183,30 @@ describe("CorpusPanel", () => {
     expect(screen.getByText("tree-sitter-python")).toBeTruthy();
   });
 
-  it("future panel tabs are visibly disabled with their stage", () => {
+  it("all four research tabs are live (stage 4) and switch the pane", () => {
     const { fetchMock } = mockFetch(baseRoutes());
     vi.stubGlobal("fetch", fetchMock);
     resetStore();
 
     render(<CorpusPanel />);
-    for (const label of ["NEIGHBORS", "RELATIONS", "CLUSTERS"]) {
-      const tab = screen.getByText(label).closest("button");
-      expect(tab).toBeTruthy();
-      expect((tab as HTMLButtonElement).disabled).toBe(true);
-      expect(tab?.textContent).toContain("4");
+    for (const label of ["FRAGMENTS", "NEIGHBORS", "RELATIONS", "CLUSTERS"]) {
+      const tab = screen.getByRole("tab", { name: new RegExp(label) });
+      expect((tab as HTMLButtonElement).disabled).toBe(false);
     }
-    const fragmentsTab = screen.getByRole("tab", { name: /FRAGMENTS/ });
-    expect(fragmentsTab.getAttribute("aria-selected")).toBe("true");
+    expect(
+      screen.getByRole("tab", { name: /FRAGMENTS/ }).getAttribute("aria-selected"),
+    ).toBe("true");
+
+    fireEvent.click(screen.getByRole("tab", { name: /NEIGHBORS/ }));
+    expect(screen.getByLabelText("Семантические соседи")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: /RELATIONS/ }));
+    expect(screen.getByLabelText("Структурные связи")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: /CLUSTERS/ }));
+    expect(screen.getByLabelText("Кластеры и группы")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: /FRAGMENTS/ }));
+    expect(
+      screen.getByRole("tab", { name: /FRAGMENTS/ }).getAttribute("aria-selected"),
+    ).toBe("true");
   });
 
   it("changes dialog lists diffs and starts indexing on confirm", async () => {

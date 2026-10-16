@@ -21,9 +21,47 @@ vi.mock("@react-three/drei", () => ({
   OrbitControls: () => null,
 }));
 
+import type { RelationsResponse } from "../../api/types";
+import { useAnalysisStore } from "../../state/analysisStore";
 import { useProjectStore } from "../../state/projectStore";
 import { buildCloud, useSpaceStore } from "../../state/spaceStore";
 import { Scene3D } from "./Scene3D";
+
+const RELATIONS_AB: RelationsResponse = {
+  items: [
+    {
+      id: "rel1",
+      kind: "imports",
+      origin: "extracted",
+      confidence: 1,
+      detail: null,
+      created_at: "",
+      source: {
+        file_id: "fa",
+        fragment_id: "fragA",
+        rel_path: "src/a.py",
+        name: "alpha",
+        symbol_path: "Cls.alpha",
+        start_line: 5,
+        end_line: 9,
+      },
+      target: {
+        file_id: "fb",
+        fragment_id: "fragS",
+        rel_path: "docs/guide.md",
+        name: null,
+        symbol_path: "Usage",
+        start_line: 1,
+        end_line: 4,
+      },
+    },
+  ],
+  total: 1,
+  limit: 200,
+  offset: 0,
+  counts_by_kind: { imports: 1 },
+  counts_by_origin: { extracted: 1 },
+};
 
 const RUN: ProjectionRunDTO = {
   id: "proj3d",
@@ -90,6 +128,7 @@ function seedCloud(stale = false) {
 }
 
 beforeEach(() => {
+  useAnalysisStore.getState().reset();
   useProjectStore.setState({
     current: { id: "p1", name: "Sample" } as never,
     activeFragmentId: null,
@@ -284,5 +323,107 @@ describe("Scene3D with a cloud", () => {
     render(<Scene3D />);
     fireEvent.keyDown(window, { key: "Escape" });
     expect(useProjectStore.getState().selectedFragmentIds).toEqual([]);
+  });
+});
+
+
+describe("Scene3D stage-4 overlays", () => {
+  it("«⇄ Связи» toggles relation lines and the filter panel lists kinds", () => {
+    seedCloud();
+    useProjectStore.setState({ activeFragmentId: "fragA" });
+    useAnalysisStore.setState({
+      fragmentRelations: RELATIONS_AB,
+      fragmentRelationsFor: "fragA",
+    });
+    useSpaceStore.setState({ relationLines: true });
+    render(<Scene3D />);
+
+    const toggle = screen.getByRole("button", { name: /Связи/ });
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    // the panel reports the single drawable line and its type filter
+    expect(screen.getByText(/связи: 1/)).toBeTruthy();
+    const kindBox = screen.getByRole("checkbox", { name: /imports/ });
+    expect(kindBox).toBeTruthy();
+
+    // unchecking the kind hides the line (count drops to 0 + explanation)
+    fireEvent.click(kindBox);
+    expect(screen.getByText(/нет связей с концами-фрагментами/)).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(useSpaceStore.getState().relationLines).toBe(false);
+  });
+
+  it("cluster coloring is disabled until labels are applied, then toggles", () => {
+    seedCloud();
+    render(<Scene3D />);
+    const colorBtn = screen.getByRole("button", { name: /цвет: тип/ });
+    expect((colorBtn as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("with labels the color button switches the scene palette state", () => {
+    seedCloud();
+    useSpaceStore.setState({
+      clusterLabels: new Map([
+        ["fragA", 0],
+        ["fragS", -1],
+      ]),
+      clusterCaption: "DBSCAN · исходное · cosine · кластеров: 1, шум: 1",
+      colorBy: "kind",
+    });
+    render(<Scene3D />);
+    const colorBtn = screen.getByRole("button", { name: /цвет: тип/ });
+    expect((colorBtn as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(colorBtn);
+    expect(useSpaceStore.getState().colorBy).toBe("cluster");
+    // the badge names the applied clustering (never a silent recolor)
+    expect(screen.getByText(/DBSCAN · исходное/)).toBeTruthy();
+  });
+
+  it("slice «only» mode is reflected in the badge count", () => {
+    seedCloud();
+    useSpaceStore.setState({
+      sliceOverlay: {
+        embeddingRunId: "emb1",
+        normalKind: "axis",
+        normalIndex: 0,
+        position: 0,
+        thickness: 10,
+        uMin: -1,
+        uMax: 1,
+        total: 2,
+        uById: new Map([
+          ["fragA", 0],
+          ["fragS", 50],
+        ]),
+        note: "",
+        vector: null,
+      },
+      sliceDisplay: "only",
+    });
+    render(<Scene3D />);
+    // window ±5 around 0 → fragA inside, fragS outside
+    expect(screen.getByText(/слой: 1 из 2/)).toBeTruthy();
+  });
+
+  it("a slice of ANOTHER embedding run is not applied (no fake membership)", () => {
+    seedCloud();
+    useSpaceStore.setState({
+      sliceOverlay: {
+        embeddingRunId: "embOTHER",
+        normalKind: "axis",
+        normalIndex: 0,
+        position: 0,
+        thickness: 10,
+        uMin: -1,
+        uMax: 1,
+        total: 2,
+        uById: new Map(),
+        note: "",
+        vector: null,
+      },
+      sliceDisplay: "only",
+    });
+    render(<Scene3D />);
+    expect(screen.queryByText(/слой:/)).toBeNull();
   });
 });
