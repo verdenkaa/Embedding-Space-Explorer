@@ -188,8 +188,11 @@ def test_normalize_components() -> None:
     assert normalize_components([]) == [3, 2]
     assert normalize_components([2, 2]) == [2]
     assert normalize_components([2, 3]) == [2, 3]
+    # 4 feeds the 4D view (3D scene + "time" slider over the 4th axis)
+    assert normalize_components([4]) == [4]
+    assert normalize_components([4, 4]) == [4]
     with pytest.raises(ProjectionParamsError):
-        normalize_components([4])
+        normalize_components([5])
 
 
 def test_registry_lookup() -> None:
@@ -265,8 +268,9 @@ def test_methods_catalog(client: TestClient) -> None:
 
     pca = methods["pca"]
     assert pca["available"] is True
-    assert pca["supported_components"] == [2, 3]
+    assert pca["supported_components"] == [2, 3, 4]
     assert pca["caveat"]  # honest interpretation note is present
+    assert "ТЗ" not in pca["caveat"]  # user-facing text without spec references
     assert {p["name"] for p in pca["params"]} == {"whiten"}
 
     umap = methods["umap"]
@@ -276,6 +280,7 @@ def test_methods_catalog(client: TestClient) -> None:
     assert spec["n_neighbors"]["default"] == 15
     assert spec["metric"]["choices"] == ["cosine", "euclidean"]
     assert "искажает расстояния" in umap["caveat"]
+    assert "ТЗ" not in umap["caveat"]  # user-facing text without spec references
 
     raw = methods["raw_axes"]
     assert raw["available"] is True
@@ -283,9 +288,10 @@ def test_methods_catalog(client: TestClient) -> None:
     assert set(raw_spec) == {"axes", "standardize"}
     assert raw_spec["axes"]["type"] == "int_list"
     assert raw_spec["axes"]["min_items"] == 2
-    assert raw_spec["axes"]["max_items"] == 3
+    assert raw_spec["axes"]["max_items"] == 4
     # honest labeling: model dimensions have no human semantics (TZ 5.1)
     assert "не имеют" in raw["description"]
+    assert "ТЗ" not in raw["description"]
     assert "игнорируются" in raw["caveat"]
 
 
@@ -884,8 +890,8 @@ def test_raw_axes_guards() -> None:
         method.fit(data, n_components=2, params=method.validate_params({"axes": [0, 99]}), seed=0)
     with pytest.raises(ProjectionParamsError, match="at least 2 items"):
         method.validate_params({"axes": [3]})
-    with pytest.raises(ProjectionParamsError, match="at most 3 items"):
-        method.validate_params({"axes": [0, 1, 2, 3]})
+    with pytest.raises(ProjectionParamsError, match="at most 4 items"):
+        method.validate_params({"axes": [0, 1, 2, 3, 4]})
     with pytest.raises(ProjectionParamsError, match="duplicates"):
         method.validate_params({"axes": [2, 2]})
     with pytest.raises(ProjectionParamsError, match="list of integers"):
@@ -1114,3 +1120,299 @@ def test_db_migration_v3_to_v4_keeps_projections(settings: Settings) -> None:
     assert version == str(CURRENT_DB_SCHEMA)
     assert "projection_presets" in tables
     assert "projection_runs" in tables
+
+
+# ---------------------------------------------------------------------------
+# 4-component projections (4D view: 3D scene + "time" slider on the 4th axis)
+# ---------------------------------------------------------------------------
+
+
+def test_pca_four_components_fit() -> None:
+    data = np.random.default_rng(11).normal(size=(12, 8)).astype(np.float32)
+    result = PcaMethod().fit(data, n_components=4, params={"whiten": False}, seed=42)
+    assert result.coords.shape == (12, 4)
+    assert result.axis_labels == ("PC1", "PC2", "PC3", "PC4")
+    assert result.axis_info is not None and len(result.axis_info) == 4
+    assert sum(result.axis_info) <= 1.0 + 1e-6
+
+
+def test_raw_axes_four_axes_fit() -> None:
+    from app.projection_methods.raw_axes_method import RawAxesMethod
+
+    method = RawAxesMethod()
+    data = np.random.default_rng(12).normal(size=(9, 8)).astype(np.float32)
+    params = method.validate_params({"axes": [0, 1, 2, 7]})
+    result = method.fit(data, n_components=4, params=params, seed=0)
+    assert result.coords.shape == (9, 4)
+    assert result.axis_labels == ("dim 0", "dim 1", "dim 2", "dim 7")
+    np.testing.assert_allclose(result.coords, data[:, [0, 1, 2, 7]], atol=1e-6)
+
+
+def test_projection_4d_api_flow(
+    client: TestClient,
+    sample_project: Path,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+
+    # PCA with 4 components → one 4D run (PC4 is the "time" axis in the UI).
+    response = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca", "components": [4], "seed": 42},
+    )
+    assert response.status_code == 202, response.text
+    info = wait_for_job(client, pid, response.json()["id"])
+    assert info["state"] == "done", info
+    assert "PCA-4D" in str(info["message"])
+
+    inventory = client.get(f"/api/projects/{pid}/projections").json()
+    assert len(inventory) == 1
+    run = inventory[0]
+    assert run["n_components"] == 4
+    assert run["axis_labels"] == ["PC1", "PC2", "PC3", "PC4"]
+    assert len(run["axis_info"]) == 4
+
+    points = client.get(f"/api/projects/{pid}/projections/{run['id']}/points").json()
+    assert points["n_components"] == 4
+    assert points["count"] == 21
+    assert all(len(p["coords"]) == 4 for p in points["points"])
+
+    # raw_axes with 4 axes derives components=4 the same way.
+    response = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={
+            "embedding_run_id": run_id,
+            "method": "raw_axes",
+            "params": {"axes": [0, 1, 2, 3]},
+        },
+    )
+    assert response.status_code == 202, response.text
+    info = wait_for_job(client, pid, response.json()["id"])
+    assert info["state"] == "done", info
+    inventory = client.get(f"/api/projects/{pid}/projections").json()
+    raw4 = next(r for r in inventory if r["method"] == "raw_axes")
+    assert raw4["n_components"] == 4
+    assert raw4["axis_labels"] == ["dim 0", "dim 1", "dim 2", "dim 3"]
+
+
+# ---------------------------------------------------------------------------
+# Multi axis-set builds ("0,1;0,2" — several 2D plots in one job)
+# ---------------------------------------------------------------------------
+
+
+def test_axis_sets_multi_build(
+    client: TestClient,
+    sample_project: Path,
+    settings: Settings,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+
+    response = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={
+            "embedding_run_id": run_id,
+            "method": "raw_axes",
+            "axis_sets": [[0, 1], [0, 3]],
+            "params": {"standardize": False},
+            "seed": 5,
+        },
+    )
+    assert response.status_code == 202, response.text
+    info = wait_for_job(client, pid, response.json()["id"])
+    assert info["state"] == "done", info
+    assert "[0, 1]" in str(info["message"]) and "[0, 3]" in str(info["message"])
+
+    inventory = client.get(f"/api/projects/{pid}/projections").json()
+    assert len(inventory) == 2, "one run per axis pair"
+    by_axes = {tuple(r["params"]["axes"]): r for r in inventory}
+    assert set(by_axes) == {(0, 1), (0, 3)}
+    for run in by_axes.values():
+        assert run["method"] == "raw_axes"
+        assert run["n_components"] == 2
+        assert run["seed"] == 5
+        assert run["cache_ok"] is True
+
+    # Coordinates of every plot are the exact columns of the stored vectors.
+    emb_npz = settings.data_dir / "projects" / pid / "cache" / "embeddings" / f"{run_id}.npz"
+    cache = NpzEmbeddingCache.load(emb_npz)
+    assert cache is not None
+    vectors_by_id = {fid: cache.vectors[i] for i, fid in enumerate(cache.ids)}
+    for axes, run in by_axes.items():
+        points = client.get(f"/api/projects/{pid}/projections/{run['id']}/points").json()
+        assert points["count"] == 21
+        for point in points["points"]:
+            expected = vectors_by_id[point["fragment_id"]][list(axes)]
+            np.testing.assert_allclose(point["coords"], expected, atol=1e-5)
+
+    # Idempotent rebuild: same fingerprints → still exactly 2 runs.
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={
+            "embedding_run_id": run_id,
+            "method": "raw_axes",
+            "axis_sets": [[0, 1], [0, 3]],
+            "params": {"standardize": False},
+            "seed": 5,
+        },
+    ).json()
+    wait_for_job(client, pid, job["id"])
+    assert len(client.get(f"/api/projects/{pid}/projections").json()) == 2
+
+
+def test_axis_sets_validation_errors(
+    client: TestClient,
+    sample_project: Path,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+    base = f"/api/projects/{pid}/projections/compute"
+
+    # axis_sets belongs to raw_axes only.
+    wrong_method = client.post(
+        base,
+        json={"embedding_run_id": run_id, "method": "pca", "axis_sets": [[0, 1], [0, 2]]},
+    )
+    assert wrong_method.status_code == 400
+    assert wrong_method.json()["error"]["code"] == "invalid_projection_params"
+    assert "raw_axes" in wrong_method.json()["error"]["message"]
+
+    # params.axes must not be mixed with axis_sets (no silent ignoring).
+    ambiguous = client.post(
+        base,
+        json={
+            "embedding_run_id": run_id,
+            "method": "raw_axes",
+            "axis_sets": [[0, 1], [0, 2]],
+            "params": {"axes": [0, 1]},
+        },
+    )
+    assert ambiguous.status_code == 400
+    assert ambiguous.json()["error"]["code"] == "invalid_projection_params"
+
+    # Out-of-range axis inside a pair is rejected BEFORE queueing.
+    out_of_range = client.post(
+        base,
+        json={"embedding_run_id": run_id, "method": "raw_axes", "axis_sets": [[0, 1], [0, 99]]},
+    )
+    assert out_of_range.status_code == 400
+    assert "out of range" in out_of_range.json()["error"]["message"]
+
+    # Schema-level violations: 3-axis set, duplicate set, single set, 7 sets.
+    triple = client.post(
+        base,
+        json={
+            "embedding_run_id": run_id,
+            "method": "raw_axes",
+            "axis_sets": [[0, 1, 2], [0, 3]],
+        },
+    )
+    assert triple.status_code == 422
+    duplicate = client.post(
+        base,
+        json={"embedding_run_id": run_id, "method": "raw_axes", "axis_sets": [[0, 1], [0, 1]]},
+    )
+    assert duplicate.status_code == 422
+    single = client.post(
+        base,
+        json={"embedding_run_id": run_id, "method": "raw_axes", "axis_sets": [[0, 1]]},
+    )
+    assert single.status_code == 422
+    too_many = client.post(
+        base,
+        json={
+            "embedding_run_id": run_id,
+            "method": "raw_axes",
+            "axis_sets": [[0, i] for i in range(1, 8)],
+        },
+    )
+    assert too_many.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Projection deletion (inventory hygiene)
+# ---------------------------------------------------------------------------
+
+
+def test_delete_projection_single(
+    client: TestClient,
+    sample_project: Path,
+    settings: Settings,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca", "seed": 42},
+    ).json()
+    wait_for_job(client, pid, job["id"])
+    inventory = client.get(f"/api/projects/{pid}/projections").json()
+    assert len(inventory) == 2
+    victim = next(r for r in inventory if r["n_components"] == 2)
+    npz = settings.data_dir / "projects" / pid / "cache" / "projections" / f"{victim['id']}.npz"
+    assert npz.exists()
+
+    deleted = client.delete(f"/api/projects/{pid}/projections/{victim['id']}")
+    assert deleted.status_code == 200
+    assert deleted.json() == {"deleted": victim["id"]}
+
+    inventory = client.get(f"/api/projects/{pid}/projections").json()
+    assert [r["id"] for r in inventory] != victim["id"]
+    assert len(inventory) == 1
+    assert not npz.exists(), "coordinate cache file must be removed too"
+
+    # Points of a deleted run are gone; deleting twice is a clean 404.
+    assert client.get(f"/api/projects/{pid}/projections/{victim['id']}/points").status_code == 404
+    again = client.delete(f"/api/projects/{pid}/projections/{victim['id']}")
+    assert again.status_code == 404
+    assert again.json()["error"]["code"] == "projection_not_found"
+
+    # Embedding vectors are NOT projections: the run cache stays intact.
+    emb_npz = settings.data_dir / "projects" / pid / "cache" / "embeddings" / f"{run_id}.npz"
+    assert emb_npz.exists()
+
+
+def test_delete_all_projections_requires_confirm_and_keeps_presets(
+    client: TestClient,
+    sample_project: Path,
+    settings: Settings,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    pid, run_id = _embedded_project(client, sample_project)
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca", "seed": 42},
+    ).json()
+    wait_for_job(client, pid, job["id"])
+    preset = client.post(
+        f"/api/projects/{pid}/projection-presets",
+        json={"name": "keep-me", "method": "pca", "params": {"whiten": True}, "seed": 1},
+    )
+    assert preset.status_code == 201
+    assert len(client.get(f"/api/projects/{pid}/projections").json()) == 2
+
+    # Without confirmation the destructive bulk delete is refused.
+    refused = client.delete(f"/api/projects/{pid}/projections")
+    assert refused.status_code == 400
+    assert refused.json()["error"]["code"] == "confirmation_required"
+    assert len(client.get(f"/api/projects/{pid}/projections").json()) == 2
+
+    result = client.delete(f"/api/projects/{pid}/projections?confirm=true")
+    assert result.status_code == 200
+    assert result.json() == {"deleted": 2}
+    assert client.get(f"/api/projects/{pid}/projections").json() == []
+
+    cache_dir = settings.data_dir / "projects" / pid / "cache" / "projections"
+    assert not list(cache_dir.glob("*.npz")), "all coordinate caches removed"
+
+    # Presets are form states, not computed views — they survive the cleanup.
+    presets = client.get(f"/api/projects/{pid}/projection-presets").json()
+    assert [p["name"] for p in presets] == ["keep-me"]
+
+    # Embedding vectors stay intact: a rebuild right after works from cache.
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca", "components": [3], "seed": 42},
+    ).json()
+    info = wait_for_job(client, pid, job["id"])
+    assert info["state"] == "done", info
