@@ -25,11 +25,25 @@ export interface FitTransform {
 
 /** Compute the uniform fit transform of an N×k cloud (k = 2 or 3). */
 export function computeFit(coords: Float32Array, count: number, k: number): FitTransform {
+  return computeFitStrided(coords, count, k, k);
+}
+
+/**
+ * Fit transform over the FIRST `k` components of an interleaved buffer with
+ * a larger `stride` (a 4-component cloud is displayed as 3D: the scene fits
+ * axes 0..2, the 4th axis belongs to the "time" slider).
+ */
+export function computeFitStrided(
+  coords: Float32Array,
+  count: number,
+  stride: number,
+  k: number,
+): FitTransform {
   const min = new Array<number>(k).fill(Number.POSITIVE_INFINITY);
   const max = new Array<number>(k).fill(Number.NEGATIVE_INFINITY);
   for (let i = 0; i < count; i++) {
     for (let a = 0; a < k; a++) {
-      const v = coords[i * k + a];
+      const v = coords[i * stride + a];
       if (v < min[a]) min[a] = v;
       if (v > max[a]) max[a] = v;
     }
@@ -51,10 +65,21 @@ export function computeFit(coords: Float32Array, count: number, k: number): FitT
 /** Apply the fit transform → display coordinates inside [-1, 1]. */
 export function applyFit(coords: Float32Array, fit: FitTransform): Float32Array {
   const k = fit.center.length;
-  const out = new Float32Array(coords.length);
-  for (let i = 0; i < coords.length; i += k) {
+  return applyFitStrided(coords, fit, k, k);
+}
+
+/** Apply the fit to the first `k` of `stride` components → count×k buffer. */
+export function applyFitStrided(
+  coords: Float32Array,
+  fit: FitTransform,
+  stride: number,
+  k: number,
+): Float32Array {
+  const count = stride > 0 ? Math.floor(coords.length / stride) : 0;
+  const out = new Float32Array(count * k);
+  for (let i = 0; i < count; i++) {
     for (let a = 0; a < k; a++) {
-      out[i + a] = (coords[i + a] - fit.center[a]) / fit.extent;
+      out[i * k + a] = (coords[i * stride + a] - fit.center[a]) / fit.extent;
     }
   }
   return out;
@@ -69,6 +94,15 @@ export interface Rect {
   y0: number;
   x1: number;
   y1: number;
+}
+
+/**
+ * True when the drag rectangle is a real marquee, not a click: guards the
+ * selection from degenerate zero-area rects (the regression that used to
+ * wipe the selection on a toolbar click in marquee mode).
+ */
+export function marqueeExceedsSlop(rect: Rect, slopPx: number): boolean {
+  return Math.abs(rect.x1 - rect.x0) >= slopPx || Math.abs(rect.y1 - rect.y0) >= slopPx;
 }
 
 /** Normalize a drag rectangle so x0<=x1 and y0<=y1 (drag direction-agnostic). */
@@ -248,4 +282,144 @@ export function formatTick(value: number, step: number): string {
   const dot = stepText.indexOf(".");
   const decimals = dot === -1 ? 0 : Math.min(6, stepText.length - dot - 1);
   return value.toFixed(decimals);
+}
+
+/* ------------------------------------------------------------------ */
+/* 4D view: the "time" layer along one axis                            */
+/* ------------------------------------------------------------------ */
+
+/** Min/max of one component of an interleaved buffer (finite values only). */
+export function axisExtent(
+  coords: Float32Array,
+  count: number,
+  stride: number,
+  axis: number,
+): { min: number; max: number } {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < count; i++) {
+    const v = coords[i * stride + axis];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return { min: 0, max: 0 };
+  }
+  return { min, max };
+}
+
+export interface Layer4D {
+  /** 1 = inside the window around `tFrac` on the chosen axis, 0 = outside. */
+  mask: Uint8Array;
+  inLayer: number;
+  /** Window center in RAW axis units (for the numeric readout). */
+  t: number;
+  /** Full window width in RAW axis units. */
+  width: number;
+  min: number;
+  max: number;
+}
+
+/**
+ * Points whose `axis` coordinate falls inside [t - w/2, t + w/2]:
+ * tFrac/wFrac are 0..1 fractions of the axis range, so the slider state
+ * stays meaningful when the projection (and its units) changes.
+ * A degenerate (constant) axis puts every point in the layer — honestly,
+ * there is nothing to slice.
+ */
+export function layerMask4D(
+  coords: Float32Array,
+  count: number,
+  stride: number,
+  axis: number,
+  tFrac: number,
+  wFrac: number,
+): Layer4D {
+  const { min, max } = axisExtent(coords, count, stride, axis);
+  const range = max - min;
+  const t = min + clamp01(tFrac) * range;
+  const width = clamp01(wFrac) * range;
+  const half = width / 2;
+  const mask = new Uint8Array(count);
+  let inLayer = 0;
+  for (let i = 0; i < count; i++) {
+    const v = coords[i * stride + axis];
+    const inside = range === 0 ? true : Math.abs(v - t) <= half;
+    mask[i] = inside ? 1 : 0;
+    if (inside) inLayer += 1;
+  }
+  return { mask, inLayer, t, width, min, max };
+}
+
+function clamp01(v: number): number {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+/* ------------------------------------------------------------------ */
+/* 2D plot zoom & pan (bounds-space camera)                            */
+/* ------------------------------------------------------------------ */
+
+/** Zoom limits relative to the auto-fit bounds (span ratio fit/current). */
+export const MIN_ZOOM = 0.2;
+export const MAX_ZOOM = 50;
+
+/** Current zoom level: 1 = auto-fit, >1 = zoomed in. */
+export function zoomLevel(bounds: PlotBounds, fit: PlotBounds): number {
+  const fitSpan = fit.maxX - fit.minX || 1;
+  const span = bounds.maxX - bounds.minX || Number.NaN;
+  if (!Number.isFinite(span) || span === 0) return 1;
+  return fitSpan / span;
+}
+
+/**
+ * Zoom `bounds` by `factor` (>1 = zoom in) keeping the data point under the
+ * cursor (`anchor`) fixed; the result is clamped to MIN_ZOOM..MAX_ZOOM
+ * relative to the auto-fit bounds so the cloud can never be lost off-screen.
+ */
+export function zoomBoundsAt(
+  bounds: PlotBounds,
+  fit: PlotBounds,
+  factor: number,
+  anchor: { x: number; y: number },
+): PlotBounds {
+  if (!Number.isFinite(factor) || factor <= 0) return bounds;
+  const clampSpan = (span: number, fitSpan: number): number => {
+    const base = fitSpan > 0 ? fitSpan : Math.abs(span) || 1;
+    return Math.min(base / MIN_ZOOM, Math.max(span / factor, base / MAX_ZOOM));
+  };
+  const rescale = (min: number, max: number, fitMin: number, fitMax: number, a: number) => {
+    const span = max - min;
+    const next = clampSpan(span, fitMax - fitMin);
+    const r = span > 0 ? next / span : 1;
+    const nextMin = a - (a - min) * r;
+    return { min: nextMin, max: nextMin + next };
+  };
+  const x = rescale(bounds.minX, bounds.maxX, fit.minX, fit.maxX, anchor.x);
+  const y = rescale(bounds.minY, bounds.maxY, fit.minY, fit.maxY, anchor.y);
+  return { minX: x.min, maxX: x.max, minY: y.min, maxY: y.max };
+}
+
+/**
+ * Pan `bounds` by a pointer drag of (dxPx, dyPx) canvas pixels: the content
+ * follows the cursor (drag right → the view shifts left in data space).
+ */
+export function panBounds(
+  bounds: PlotBounds,
+  dxPx: number,
+  dyPx: number,
+  geom: PlotGeometry,
+): PlotBounds {
+  const plotW = Math.max(1, geom.width - geom.padding.left - geom.padding.right);
+  const plotH = Math.max(1, geom.height - geom.padding.top - geom.padding.bottom);
+  const spanX = bounds.maxX - bounds.minX;
+  const spanY = bounds.maxY - bounds.minY;
+  const dx = (dxPx / plotW) * spanX;
+  const dy = (dyPx / plotH) * spanY;
+  return {
+    minX: bounds.minX - dx,
+    maxX: bounds.maxX - dx,
+    // canvas y grows down, data y grows up → dragging down shifts minY up
+    minY: bounds.minY + dy,
+    maxY: bounds.maxY + dy,
+  };
 }

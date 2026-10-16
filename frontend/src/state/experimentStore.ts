@@ -20,6 +20,7 @@ import type {
   ProjectionRunDTO,
 } from "../api/types";
 import { useProjectStore } from "./projectStore";
+import { useSpaceStore, type PendingBuild } from "./spaceStore";
 
 export interface ExperimentError {
   code: string;
@@ -48,6 +49,13 @@ interface ExperimentState {
   projMethod: string;
   projParams: ProjectionParamValues;
   projSeed: number;
+  /** Raw-axes field as parsed groups ("0,1;0,2" → [[0,1],[0,2]]); the
+   *  round-trip source of the input (echo), valid or not. */
+  projAxesGroups: number[][];
+  /** Validation problem of the axes field (null = valid). */
+  projAxesProblem: string | null;
+  /** What the running/last projection job built — used to show the result. */
+  pendingBuild: PendingBuild | null;
   loading: boolean;
   error: ExperimentError | null;
 
@@ -59,12 +67,16 @@ interface ExperimentState {
   startDownload: (modelId: string) => Promise<void>;
   startCompute: () => Promise<void>;
   loadProjectionCatalog: () => Promise<void>;
-  loadProjections: () => Promise<void>;
+  loadProjections: () => Promise<ProjectionRunDTO[] | null>;
   setProjRunId: (id: string | null) => void;
   setProjMethod: (methodId: string) => void;
   setProjParam: (name: string, value: ProjectionParamValue) => void;
+  /** Axes field emitted as parsed sets (single mode = one set of 2..4). */
+  setProjAxesState: (sets: number[][], problem: string | null) => void;
   setProjSeed: (seed: number) => void;
-  startProjection: () => Promise<void>;
+  startProjection: (opts?: { components?: number[] }) => Promise<void>;
+  deleteProjection: (id: string) => Promise<void>;
+  deleteAllProjections: () => Promise<void>;
   loadPresets: () => Promise<void>;
   savePreset: () => Promise<void>;
   deletePreset: (id: string) => Promise<void>;
@@ -108,6 +120,9 @@ export const useExperimentStore = create<ExperimentState>()((set, get) => ({
   projMethod: "pca",
   projParams: {},
   projSeed: 42,
+  projAxesGroups: [],
+  projAxesProblem: null,
+  pendingBuild: null,
   loading: false,
   error: null,
 
@@ -165,12 +180,14 @@ export const useExperimentStore = create<ExperimentState>()((set, get) => ({
 
   loadProjections: async () => {
     const project = useProjectStore.getState().current;
-    if (!project) return;
+    if (!project) return null;
     try {
       const projections = await api.listProjections(project.id);
       set({ projections, error: null });
+      return projections;
     } catch (err) {
       set({ error: toError(err) });
+      return null;
     }
   },
 
@@ -178,20 +195,38 @@ export const useExperimentStore = create<ExperimentState>()((set, get) => ({
 
   setProjMethod: (methodId) => {
     const method = get().projectionMethods?.find((m) => m.method_id === methodId) ?? null;
-    set({ projMethod: methodId, projParams: defaultParamsFor(method) });
+    set({
+      projMethod: methodId,
+      projParams: defaultParamsFor(method),
+      projAxesGroups: [],
+      projAxesProblem: null,
+    });
   },
 
   setProjParam: (name, value) => {
     set({ projParams: { ...get().projParams, [name]: value } });
   },
 
+  setProjAxesState: (sets, problem) => {
+    set({
+      projParams: { ...get().projParams, axes: sets[0] ?? [] },
+      projAxesGroups: sets,
+      projAxesProblem: problem,
+    });
+  },
+
   setProjSeed: (seed) => {
     set({ projSeed: Math.min(2_147_483_647, Math.max(0, Math.round(seed) || 0)) });
   },
 
-  startProjection: async () => {
+  startProjection: async (opts) => {
     const project = useProjectStore.getState().current;
-    const { projRunId, projMethod, projParams, projSeed, runs } = get();
+    const { projRunId, projMethod, projParams, projSeed, projAxesGroups, projAxesProblem, runs } =
+      get();
+    const axisSets =
+      projMethod === "raw_axes" && projAxesProblem === null && projAxesGroups.length > 1
+        ? projAxesGroups
+        : null;
     // Default source run: the most recently updated one (inventory is sorted).
     const embeddingRunId = projRunId ?? runs?.[0]?.id ?? null;
     if (!project || !embeddingRunId) {
@@ -206,21 +241,64 @@ export const useExperimentStore = create<ExperimentState>()((set, get) => ({
     }
     set({ error: null });
     try {
-      // raw_axes: one coordinate per selected axis — the component count is
-      // derived from the axes, never [3,2] (backend enforces the same rule).
+      let components: number[];
+      let params: ProjectionParamValues = projParams;
+      let pending: PendingBuild;
       const axes = projParams["axes"];
-      const components =
-        projMethod === "raw_axes" && Array.isArray(axes) && axes.length >= 2
-          ? [axes.length]
-          : [3, 2];
+      if (axisSets) {
+        // multi-plot 2D comparison: one pair → one projection run (backend)
+        components = [2];
+        params = { ...projParams };
+        delete params["axes"]; // the pairs carry their own axes
+        pending = {
+          mode: "multi2d",
+          sets: axisSets,
+          embeddingRunId,
+          seed: projSeed,
+          standardize: params["standardize"] === true,
+        };
+      } else if (projMethod === "raw_axes" && Array.isArray(axes) && axes.length >= 2) {
+        // raw_axes: one coordinate per selected axis — the component count is
+        // derived from the axes, never [3,2] (backend enforces the same rule).
+        components = [axes.length];
+        pending = { mode: "single", components, embeddingRunId };
+      } else {
+        components = opts?.components ?? [3, 2];
+        pending = { mode: "single", components, embeddingRunId };
+      }
       const job = await api.computeProjection(project.id, {
         embedding_run_id: embeddingRunId,
         method: projMethod,
         components,
-        params: projParams,
+        params,
         seed: projSeed,
+        ...(axisSets ? { axis_sets: axisSets } : {}),
       });
-      set({ activeJob: job, projRunId: embeddingRunId });
+      set({ activeJob: job, projRunId: embeddingRunId, pendingBuild: pending });
+    } catch (err) {
+      set({ error: toError(err) });
+    }
+  },
+
+  deleteProjection: async (id) => {
+    const project = useProjectStore.getState().current;
+    if (!project) return;
+    set({ error: null });
+    try {
+      await api.deleteProjection(project.id, id);
+      await get().loadProjections();
+    } catch (err) {
+      set({ error: toError(err) });
+    }
+  },
+
+  deleteAllProjections: async () => {
+    const project = useProjectStore.getState().current;
+    if (!project) return;
+    set({ error: null });
+    try {
+      await api.deleteAllProjections(project.id);
+      await get().loadProjections();
     } catch (err) {
       set({ error: toError(err) });
     }
@@ -271,10 +349,13 @@ export const useExperimentStore = create<ExperimentState>()((set, get) => ({
   applyPreset: (id) => {
     const preset = get().presets?.find((p) => p.id === id);
     if (!preset) return;
+    const presetAxes = preset.params["axes"];
     set({
       projMethod: preset.method,
       projParams: { ...preset.params },
       projSeed: preset.seed,
+      projAxesGroups: Array.isArray(presetAxes) && presetAxes.length > 0 ? [presetAxes] : [],
+      projAxesProblem: null,
     });
   },
 
@@ -318,7 +399,17 @@ export const useExperimentStore = create<ExperimentState>()((set, get) => ({
       const job = await api.getJob(project.id, activeJob.id);
       set({ activeJob: job });
       if (job.state === "done" || job.state === "failed" || job.state === "cancelled") {
-        await Promise.all([get().loadRuns(), get().loadCatalog(), get().loadProjections()]);
+        const [, , projections] = await Promise.all([
+          get().loadRuns(),
+          get().loadCatalog(),
+          get().loadProjections(),
+        ]);
+        const pending = get().pendingBuild;
+        if (job.state === "done" && job.kind === "projection" && pending && projections) {
+          // show what the build produced (single/multi/4D) right away
+          useSpaceStore.getState().applyBuiltProjections(projections, pending);
+        }
+        set({ pendingBuild: null });
       }
     } catch (err) {
       set({ error: toError(err) });

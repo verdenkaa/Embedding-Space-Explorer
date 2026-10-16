@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 import { useExperimentStore } from "../../state/experimentStore";
 import { useProjectStore } from "../../state/projectStore";
-import { useSpaceStore, pickActiveProjections, type ViewMode } from "../../state/spaceStore";
+import { useSpaceStore, pickActiveProjections } from "../../state/spaceStore";
 import { useUiStore } from "../../state/uiStore";
 import { CorpusPanel } from "../corpus/CorpusPanel";
 import { JobPoller } from "../corpus/JobProgress";
@@ -12,40 +12,15 @@ import { SourceInspector } from "../inspector/SourceInspector";
 import { Projection2D } from "./Projection2D";
 import { ExperimentJobPoller, ProjectionControls } from "./ProjectionControls";
 import { Scene3D } from "./Scene3D";
+import { Scene4D } from "./Scene4D";
+import { ViewBar } from "./ViewBar";
 
 /**
  * SPACE section: the research-IDE layout of TZ §4.2, adjusted by user
- * feedback — corpus (left) | view-mode toggle + scenes + projection
- * controls at the BOTTOM (center) | Monaco inspector (right, closable).
- * Every view shares the selection state by fragment id (TZ §4.4).
+ * feedback — corpus (left) | view bar + scenes + projection controls at
+ * the BOTTOM (center) | Monaco inspector (right, closable). Every view
+ * shares the selection state by fragment id (TZ §4.4).
  */
-
-const VIEW_MODES: { id: ViewMode; label: string; hint: string }[] = [
-  { id: "3d", label: "3D", hint: "Только 3D-пространство" },
-  { id: "2d", label: "2D", hint: "Только 2D-проекция (на всю высоту)" },
-  { id: "split", label: "3D+2D", hint: "Обе сцены одновременно (синхронное выделение)" },
-];
-
-export function ViewModeToggle() {
-  const viewMode = useSpaceStore((s) => s.viewMode);
-  const setViewMode = useSpaceStore((s) => s.setViewMode);
-  return (
-    <div className="view-mode" role="group" aria-label="Режим представления">
-      {VIEW_MODES.map((mode) => (
-        <button
-          key={mode.id}
-          type="button"
-          className={`view-mode__btn${viewMode === mode.id ? " view-mode__btn--active" : ""}`}
-          onClick={() => setViewMode(mode.id)}
-          aria-pressed={viewMode === mode.id}
-          title={mode.hint}
-        >
-          {mode.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export function SpaceSection() {
   const projectId = useProjectStore((s) => s.current?.id ?? null);
@@ -75,15 +50,29 @@ export function SpaceSection() {
     void loadPresets();
   }, [projectId, reset, loadRuns, loadProjections, loadPresets]);
 
-  /* Auto-select which cached projections the views show: freshest non-stale
-     per component count of the active embedding run (stale fallback keeps
-     the user oriented, badges tell the truth). */
+  /* Auto-select which cached projections the views show — but ONLY while a
+     view is empty or its projection disappeared (deleted / project switch):
+     the freshest non-stale per component count of the active embedding run
+     (stale fallback keeps the user oriented, badges tell the truth). A
+     manual dropdown choice or a multi-plot 2D set survives inventory
+     reloads; a finished build switches the views explicitly (store). */
   useEffect(() => {
     if (!projections) return;
+    const s = useSpaceStore.getState();
+    const alive = new Set(projections.filter((p) => p.cache_ok).map((p) => p.id));
     const effectiveRunId = projRunId ?? runs?.[0]?.id ?? null;
     const picked = pickActiveProjections(projections, effectiveRunId);
-    void setActiveProjection("3d", picked.three?.id ?? null);
-    void setActiveProjection("2d", picked.two?.id ?? null);
+
+    if (s.cloud3d === null || !alive.has(s.cloud3d.projection.id)) {
+      void setActiveProjection("3d", picked.three?.id ?? null);
+    }
+    const shown2d = s.clouds2d.map((c) => c.projection.id);
+    if (shown2d.length === 0 || shown2d.some((id) => !alive.has(id))) {
+      void setActiveProjection("2d", picked.two?.id ?? null);
+    }
+    if (s.cloud4d === null || !alive.has(s.cloud4d.projection.id)) {
+      void setActiveProjection("4d", picked.four?.id ?? null);
+    }
   }, [projections, runs, projRunId, setActiveProjection]);
 
   /* A finished projection/embedding job may have refreshed caches. */
@@ -111,16 +100,19 @@ export function SpaceSection() {
         </Allotment.Pane>
         <Allotment.Pane minSize={380}>
           <div className="space-center">
-            <div className="space-center__topbar">
-              <ViewModeToggle />
-            </div>
+            <ViewBar />
             <Allotment vertical>
-              {viewMode !== "2d" && (
+              {(viewMode === "3d" || viewMode === "split") && (
                 <Allotment.Pane minSize={180}>
                   <Scene3D />
                 </Allotment.Pane>
               )}
-              {viewMode !== "3d" && (
+              {viewMode === "4d" && (
+                <Allotment.Pane minSize={180}>
+                  <Scene4D />
+                </Allotment.Pane>
+              )}
+              {(viewMode === "2d" || viewMode === "split") && (
                 <Allotment.Pane minSize={150}>
                   <Projection2D />
                 </Allotment.Pane>

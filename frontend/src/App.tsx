@@ -6,7 +6,6 @@ import { StartScreen } from "./components/StartScreen";
 import { SpaceSection } from "./components/space/SpaceSection";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
-import { WorkspaceLayout } from "./components/WorkspaceLayout";
 import { useProjectStore } from "./state/projectStore";
 import { useUiStore } from "./state/uiStore";
 
@@ -39,10 +38,8 @@ export default function App() {
           <StartScreen />
         ) : activeSection === "experiments" ? (
           <ExperimentsPanel />
-        ) : activeSection === "space" ? (
-          <SpaceSection />
         ) : (
-          <WorkspaceLayout />
+          <SpaceSection />
         )}
       </main>
       <StatusBar />

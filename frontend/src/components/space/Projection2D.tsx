@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { COLORS, kindColor } from "../../space/palette";
 import {
@@ -10,27 +10,44 @@ import {
   hitTest2D,
   indicesInDataRect,
   makeTicks,
+  panBounds,
+  zoomBoundsAt,
+  zoomLevel,
+  type PlotBounds,
   type PlotGeometry,
 } from "../../space/selectionMath";
 import { useProjectStore } from "../../state/projectStore";
-import { useSpaceStore } from "../../state/spaceStore";
+import { useSpaceStore, type PointCloud, type PointMeta } from "../../state/spaceStore";
 import { kindBadge } from "../../monaco/helpers";
 import { toFragmentRef } from "../../space/fragmentRef";
 
 /**
- * Synchronized 2D projection (TZ §4.4, UI-ТЗ §3): the same fragments as the
- * 3D scene, sharing the selection state by fragment id. Plain canvas 2D —
+ * Synchronized 2D projection(s) (TZ §4.4, UI-ТЗ §3): the same fragments as
+ * the 3D scene, sharing the selection state by fragment id. Plain canvas 2D —
  * no per-point components; redraws happen only on state changes.
  *
- * Honesty (TZ §5.2/§5.4): the header names the projection method and its
- * axes, shows PCA explained variance when available, and states that this
- * map is a PROJECTION of all points — not a mathematical slice of the
+ * Several plots side by side: a multi axis-set build ("0,1;0,2" in the raw
+ * axes field) produces one projection per pair and every plot is an ordinary
+ * cached projection (own inventory entry, own staleness badge).
+ *
+ * Camera (user request — parity with 3D): wheel zooms towards the cursor,
+ * LMB-drag pans, double-click / ⌂ returns to the auto-fit; the point size
+ * slider lives in the panel header (shared with the 3D scene).
+ *
+ * Selection (no explicit mode buttons): Shift+drag draws a marquee (Ctrl
+ * adds the area to the selection), click selects a point (Ctrl toggles),
+ * Esc clears.
+ *
+ * Honesty (TZ §5.2/§5.4): each plot header names the projection method and
+ * its axes, shows PCA explained variance when available, and states that
+ * this map is a PROJECTION of all points — not a mathematical slice of the
  * original space (slices arrive at stage 4 and will be labeled separately).
  */
 
 const PADDING = DEFAULT_PADDING;
 const HIT_RADIUS_PX = 7;
 const DRAG_SLOP_PX = 4;
+const WHEEL_ZOOM_SPEED = 0.0016;
 
 interface MarqueeRect {
   x0: number;
@@ -40,12 +57,86 @@ interface MarqueeRect {
 }
 
 export function Projection2D() {
-  const cloud = useSpaceStore((s) => s.cloud2d);
+  const clouds = useSpaceStore((s) => s.clouds2d);
   const loading = useSpaceStore((s) => s.loading2d);
   const pointSize = useSpaceStore((s) => s.pointSize);
-  const interactionMode = useSpaceStore((s) => s.interactionMode);
+  const setPointSize = useSpaceStore((s) => s.setPointSize);
+
+  /* Esc clears the shared selection from any view. */
+  const clearSelection = useProjectStore((s) => s.clearSelection);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") clearSelection();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [clearSelection]);
+
+  if (clouds.length === 0) {
+    return (
+      <section className="projection2d" aria-label="2D-проекция">
+        <header className="projection2d__header">
+          <span className="projection2d__title">2D-ПРОЕКЦИЯ</span>
+          <span className="projection2d__spacer" />
+          <span className="projection2d__note">проекция всех точек · не срез</span>
+        </header>
+        <div className="projection2d__canvas-wrap">
+          {loading ? (
+            <div className="projection2d__overlay empty-hint">Загрузка 2D-проекции…</div>
+          ) : (
+            <div className="projection2d__overlay empty-hint">
+              2D-проекция появится вместе с 3D-пространством после «Построить проекцию».
+              Несколько графиков рядом: метод «Сырые оси», ввод вида 0,1;0,2.
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="projection2d" aria-label="2D-проекция">
+      <header className="projection2d__header">
+        <span className="projection2d__title">
+          2D-ПРОЕКЦИЯ{clouds.length > 1 ? ` · ${clouds.length} графика рядом` : ""}
+        </span>
+        {loading && <span className="badge">обновление…</span>}
+        <span className="projection2d__spacer" />
+        <label className="projection2d__size" title="Размер точек (общий с 3D-сценой)">
+          <span className="mono">размер</span>
+          <input
+            type="range"
+            min={1}
+            max={8}
+            step={1}
+            value={pointSize}
+            onChange={(e) => setPointSize(Number.parseInt(e.target.value, 10))}
+            aria-label="Размер точек"
+          />
+        </label>
+        <span
+          className="projection2d__note"
+          title="Проекция ВСЕХ точек — не математический срез исходного пространства (срезы — этап 4). Расстояния на карте приближают исходные; на UMAP — только локально. Колесо — масштаб, перетаскивание — сдвиг, Shift — выделение области."
+        >
+          проекция всех точек · не срез
+        </span>
+      </header>
+      <div className="projection2d__plots">
+        {clouds.map((cloud) => (
+          <Plot2D key={cloud.projection.id} cloud={cloud} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* One plot                                                            */
+/* ------------------------------------------------------------------ */
+
+export function Plot2D({ cloud }: { cloud: PointCloud }) {
+  const pointSize = useSpaceStore((s) => s.pointSize);
   const hoveredId = useSpaceStore((s) => s.hoveredId);
-  const hoverScreen = useSpaceStore((s) => s.hoverScreen);
   const setHover = useSpaceStore((s) => s.setHover);
 
   const activeFragmentId = useProjectStore((s) => s.activeFragmentId);
@@ -60,7 +151,33 @@ export function Projection2D() {
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [marquee, setMarquee] = useState<MarqueeRect | null>(null);
   const [shiftDown, setShiftDown] = useState(false);
-  const dragRef = useRef<{ x: number; y: number; marquee: boolean } | null>(null);
+  /** null = auto-fit; otherwise the zoomed/panned data window. */
+  const [view, setView] = useState<PlotBounds | null>(null);
+  const [panning, setPanning] = useState(false);
+  const [localTooltip, setLocalTooltip] = useState<{ meta: PointMeta; x: number; y: number } | null>(
+    null,
+  );
+  const dragRef = useRef<{ x: number; y: number; mode: "pan" | "marquee"; moved: boolean } | null>(
+    null,
+  );
+
+  const count = cloud.points.count;
+  const fitBounds = useMemo(() => computeBounds2D(cloud.coords, count), [cloud, count]);
+  const fitRef = useRef(fitBounds);
+  useEffect(() => {
+    fitRef.current = fitBounds;
+  }, [fitBounds]);
+  // Another projection in the same slot: the camera resets to auto-fit.
+  useEffect(() => {
+    setView(null);
+  }, [cloud]);
+
+  const bounds = view ?? fitBounds;
+  const geom = useMemo<PlotGeometry>(
+    () => ({ width: size.w, height: size.h, padding: PADDING, bounds }),
+    [size.w, size.h, bounds],
+  );
+  const zoom = zoomLevel(bounds, fitBounds);
 
   /* Track container size (Allotment drags, window resize). */
   useEffect(() => {
@@ -74,9 +191,9 @@ export function Projection2D() {
     return () => observer.disconnect();
   }, []);
 
+  /* Shift arms the marquee in every 2D plot (single source: window). */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") clearSelection();
       if (e.key === "Shift") setShiftDown(true);
     };
     const onUp = (e: KeyboardEvent) => {
@@ -88,22 +205,11 @@ export function Projection2D() {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onUp);
     };
-  }, [clearSelection]);
-
-  const count = cloud?.points.count ?? 0;
-  const bounds = useMemo(
-    () => computeBounds2D(cloud?.coords ?? new Float32Array(0), count),
-    [cloud, count],
-  );
-  const geom = useMemo<PlotGeometry>(
-    () => ({ width: size.w, height: size.h, padding: PADDING, bounds }),
-    [size.w, size.h, bounds],
-  );
+  }, []);
 
   /* Precomputed pixel positions (hit-testing and drawing share them). */
   const pixels = useMemo(() => {
     const arr = new Float32Array(count * 2);
-    if (!cloud) return arr;
     for (let i = 0; i < count; i++) {
       const { cx, cy } = dataToCanvas(cloud.coords[i * 2], cloud.coords[i * 2 + 1], geom);
       arr[i * 2] = cx;
@@ -116,6 +222,32 @@ export function Projection2D() {
     () => (index: number) => ({ cx: pixels[index * 2], cy: pixels[index * 2 + 1] }),
     [pixels],
   );
+
+  /* Wheel zoom towards the cursor (native listener: React's is passive). */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      setView((prev) => {
+        const base = prev ?? fitRef.current;
+        const g: PlotGeometry = {
+          width: rect.width,
+          height: rect.height,
+          padding: PADDING,
+          bounds: base,
+        };
+        const anchor = canvasToData(cx, cy, g);
+        const factor = Math.exp(-e.deltaY * WHEEL_ZOOM_SPEED);
+        return zoomBoundsAt(base, fitRef.current, factor, anchor);
+      });
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, []);
 
   /* ---------------------------- drawing ---------------------------- */
 
@@ -136,7 +268,7 @@ export function Projection2D() {
     const plotR = size.w - PADDING.right;
     const plotB = size.h - PADDING.bottom;
 
-    /* frame + ticks */
+    /* frame + ticks (of the CURRENT view bounds — zoom changes the grid) */
     ctx.strokeStyle = "#232a31";
     ctx.lineWidth = 1;
     ctx.strokeRect(plotL + 0.5, plotT + 0.5, plotR - plotL, plotB - plotT);
@@ -148,34 +280,32 @@ export function Projection2D() {
     ctx.font = "9px 'Cascadia Code', Consolas, monospace";
     ctx.fillStyle = COLORS.textDim;
     ctx.strokeStyle = COLORS.grid;
+    // points outside the zoom window are clipped to the plot frame
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(plotL, plotT, Math.max(0, plotR - plotL), Math.max(0, plotB - plotT));
+    ctx.clip();
     for (const v of xTicks) {
       const { cx } = dataToCanvas(v, bounds.minY, geom);
-      if (cx < plotL - 1 || cx > plotR + 1) continue;
       ctx.beginPath();
       ctx.moveTo(cx, plotT);
       ctx.lineTo(cx, plotB);
       ctx.stroke();
-      ctx.textAlign = "center";
-      ctx.fillText(formatTick(v, xStep), cx, size.h - PADDING.bottom + 12);
     }
     for (const v of yTicks) {
       const { cy } = dataToCanvas(bounds.minX, v, geom);
-      if (cy < plotT - 1 || cy > plotB + 1) continue;
       ctx.beginPath();
       ctx.moveTo(plotL, cy);
       ctx.lineTo(plotR, cy);
       ctx.stroke();
-      ctx.textAlign = "right";
-      ctx.fillText(formatTick(v, yStep), plotL - 5, cy + 3);
     }
-
-    if (!cloud) return;
 
     /* points: small squares (distinct from selection rings — not color-only) */
     const r = Math.max(1, pointSize * 0.7);
     for (let i = 0; i < count; i++) {
       const cx = pixels[i * 2];
       const cy = pixels[i * 2 + 1];
+      if (cx < plotL - r || cx > plotR + r || cy < plotT - r || cy > plotB + r) continue;
       ctx.fillStyle = kindColor(cloud.metas[i].kind);
       ctx.fillRect(cx - r / 2, cy - r / 2, r, r);
     }
@@ -222,6 +352,23 @@ export function Projection2D() {
         ctx.stroke();
       }
     }
+    ctx.restore();
+
+    /* tick labels (outside the clip, along the frame) */
+    ctx.fillStyle = COLORS.textDim;
+    ctx.strokeStyle = "#232a31";
+    for (const v of xTicks) {
+      const { cx } = dataToCanvas(v, bounds.minY, geom);
+      if (cx < plotL - 1 || cx > plotR + 1) continue;
+      ctx.textAlign = "center";
+      ctx.fillText(formatTick(v, xStep), cx, size.h - PADDING.bottom + 12);
+    }
+    for (const v of yTicks) {
+      const { cy } = dataToCanvas(bounds.minX, v, geom);
+      if (cy < plotT - 1 || cy > plotB + 1) continue;
+      ctx.textAlign = "right";
+      ctx.fillText(formatTick(v, yStep), plotL - 5, cy + 3);
+    }
 
     /* marquee */
     if (marquee) {
@@ -252,8 +399,6 @@ export function Projection2D() {
 
   /* --------------------------- interaction -------------------------- */
 
-  const marqueeArmed = interactionMode === "marquee" || shiftDown;
-
   /** Pointer position in canvas pixels (jsdom-safe: clientX − bounding rect). */
   const eventPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -263,37 +408,57 @@ export function Projection2D() {
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return;
     const { x, y } = eventPos(e);
-    const armed = marqueeArmed || e.shiftKey;
-    dragRef.current = { x, y, marquee: armed };
-    if (armed) {
+    const marqueeMode = shiftDown || e.shiftKey;
+    dragRef.current = { x, y, mode: marqueeMode ? "marquee" : "pan", moved: false };
+    if (marqueeMode) {
       setMarquee({ x0: x, y0: y, x1: x, y1: y });
-      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    } else {
+      setPanning(true);
     }
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const { x, y } = eventPos(e);
     const drag = dragRef.current;
-    if (drag?.marquee) {
-      setMarquee((prev) => (prev ? { ...prev, x1: x, y1: y } : prev));
+    if (drag) {
+      if (Math.abs(x - drag.x) > DRAG_SLOP_PX || Math.abs(y - drag.y) > DRAG_SLOP_PX) {
+        drag.moved = true;
+      }
+      if (drag.mode === "marquee") {
+        setMarquee((prev) => (prev ? { ...prev, x1: x, y1: y } : prev));
+        return;
+      }
+      // pan: the content follows the cursor
+      if (drag.moved) {
+        const dx = x - drag.x;
+        const dy = y - drag.y;
+        setView((prev) => panBounds(prev ?? fitRef.current, dx, dy, geom));
+        drag.x = x;
+        drag.y = y;
+      }
       return;
     }
     const hit = hitTest2D(count, { cx: x, cy: y }, HIT_RADIUS_PX, pixelOf);
     if (hit === null) {
+      setLocalTooltip(null);
       setHover(null);
     } else {
-      const meta = cloud?.metas[hit];
-      if (meta) setHover(meta.fragmentId, { kind: "2d", x, y });
+      const meta = cloud.metas[hit];
+      if (meta) {
+        setLocalTooltip({ meta, x, y });
+        setHover(meta.fragmentId, { kind: "2d", x, y });
+      }
     }
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
     dragRef.current = null;
+    setPanning(false);
     const { x, y } = eventPos(e);
-    if (drag?.marquee && marquee) {
-      const moved = Math.abs(x - drag.x) > DRAG_SLOP_PX || Math.abs(y - drag.y) > DRAG_SLOP_PX;
-      if (moved && cloud) {
+    if (drag?.mode === "marquee" && marquee) {
+      if (drag.moved) {
         const a = canvasToData(Math.min(marquee.x0, marquee.x1), 0, geom);
         const b = canvasToData(Math.max(marquee.x0, marquee.x1), 0, geom);
         const c = canvasToData(0, Math.min(marquee.y0, marquee.y1), geom);
@@ -313,18 +478,19 @@ export function Projection2D() {
           setSelectedFragments(picked);
         }
       }
+      // a Shift-click without a drag never touches the selection
       setMarquee(null);
       return;
     }
-    if (drag && (Math.abs(x - drag.x) > DRAG_SLOP_PX || Math.abs(y - drag.y) > DRAG_SLOP_PX)) {
-      return; // a drag, not a click
+    if (drag?.moved) {
+      return; // a pan, not a click
     }
     const hit = hitTest2D(count, { cx: x, cy: y }, HIT_RADIUS_PX, pixelOf);
     if (hit === null) {
       clearSelection();
       return;
     }
-    const meta = cloud?.metas[hit];
+    const meta = cloud.metas[hit];
     if (!meta) return;
     const ref = toFragmentRef(meta);
     if (e.nativeEvent.ctrlKey || e.nativeEvent.metaKey) {
@@ -335,97 +501,101 @@ export function Projection2D() {
   };
 
   const onPointerLeave = () => {
+    setLocalTooltip(null);
     setHover(null);
     if (marquee) {
       setMarquee(null);
       dragRef.current = null;
+      setPanning(false);
     }
   };
 
+  const resetView = useCallback(() => setView(null), []);
+
   /* ------------------------------ render ---------------------------- */
 
-  const hoveredMeta = useMemo(() => {
-    if (!cloud || !hoveredId) return null;
-    const i = cloud.indexById.get(hoveredId);
-    return i === undefined ? null : cloud.metas[i];
-  }, [cloud, hoveredId]);
-
-  const projection = cloud?.projection ?? null;
-  const axisInfo = projection?.axis_info;
+  const projection = cloud.projection;
+  const axisInfo = projection.axis_info;
+  const axesLabel =
+    projection.axis_labels.length >= 2
+      ? `${projection.axis_labels[0]} / ${projection.axis_labels[1]}`
+      : null;
 
   return (
-    <section className="projection2d" aria-label="2D-проекция">
-      <header className="projection2d__header">
-        <span className="projection2d__title">2D-ПРОЕКЦИЯ</span>
-        {projection ? (
-          <>
-            <span className="mono">
-              {projection.method_display_name} · {count} точек
-            </span>
-            {projection.axis_labels.length >= 2 && (
-              <span className="mono projection2d__axes">
-                оси: {projection.axis_labels[0]} / {projection.axis_labels[1]}
-                {axisInfo && axisInfo.length >= 2
-                  ? ` (${Math.round(axisInfo[0] * 100)}% / ${Math.round(axisInfo[1] * 100)}% дисперсии)`
-                  : ""}
-              </span>
-            )}
-            {projection.stale && (
-              <span className="badge badge--warn" title="Векторы изменились после построения — пересчитайте проекцию">
-                устарела
-              </span>
-            )}
-            {cloud && cloud.points.dropped_orphans > 0 && (
-              <span className="badge badge--warn">
-                −{cloud.points.dropped_orphans} удалённых фрагментов
-              </span>
-            )}
-          </>
-        ) : (
-          <span className="projection2d__axes">нет данных</span>
-        )}
-        <span className="projection2d__spacer" />
-        <span className="projection2d__note" title="Проекция ВСЕХ точек — не математический срез исходного пространства (срезы — этап 4). Расстояния на карте приближают исходные; на UMAP — только локально.">
-          проекция всех точек · не срез
+    <div
+      className={`plot2d${shiftDown ? " plot2d--marquee" : ""}${panning ? " plot2d--panning" : ""}`}
+      aria-label={`2D-график (${projection.method_display_name})`}
+    >
+      <header className="plot2d__header">
+        <span className="mono plot2d__method">
+          {projection.method_display_name} · {count} точ.
         </span>
+        {axesLabel && (
+          <span className="mono plot2d__axes">
+            оси: {axesLabel}
+            {axisInfo && axisInfo.length >= 2
+              ? ` (${Math.round(axisInfo[0] * 100)}% / ${Math.round(axisInfo[1] * 100)}% дисперсии)`
+              : ""}
+          </span>
+        )}
+        {projection.stale && (
+          <span
+            className="badge badge--warn"
+            title="Векторы изменились после построения — пересчитайте проекцию"
+          >
+            устарела
+          </span>
+        )}
+        {cloud.points.dropped_orphans > 0 && (
+          <span className="badge badge--warn">−{cloud.points.dropped_orphans} удалённых</span>
+        )}
+        <span className="plot2d__spacer" />
+        <span className="mono plot2d__zoom" title="Масштаб относительно автоподгонки">
+          {Math.round(zoom * 100)}%
+        </span>
+        <button
+          type="button"
+          className="btn btn--small"
+          onClick={resetView}
+          disabled={view === null}
+          title="Сбросить масштаб и сдвиг к автоподгонке (или двойной клик)"
+        >
+          ⌂
+        </button>
       </header>
-      <div className="projection2d__canvas-wrap" ref={wrapRef}>
+      <div className="plot2d__canvas-wrap" ref={wrapRef}>
         <canvas
           ref={canvasRef}
-          className="projection2d__canvas"
+          className="plot2d__canvas"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerLeave={onPointerLeave}
+          onDoubleClick={resetView}
           role="img"
           aria-label={
-            projection
-              ? `2D-проекция (${projection.method_display_name}), ${count} точек`
-              : "2D-проекция (нет данных)"
+            axesLabel
+              ? `2D-проекция (${projection.method_display_name}), оси ${axesLabel}, ${count} точек`
+              : `2D-проекция (${projection.method_display_name}), ${count} точек`
           }
         />
-        {!cloud && loading && (
-          <div className="projection2d__overlay empty-hint">Загрузка 2D-проекции…</div>
-        )}
-        {!cloud && !loading && (
-          <div className="projection2d__overlay empty-hint">
-            2D-проекция появится вместе с 3D-пространством после «Построить проекцию».
-          </div>
-        )}
-        {hoveredMeta && hoverScreen?.kind === "2d" && (
+        {localTooltip && (
           <div
             className="scene-tooltip"
-            style={{ left: hoverScreen.x, top: hoverScreen.y }}
+            style={{ left: localTooltip.x, top: localTooltip.y }}
             role="tooltip"
           >
-            <span className="scene-tooltip__kind mono">{kindBadge(hoveredMeta.kind)}</span>
-            <span className="scene-tooltip__name">{hoveredMeta.name ?? hoveredMeta.symbolPath}</span>
+            <span className="scene-tooltip__kind mono">{kindBadge(localTooltip.meta.kind)}</span>
+            <span className="scene-tooltip__name">
+              {localTooltip.meta.name ?? localTooltip.meta.symbolPath}
+            </span>
             <span className="scene-tooltip__path mono">
-              {hoveredMeta.relPath}:{hoveredMeta.startLine}–{hoveredMeta.endLine}
+              {localTooltip.meta.relPath}:{localTooltip.meta.startLine}–
+              {localTooltip.meta.endLine}
             </span>
           </div>
         )}
       </div>
-    </section>
+    </div>
   );
 }

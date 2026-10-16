@@ -3,8 +3,10 @@
  *
  * Stage 0: backend connection + diagnostics.
  * Stage 1: active section switching.
- * Stage 3: corpus / space / experiments / diagnostics (experiment state
- * lives in experimentStore, space view state in spaceStore).
+ * Stage 3: space / experiments / diagnostics (experiment state lives in
+ * experimentStore, space view state in spaceStore). The separate CORPUS
+ * section was removed by user feedback: the corpus panel and the source
+ * inspector live inside SPACE.
  */
 
 import { create } from "zustand";
@@ -13,7 +15,9 @@ import { ApiError, api } from "../api/client";
 import type { HealthResponse } from "../api/types";
 
 export type ConnectionStatus = "idle" | "loading" | "online" | "offline";
-export type ActiveSection = "corpus" | "space" | "diagnostics" | "experiments";
+/** CORPUS was removed as a separate tab (user feedback): everything it
+ *  showed lives in the SPACE section (corpus panel left, inspector right). */
+export type ActiveSection = "space" | "diagnostics" | "experiments";
 
 export interface UiError {
   code: string;
@@ -44,7 +48,7 @@ export const useUiStore = create<UiState>()((set, get) => ({
   health: null,
   error: null,
   lastCheckedAt: null,
-  activeSection: "corpus",
+  activeSection: "space",
   inspectorVisible: true,
 
   setActiveSection: (section) => set({ activeSection: section }),

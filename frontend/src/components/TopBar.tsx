@@ -48,7 +48,7 @@ export function TopBar() {
         className={`topbar__diag-btn${activeSection === "diagnostics" ? " topbar__diag-btn--active" : ""}`}
         title="Диагностика backend: версии, проверки, зависимости"
         onClick={() =>
-          setActiveSection(activeSection === "diagnostics" ? "corpus" : "diagnostics")
+          setActiveSection(activeSection === "diagnostics" ? "space" : "diagnostics")
         }
         aria-pressed={activeSection === "diagnostics"}
       >

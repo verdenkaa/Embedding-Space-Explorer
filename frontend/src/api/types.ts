@@ -306,11 +306,15 @@ export interface ProjectionMethodInfo {
 export interface ComputeProjectionRequest {
   embedding_run_id: string;
   method: string;
-  /** 3 = 3D scene, 2 = 2D map; both by default. Derived from `axes` for
-   *  the raw_axes method (backend ignores the sent value then). */
+  /** 3 = 3D scene, 2 = 2D map, 4 = 4D view (3D scene + "time" slider over
+   *  the 4th axis); [3, 2] by default. Derived from `axes` for the raw_axes
+   *  method (backend ignores the sent value then). */
   components: number[];
   params: Record<string, ProjectionParamValue>;
   seed: number;
+  /** raw_axes only: several axis PAIRS in one job — one 2D projection per
+   *  pair, compared side by side (2..6 sets; backend enforces). */
+  axis_sets?: number[][] | null;
 }
 
 export interface ProjectionRunDTO {

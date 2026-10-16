@@ -180,6 +180,14 @@ export const api = {
     request<ProjectionRunDTO[]>(`/api/projects/${pid}/projections`),
   getProjectionPoints: (pid: string, projectionId: string): Promise<ProjectionPoints> =>
     request<ProjectionPoints>(`/api/projects/${pid}/projections/${projectionId}/points`),
+  deleteProjection: (pid: string, projectionId: string): Promise<{ deleted: string }> =>
+    request<{ deleted: string }>(`/api/projects/${pid}/projections/${projectionId}`, {
+      method: "DELETE",
+    }),
+  deleteAllProjections: (pid: string): Promise<{ deleted: number }> =>
+    request<{ deleted: number }>(`/api/projects/${pid}/projections?confirm=true`, {
+      method: "DELETE",
+    }),
   listPresets: (pid: string): Promise<ProjectionPresetDTO[]> =>
     request<ProjectionPresetDTO[]>(`/api/projects/${pid}/projection-presets`),
   createPreset: (pid: string, payload: CreatePresetRequest): Promise<ProjectionPresetDTO> =>

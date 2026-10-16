@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { ProjectionMethodInfo, ProjectionParamSpec } from "../../api/types";
-import { runOptionLabel } from "../../space/projectionLabels";
+import { axesSetsKey, parseAxesInput } from "../../space/axisSpec";
 import { useExperimentStore } from "../../state/experimentStore";
 import { useProjectStore } from "../../state/projectStore";
-import { useSpaceStore } from "../../state/spaceStore";
 import { useUiStore } from "../../state/uiStore";
 import { JobProgress } from "../corpus/JobProgress";
 
 /**
  * Projection control panel (bottom of the SPACE center column — moved there
  * by user feedback; between the charts it competed with the data).
+ *
+ * The view selectors ("3D-вид" / "2D-вид" / "4D-вид") and the projection
+ * cleanup buttons live in the TOP bar next to the view-mode toggle now
+ * (user feedback): the panel builds, the top bar shows and cleans up.
  *
  * Form fields carry NO hover tooltips (they were clipped and uninformative):
  * parameter names are self-descriptive, ranges are enforced by inputs, and
@@ -38,64 +41,39 @@ export function ExperimentJobPoller() {
 /* Parameter inputs rendered from the backend catalog specs             */
 /* ------------------------------------------------------------------ */
 
-interface IntListInputProps {
+interface AxesInputProps {
   spec: ProjectionParamSpec;
-  value: number[];
+  sets: number[][];
   dimHint: number | null;
-  onEmit: (values: number[]) => void;
+  onEmit: (sets: number[][], problem: string | null) => void;
 }
 
-/** Comma-separated integer list with inline validation (raw-axes picker). */
-function IntListInput({ spec, value, dimHint, onEmit }: IntListInputProps) {
-  const [text, setText] = useState(() => value.join(", "));
+/**
+ * Raw-axes picker: "12, 57" (one plot) or "0,1;0,2;0,3" (several 2D plots
+ * side by side — one projection per `;`-separated pair). Validation is
+ * instant and inline; the backend re-validates everything.
+ */
+export function AxesInput({ spec, sets, dimHint, onEmit }: AxesInputProps) {
+  const [text, setText] = useState(() => sets.map((s) => s.join(", ")).join("; "));
   const [problem, setProblem] = useState<string | null>(null);
-  const lastEmitted = useRef(value.join(", "));
+  const lastEmitted = useRef(axesSetsKey(sets));
 
   // External changes (preset applied, method switch) refresh the field.
   useEffect(() => {
-    const external = value.join(", ");
+    const external = axesSetsKey(sets);
     if (external !== lastEmitted.current) {
       lastEmitted.current = external;
-      setText(external);
+      setText(sets.map((s) => s.join(", ")).join("; "));
       setProblem(null);
     }
-  }, [value]);
+  }, [sets]);
 
   const handleChange = (next: string) => {
     setText(next);
-    const tokens = next
-      .split(/[,\s]+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    const nums: number[] = [];
-    for (const token of tokens) {
-      if (!/^\d+$/.test(token)) {
-        setProblem("только целые неотрицательные индексы через запятую");
-        return;
-      }
-      nums.push(Number.parseInt(token, 10));
-    }
-    const min = spec.min_items ?? 1;
-    const max = spec.max_items ?? nums.length;
-    if (nums.length > 0 && new Set(nums).size !== nums.length) {
-      setProblem("оси не должны повторяться");
-      return;
-    }
-    if (dimHint !== null) {
-      const bad = nums.find((n) => n >= dimHint);
-      if (bad !== undefined) {
-        setProblem(`индекс ${bad} вне диапазона 0..${dimHint - 1}`);
-        return;
-      }
-    }
-    if (nums.length < min || nums.length > max) {
-      setProblem(`нужно от ${min} до ${max} осей`);
-      // still emit so the store reflects intent; backend validates too
-    } else {
-      setProblem(null);
-    }
-    lastEmitted.current = nums.join(", ");
-    onEmit(nums);
+    const parsed = parseAxesInput(next, dimHint);
+    setProblem(parsed.problem);
+    lastEmitted.current = axesSetsKey(parsed.sets);
+    onEmit(parsed.sets, parsed.problem);
   };
 
   return (
@@ -109,7 +87,7 @@ function IntListInput({ spec, value, dimHint, onEmit }: IntListInputProps) {
         value={text}
         aria-labelledby={`axes-label-${spec.name}`}
         aria-invalid={problem !== null}
-        placeholder={dimHint !== null ? `0..${dimHint - 1}, через запятую` : "12, 57, 200"}
+        placeholder={dimHint !== null ? `0..${dimHint - 1}; «0,1;0,2» — графики рядом` : "12, 57"}
         spellCheck={false}
         onChange={(e) => handleChange(e.target.value)}
       />
@@ -126,20 +104,28 @@ function MethodParams({
   dimHint: number | null;
 }) {
   const projParams = useExperimentStore((s) => s.projParams);
+  const projAxesGroups = useExperimentStore((s) => s.projAxesGroups);
   const setProjParam = useExperimentStore((s) => s.setProjParam);
+  const setProjAxesState = useExperimentStore((s) => s.setProjAxesState);
   if (!method) return null;
   return (
     <>
       {method.params.map((spec) => {
         const value = projParams[spec.name] ?? spec.default;
         if (spec.type === "int_list") {
+          const sets =
+            projAxesGroups.length > 0
+              ? projAxesGroups
+              : Array.isArray(value) && value.length > 0
+                ? [value]
+                : [];
           return (
-            <IntListInput
+            <AxesInput
               key={spec.name}
               spec={spec}
-              value={Array.isArray(value) ? value : []}
+              sets={sets}
               dimHint={dimHint}
-              onEmit={(nums) => setProjParam(spec.name, nums)}
+              onEmit={(parsed, problem) => setProjAxesState(parsed, problem)}
             />
           );
         }
@@ -213,7 +199,6 @@ export function ProjectionControls() {
   const current = useProjectStore((s) => s.current);
 
   const runs = useExperimentStore((s) => s.runs);
-  const projections = useExperimentStore((s) => s.projections);
   const presets = useExperimentStore((s) => s.presets);
   const methods = useExperimentStore((s) => s.projectionMethods);
   const activeJob = useExperimentStore((s) => s.activeJob);
@@ -222,6 +207,8 @@ export function ProjectionControls() {
   const projMethod = useExperimentStore((s) => s.projMethod);
   const projParams = useExperimentStore((s) => s.projParams);
   const projSeed = useExperimentStore((s) => s.projSeed);
+  const projAxesGroups = useExperimentStore((s) => s.projAxesGroups);
+  const projAxesProblem = useExperimentStore((s) => s.projAxesProblem);
   const presetName = useExperimentStore((s) => s.presetName);
   const loadProjectionCatalog = useExperimentStore((s) => s.loadProjectionCatalog);
   const loadPresets = useExperimentStore((s) => s.loadPresets);
@@ -234,9 +221,6 @@ export function ProjectionControls() {
   const deletePreset = useExperimentStore((s) => s.deletePreset);
   const applyPreset = useExperimentStore((s) => s.applyPreset);
 
-  const cloud3d = useSpaceStore((s) => s.cloud3d);
-  const cloud2d = useSpaceStore((s) => s.cloud2d);
-  const setActiveProjection = useSpaceStore((s) => s.setActiveProjection);
   const setActiveSection = useUiStore((s) => s.setActiveSection);
 
   // Runs and inventory are loaded by SpaceSection; the panel itself loads
@@ -254,27 +238,26 @@ export function ProjectionControls() {
   const isRawAxes = projMethod === "raw_axes";
   const axes = projParams["axes"];
   const axesCount = Array.isArray(axes) ? axes.length : 0;
+  const isMulti = projAxesProblem === null && projAxesGroups.length > 1;
 
   const buildLabel = useMemo(() => {
     if (isRawAxes) {
-      return axesCount === 3
-        ? "Построить проекцию (3D)"
-        : axesCount === 2
-          ? "Построить проекцию (2D)"
-          : "Построить проекцию";
+      if (isMulti) return `Построить графики (2D×${projAxesGroups.length})`;
+      return axesCount === 4
+        ? "Построить проекцию (4D)"
+        : axesCount === 3
+          ? "Построить проекцию (3D)"
+          : axesCount === 2
+            ? "Построить проекцию (2D)"
+            : "Построить проекцию";
     }
     return "Построить проекцию (3D+2D)";
-  }, [isRawAxes, axesCount]);
+  }, [isRawAxes, isMulti, projAxesGroups, axesCount]);
 
-  const buildDisabled =
-    jobRunning ||
-    runs === null ||
-    runs.length === 0 ||
-    !current ||
-    (isRawAxes && (axesCount < 2 || axesCount > 3));
+  const rawAxesInvalid =
+    isRawAxes && (projAxesProblem !== null || (!isMulti && (axesCount < 2 || axesCount > 4)));
+  const buildDisabled = jobRunning || runs === null || runs.length === 0 || !current || rawAxesInvalid;
 
-  const options3d = (projections ?? []).filter((p) => p.n_components === 3 && p.cache_ok);
-  const options2d = (projections ?? []).filter((p) => p.n_components === 2 && p.cache_ok);
   const noEmbeddings = runs !== null && runs.length === 0;
 
   return (
@@ -360,6 +343,17 @@ export function ProjectionControls() {
         >
           {buildLabel}
         </button>
+        {!isRawAxes && (
+          <button
+            type="button"
+            className="btn btn--small"
+            disabled={buildDisabled}
+            title="Построить проекцию с четырьмя компонентами для 4D-вида ( четвёртая ось — слайдер «времени»)"
+            onClick={() => void startProjection({ components: [4] })}
+          >
+            Построить 4D
+          </button>
+        )}
 
         {noEmbeddings && (
           <button
@@ -373,41 +367,6 @@ export function ProjectionControls() {
       </div>
 
       <div className="proj-controls__row">
-        <label className="proj-controls__field">
-          <span>3D-вид</span>
-          <select
-            className="proj-controls__select proj-controls__select--wide mono"
-            value={cloud3d?.projection.id ?? ""}
-            aria-label="Проекция для 3D-сцены"
-            onChange={(e) => void setActiveProjection("3d", e.target.value || null)}
-          >
-            <option value="">— нет —</option>
-            {options3d.map((p) => (
-              <option key={p.id} value={p.id}>
-                {runOptionLabel(p)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="proj-controls__field">
-          <span>2D-вид</span>
-          <select
-            className="proj-controls__select proj-controls__select--wide mono"
-            value={cloud2d?.projection.id ?? ""}
-            aria-label="Проекция для 2D-карты"
-            onChange={(e) => void setActiveProjection("2d", e.target.value || null)}
-          >
-            <option value="">— нет —</option>
-            {options2d.map((p) => (
-              <option key={p.id} value={p.id}>
-                {runOptionLabel(p)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <span className="proj-controls__separator" aria-hidden="true" />
-
         <label className="proj-controls__field">
           <span>пресет</span>
           <select
@@ -441,13 +400,18 @@ export function ProjectionControls() {
           maxLength={128}
           onChange={(e) => setPresetName(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && presetName.trim()) void savePreset();
+            if (e.key === "Enter" && presetName.trim() && !isMulti) void savePreset();
           }}
         />
         <button
           type="button"
           className="btn btn--small"
-          disabled={!presetName.trim() || jobRunning}
+          disabled={!presetName.trim() || jobRunning || isMulti}
+          title={
+            isMulti
+              ? "Пресет сохраняет одну комбинацию осей — оставьте одну группу (до «;»)"
+              : "Сохранить текущую форму (метод, параметры, seed) как пресет"
+          }
           onClick={() => void savePreset()}
         >
           Сохранить пресет

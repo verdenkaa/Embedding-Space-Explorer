@@ -1646,9 +1646,9 @@ code,
   border-color: color-mix(in srgb, var(--color-warn) 45%, transparent);
 }
 
-/* ---------- 3D scene ---------- */
+/* ---------- shared point scene (3D / 4D views) ---------- */
 
-.scene3d {
+.point-scene {
   position: relative;
   width: 100%;
   height: 100%;
@@ -1658,27 +1658,27 @@ code,
   overflow: hidden;
 }
 
-.scene3d--state {
+.point-scene--state {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
 }
 
-.scene3d--hover canvas {
+.point-scene--hover canvas {
   cursor: pointer;
 }
 
-.scene3d--marquee canvas {
+.point-scene--marquee canvas {
   cursor: crosshair;
 }
 
-.scene3d canvas {
+.point-scene canvas {
   display: block;
   outline: none;
 }
 
-.scene3d__badge {
+.point-scene__badge {
   position: absolute;
   top: 8px;
   left: 10px;
@@ -1692,7 +1692,7 @@ code,
   white-space: nowrap;
 }
 
-.scene3d__toolbar {
+.point-scene__toolbar {
   position: absolute;
   top: 8px;
   right: 10px;
@@ -1705,7 +1705,7 @@ code,
   border-radius: var(--radius-md);
 }
 
-.scene3d__size {
+.point-scene__size {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -1713,12 +1713,12 @@ code,
   color: var(--color-text-dim);
 }
 
-.scene3d__size input[type="range"] {
+.point-scene__size input[type="range"] {
   width: 74px;
   accent-color: var(--color-accent);
 }
 
-.scene3d__legend {
+.point-scene__legend {
   position: absolute;
   left: 10px;
   bottom: 10px;
@@ -1836,12 +1836,6 @@ code,
   letter-spacing: 0.06em;
 }
 
-.projection2d__axes {
-  color: var(--color-text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .projection2d__spacer {
   flex: 1;
 }
@@ -1856,12 +1850,6 @@ code,
   position: relative;
   flex: 1;
   min-height: 0;
-}
-
-.projection2d__canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .projection2d__overlay {
@@ -1979,7 +1967,7 @@ code,
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: var(--space-2);
   padding: 3px 10px;
   background: var(--color-surface);
@@ -2022,12 +2010,12 @@ code,
 }
 
 /* Legend: collapsible + scrollable (never covers the scene) */
-.scene3d__legend {
+.point-scene__legend {
   pointer-events: auto;
   max-width: 220px;
 }
 
-.scene3d__legend-toggle {
+.point-scene__legend-toggle {
   padding: 0;
   background: none;
   border: none;
@@ -2036,11 +2024,11 @@ code,
   cursor: pointer;
 }
 
-.scene3d__legend-toggle:hover {
+.point-scene__legend-toggle:hover {
   color: var(--color-text);
 }
 
-.scene3d__legend-items {
+.point-scene__legend-items {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -2139,4 +2127,217 @@ code,
   width: 1px;
   background: var(--color-border);
   margin: 0 2px;
+}
+
+/* ---------- stage-3 polish: view bar (selectors + cleanup) ---------- */
+
+.view-bar__separator {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: var(--color-border);
+}
+
+.view-bar__select {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  min-width: 0;
+}
+
+.view-bar__select > span {
+  flex: 0 0 auto;
+}
+
+.view-bar__select select {
+  max-width: 260px;
+  min-width: 120px;
+}
+
+.view-bar__delete {
+  flex: 0 0 auto;
+}
+
+.view-bar__delete-all {
+  margin-left: auto;
+  color: var(--color-text-dim);
+}
+
+.view-bar__delete-all:hover {
+  color: var(--color-danger, #e5484d);
+  border-color: color-mix(in srgb, var(--color-danger, #e5484d) 45%, transparent);
+}
+
+.view-bar__confirm {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.view-bar__confirm-text {
+  color: var(--color-warn);
+}
+
+/* mode hint inside the scene toolbar (discoverability of Shift/Ctrl) */
+.point-scene__mode-hint {
+  padding: 0 4px;
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* ---------- 4D view: "time" slider panel ---------- */
+
+.scene4d__slice {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 5px 8px;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  z-index: 3;
+}
+
+.scene4d__slice-label {
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.scene4d__slider {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.scene4d__slider-name {
+  color: var(--color-text-faint);
+}
+
+.scene4d__slider input[type="range"] {
+  width: 130px;
+  accent-color: var(--color-accent);
+}
+
+.scene4d__value {
+  min-width: 52px;
+  color: var(--color-text);
+}
+
+.scene4d__count {
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.scene4d__empty-hint {
+  color: var(--color-warn);
+  font-style: italic;
+}
+
+/* ---------- 2D projection: several plots side by side ---------- */
+
+.projection2d__size {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  flex: 0 0 auto;
+}
+
+.projection2d__size input[type="range"] {
+  width: 74px;
+  accent-color: var(--color-accent);
+}
+
+.projection2d__plots {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 1px;
+  overflow-x: auto;
+  background: var(--color-border);
+}
+
+.plot2d {
+  flex: 1 1 0;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--color-bg);
+}
+
+.plot2d__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.plot2d__method {
+  color: var(--color-text);
+  flex: 0 0 auto;
+}
+
+.plot2d__axes {
+  color: var(--color-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plot2d__spacer {
+  flex: 1;
+}
+
+.plot2d__zoom {
+  color: var(--color-text-faint);
+  flex: 0 0 auto;
+}
+
+.plot2d__header .btn {
+  flex: 0 0 auto;
+  padding: 0 6px;
+}
+
+.plot2d__canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.plot2d__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.plot2d--panning .plot2d__canvas {
+  cursor: grabbing;
+}
+
+.plot2d--marquee .plot2d__canvas {
+  cursor: crosshair;
 }
