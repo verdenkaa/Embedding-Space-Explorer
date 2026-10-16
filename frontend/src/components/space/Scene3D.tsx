@@ -89,6 +89,7 @@ export function Scene3D() {
     let capped = 0;
     let fileLevel = 0;
     let offCloud = 0;
+    let hidden = 0;
     for (const rel of fragmentRelations.items) {
       const fromSource = rel.source.fragment_id === activeFragmentId;
       const fromTarget = rel.target.fragment_id === activeFragmentId;
@@ -105,6 +106,10 @@ export function Scene3D() {
       const oi = cloud.indexById.get(other.fragment_id);
       if (oi === undefined) {
         offCloud += 1;
+        continue;
+      }
+      if (sliceMasks?.mask && !sliceMasks.mask[oi]) {
+        hidden += 1; // the target is outside the active slice layer
         continue;
       }
       if (drawn >= RELATION_LINE_LIMIT) {
@@ -133,6 +138,7 @@ export function Scene3D() {
       capped,
       fileLevel,
       offCloud,
+      hidden,
     };
   }, [
     relationLinesOn,
@@ -141,6 +147,7 @@ export function Scene3D() {
     fragmentRelations,
     fragmentRelationsFor,
     kindFilter,
+    sliceMasks,
   ]);
 
   /* -------- states: loading / error / empty (honest, TZ §12) -------- */
@@ -260,11 +267,16 @@ export function Scene3D() {
                 <span className="mono scene3d__relfilter-count">{count}</span>
               </label>
             ))}
-            {(linesData.fileLevel > 0 || linesData.offCloud > 0) && (
+            {(linesData.fileLevel > 0 || linesData.offCloud > 0 || linesData.hidden > 0) && (
               <span className="scene3d__relnote">
-                не нарисовано: {linesData.fileLevel > 0 && `${linesData.fileLevel} файловых`}
-                {linesData.fileLevel > 0 && linesData.offCloud > 0 && ", "}
-                {linesData.offCloud > 0 && `${linesData.offCloud} вне этого облака`}
+                не нарисовано:{" "}
+                {[
+                  linesData.fileLevel > 0 && `${linesData.fileLevel} файловых`,
+                  linesData.offCloud > 0 && `${linesData.offCloud} вне этого облака`,
+                  linesData.hidden > 0 && `${linesData.hidden} вне слоя среза`,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
               </span>
             )}
             {linesData.drawn === 0 && (

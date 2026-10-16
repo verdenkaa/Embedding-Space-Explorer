@@ -41,11 +41,15 @@ export function SliceControls() {
   const deleteSavedSlice = useAnalysisStore((s) => s.deleteSavedSlice);
   const applySavedSlice = useAnalysisStore((s) => s.applySavedSlice);
 
-  const [enabled, setEnabled] = useState(false);
-  const [runId, setRunId] = useState<string>("");
-  const [normalKind, setNormalKind] = useState<"axis" | "pca">("axis");
-  const [indexInput, setIndexInput] = useState(0);
-  const [appliedIndex, setAppliedIndex] = useState(0);
+  // the overlay outlives the panel (section switches): restore from the store
+  const [enabled, setEnabled] = useState(() => useSpaceStore.getState().sliceOverlay !== null);
+  const initial = useSpaceStore.getState().sliceOverlay;
+  const [runId, setRunId] = useState<string>(initial?.embeddingRunId ?? "");
+  const [normalKind, setNormalKind] = useState<"axis" | "pca">(
+    initial && initial.normalKind !== "vector" ? initial.normalKind : "axis",
+  );
+  const [indexInput, setIndexInput] = useState(initial?.normalIndex ?? 0);
+  const [appliedIndex, setAppliedIndex] = useState(initial?.normalIndex ?? 0);
   const [sliceName, setSliceName] = useState("");
 
   const effectiveRunId = runId || runs?.[0]?.id || "";
@@ -56,9 +60,20 @@ export function SliceControls() {
     void loadSavedSlices();
   }, [current, loadSavedSlices]);
 
-  /* Fetch u(x) once per (run, normal); sliders afterwards are local math. */
+  /* Fetch u(x) once per (run, normal); sliders afterwards are local math.
+     A remount with an overlay that still matches must NOT refetch — that
+     would reset the user's window position/thickness to the defaults. */
   useEffect(() => {
     if (!enabled || !effectiveRunId) return;
+    const cur = useSpaceStore.getState().sliceOverlay;
+    if (
+      cur &&
+      cur.embeddingRunId === effectiveRunId &&
+      cur.normalKind === normalKind &&
+      cur.normalIndex === appliedIndex
+    ) {
+      return;
+    }
     void computeSlice(effectiveRunId, normalKind, appliedIndex);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, effectiveRunId, normalKind, appliedIndex]);
