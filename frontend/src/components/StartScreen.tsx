@@ -51,7 +51,8 @@ export function StartScreen() {
         <h1 className="start-screen__title">Начало работы</h1>
         <p className="start-screen__subtitle">
           Короткий путь: <b>1.</b> открыть или создать проект → <b>2.</b> индексировать корпус →{" "}
-          <b>3.</b> исследовать фрагменты. (Модель и пространство появятся на этапах 2–3.)
+          <b>3.</b> посчитать эмбеддинги (EXPERIMENTS) → <b>4.</b> построить проекции и
+          исследовать пространство (SPACE).
         </p>
         {error && (
           <p className="start-screen__error" role="alert">

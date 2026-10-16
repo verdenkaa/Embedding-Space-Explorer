@@ -32,7 +32,8 @@ export function JobProgress({ job, onCancel, runningLabel = "индексиро�
   const [warningsOpen, setWarningsOpen] = useState(false);
 
   if (!job) return null;
-  const { state, progress_done, progress_total, message, error, warnings } = job;
+  const { state, progress_done, progress_total, message, error } = job;
+  const warnings = job.warnings ?? [];
   const running = state === "queued" || state === "running";
   const pct = progress_total > 0 ? Math.round((progress_done / progress_total) * 100) : 0;
 

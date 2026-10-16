@@ -595,3 +595,115 @@ export interface FragmentGroupDTO {
   fragment_ids: string[];
   created_at: string;
 }
+
+
+// ---------------------------------------------------------------------------
+// Stage 5: metrics (TZ §5.6)
+// ---------------------------------------------------------------------------
+
+export interface MetricValueDTO {
+  /** null = not computed (no data) — never a fake 0.0 */
+  value: number | null;
+  k: number | null;
+  n_sampled: number | null;
+  n_sampled_with_relations: number | null;
+  n_known_pairs_embedded: number | null;
+  n_pairs_considered: number | null;
+  explanation: string;
+}
+
+export interface MetricRunDTO {
+  id: string;
+  embedding_run_id: string;
+  projection_run_id: string | null;
+  k: number;
+  sample_size: number;
+  seed: number;
+  relation_kinds: string[] | null;
+  n_vectors: number;
+  metrics: Record<string, MetricValueDTO>;
+  warnings: string[];
+  stale: boolean;
+  versions: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ComputeMetricsRequest {
+  embedding_run_id: string;
+  /** null → only relation metrics (over the ORIGINAL space) */
+  projection_run_id?: string | null;
+  k: number;
+  sample: number;
+  seed: number;
+  relation_kinds?: string[] | null;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 5: saved experiments (TZ §9.2)
+// ---------------------------------------------------------------------------
+
+export type ViewModeId = "3d" | "2d" | "4d" | "split";
+export type SliceDisplayId = "off" | "dim" | "only";
+
+export interface ExperimentSliceDTO {
+  saved_slice_id?: string | null;
+  embedding_run_id?: string | null;
+  normal_kind?: SliceNormalKind | null;
+  normal_index?: number | null;
+  normal_vector?: number[] | null;
+  position?: number | null;
+  thickness?: number | null;
+}
+
+export interface ExperimentProjectionsDTO {
+  three?: string | null;
+  two?: string[];
+  four?: string | null;
+}
+
+export interface ExperimentConfigDTO {
+  view_mode: ViewModeId;
+  embedding_run_id: string | null;
+  projections: ExperimentProjectionsDTO;
+  slice: ExperimentSliceDTO | null;
+  slice_display: SliceDisplayId;
+  clustering_run_id: string | null;
+  color_by: "kind" | "cluster";
+  group_ids: string[];
+  selection: string[];
+  selection_truncated: boolean;
+  metric_run_ids: string[];
+}
+
+export interface CreateExperimentRequest {
+  name: string;
+  description?: string | null;
+  config: ExperimentConfigDTO;
+}
+
+export interface ExperimentSummaryDTO {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  /** short content summary built at save time (values are display-ready) */
+  summary: Record<string, unknown>;
+}
+
+export interface ExperimentLiveStatusDTO {
+  missing: Record<string, string[]>;
+  stale: Record<string, string[]>;
+}
+
+export interface ExperimentDTO {
+  id: string;
+  name: string;
+  description: string | null;
+  config: ExperimentConfigDTO;
+  /** interpretation context captured AT SAVE TIME (corpus, versions,
+   *  staleness, metric values) */
+  snapshot: Record<string, unknown>;
+  live_status: ExperimentLiveStatusDTO | null;
+  created_at: string;
+}

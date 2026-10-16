@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useExperimentStore } from "../state/experimentStore";
 import { useProjectStore } from "../state/projectStore";
 import { JobProgress } from "./corpus/JobProgress";
+import { SavedExperimentsCard } from "./experiments/SavedExperimentsCard";
 
 const JOB_POLL_MS = 1000;
 
@@ -63,7 +64,8 @@ export function ExperimentsPanel() {
         <h1 className="diagnostics__title">Эксперименты: эмбеддинги и запуски</h1>
         <p className="diagnostics__subtitle">
           Модель, режим подготовки текста и расчёт векторов. Проекции строятся и
-          исследуются в разделе SPACE; соседи, кластеры и метрики появятся на этапах 4–5.
+          исследуются в разделе SPACE (соседи, связи, кластеры — левая панель; метрики
+          качества — панель «Метрики»); сохранённые эксперименты — карточка внизу страницы.
         </p>
       </div>
 
@@ -288,6 +290,8 @@ export function ExperimentsPanel() {
           </table>
         )}
       </section>
+
+      <SavedExperimentsCard />
     </div>
   );
 }

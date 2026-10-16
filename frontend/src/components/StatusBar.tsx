@@ -62,7 +62,7 @@ export function StatusBar() {
       {health && <span className="statusbar__segment">python {health.python_version}</span>}
       <span className="statusbar__segment">проверка: {formatTime(lastCheckedAt)}</span>
       <span className="statusbar__segment">
-        {health ? `v${health.app_version}` : "v—"} · этап 3
+        {health ? `v${health.app_version}` : "v—"} · этап 5
       </span>
     </footer>
   );

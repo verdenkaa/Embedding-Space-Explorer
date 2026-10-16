@@ -583,6 +583,7 @@ export function PointScene({
     >
       <Canvas
         dpr={[1, 2]}
+        gl={{ preserveDrawingBuffer: true }}
         camera={{ position: [1.9, 1.35, 1.9], fov: 50, near: 0.01, far: 60 }}
         onCreated={({ raycaster, gl }) => {
           raycaster.params.Points.threshold = HIT_THRESHOLD;

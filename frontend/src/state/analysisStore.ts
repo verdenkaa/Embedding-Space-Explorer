@@ -21,10 +21,12 @@ import { ApiError, api } from "../api/client";
 import type {
   ClusteringRunDTO,
   ComputeClusteringRequest,
+  ComputeMetricsRequest,
   CreateRelationRequest,
   FragmentGroupDTO,
   ImportRelationsResponse,
   JobInfo,
+  MetricRunDTO,
   NeighborMetric,
   NeighborsResponse,
   RelationsResponse,
@@ -80,6 +82,10 @@ interface AnalysisState {
   savedSlices: SavedSliceDTO[] | null;
   sliceLoading: boolean;
 
+  /* metrics (stage 5): runs inventory + compute form */
+  metricRuns: MetricRunDTO[] | null;
+  metricsForm: { k: number; sample: number; seed: number };
+
   /* stage-4 background jobs (relations extraction, clustering) */
   activeJob: JobInfo | null;
   error: AnalysisError | null;
@@ -116,6 +122,11 @@ interface AnalysisState {
   deleteSavedSlice: (id: string) => Promise<void>;
   applySavedSlice: (id: string) => Promise<void>;
 
+  loadMetricRuns: () => Promise<void>;
+  setMetricsForm: (patch: Partial<{ k: number; sample: number; seed: number }>) => void;
+  startMetrics: (payload: ComputeMetricsRequest) => Promise<void>;
+  deleteMetricRun: (id: string) => Promise<void>;
+
   tickActiveJob: () => Promise<void>;
   cancelActiveJob: () => Promise<void>;
   reset: () => void;
@@ -136,6 +147,8 @@ export const useAnalysisStore = create<AnalysisState>()((set, get) => ({
   groups: null,
   savedSlices: null,
   sliceLoading: false,
+  metricRuns: null,
+  metricsForm: { k: 10, sample: 500, seed: 42 },
   activeJob: null,
   error: null,
 
@@ -299,7 +312,7 @@ export const useAnalysisStore = create<AnalysisState>()((set, get) => ({
       const run = get().clusteringRuns?.find((r) => r.id === id);
       const space = labels.space === "projection" ? "проекция" : "исходные векторы";
       const caption = `${labels.algorithm.toUpperCase()} · ${space} · ${labels.metric} · кластеров: ${labels.n_clusters}, шум: ${labels.noise}${run?.stale ? " · УСТАРЕЛА" : ""}`;
-      useSpaceStore.getState().setClusterLabels(map, caption);
+      useSpaceStore.getState().setClusterLabels(map, caption, id);
     } catch (err) {
       set({ error: toError(err) });
     }
@@ -385,6 +398,7 @@ export const useAnalysisStore = create<AnalysisState>()((set, get) => ({
         uById,
         note: body.note,
         vector: vector ?? null,
+        savedSliceId: null,
       });
       set({ sliceLoading: false });
     } catch (err) {
@@ -445,7 +459,44 @@ export const useAnalysisStore = create<AnalysisState>()((set, get) => ({
         ...overlay,
         normalKind: saved.normal_kind,
         normalIndex: saved.normal_index,
+        savedSliceId: saved.id,
       });
+    }
+  },
+
+  loadMetricRuns: async () => {
+    const project = useProjectStore.getState().current;
+    if (!project) return;
+    try {
+      const metricRuns = await api.listMetricRuns(project.id);
+      set({ metricRuns, error: null });
+    } catch (err) {
+      set({ error: toError(err) });
+    }
+  },
+
+  setMetricsForm: (patch) => set((s) => ({ metricsForm: { ...s.metricsForm, ...patch } })),
+
+  startMetrics: async (payload) => {
+    const project = useProjectStore.getState().current;
+    if (!project) return;
+    set({ error: null });
+    try {
+      const activeJob = await api.computeMetrics(project.id, payload);
+      set({ activeJob });
+    } catch (err) {
+      set({ error: toError(err) });
+    }
+  },
+
+  deleteMetricRun: async (id) => {
+    const project = useProjectStore.getState().current;
+    if (!project) return;
+    try {
+      await api.deleteMetricRun(project.id, id);
+      await get().loadMetricRuns();
+    } catch (err) {
+      set({ error: toError(err) });
     }
   },
 
@@ -466,6 +517,8 @@ export const useAnalysisStore = create<AnalysisState>()((set, get) => ({
             await Promise.all(tasks);
           } else if (job.kind === "clustering") {
             await get().loadClustering();
+          } else if (job.kind === "metrics") {
+            await get().loadMetricRuns();
           }
         }
       }
@@ -500,6 +553,8 @@ export const useAnalysisStore = create<AnalysisState>()((set, get) => ({
       clusteringRuns: null,
       groups: null,
       savedSlices: null,
+      metricRuns: null,
+      metricsForm: { k: 10, sample: 500, seed: 42 },
       activeJob: null,
       error: null,
     }),

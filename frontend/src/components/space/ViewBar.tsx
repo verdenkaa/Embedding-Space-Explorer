@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
+import { exportUrls } from "../../api/client";
+import { downloadFromApi } from "../../api/download";
 import { runOptionLabel } from "../../space/projectionLabels";
+import { exportScenesPng } from "../../space/sceneCapture";
+import { useProjectStore } from "../../state/projectStore";
 import { useExperimentStore } from "../../state/experimentStore";
 import { useSpaceStore, type CloudKind, type ViewMode } from "../../state/spaceStore";
 
@@ -168,7 +172,137 @@ export function DeleteAllProjectionsButton() {
   );
 }
 
-/** The whole top bar: mode toggle + per-mode selectors + cleanup. */
+/**
+ * Export menu (stage 5, UI-ТЗ §3 «Сохранение и экспорт»): images of the live
+ * scenes (client-side canvas capture — what you see is what you get) and
+ * CSV/JSON of explicitly chosen data (the active projection's points, the
+ * current selection, all relations).
+ */
+export function ExportMenu() {
+  const current = useProjectStore((s) => s.current);
+  const selectedIds = useProjectStore((s) => s.selectedFragmentIds);
+  const viewMode = useSpaceStore((s) => s.viewMode);
+  const cloud3d = useSpaceStore((s) => s.cloud3d);
+  const clouds2d = useSpaceStore((s) => s.clouds2d);
+  const cloud4d = useSpaceStore((s) => s.cloud4d);
+  const [open, setOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  if (!current) return null;
+  const pid = current.id;
+  const activeCloud =
+    viewMode === "2d" ? clouds2d[0] : viewMode === "4d" ? cloud4d : cloud3d;
+  const hasScene = viewMode !== "2d" ? Boolean(cloud3d ?? cloud4d) : clouds2d.length > 0;
+
+  const run = async (fn: () => Promise<void> | void, okMessage: string) => {
+    try {
+      await fn();
+      setNotice(okMessage);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : String(err));
+    }
+    window.setTimeout(() => setNotice(null), 4000);
+  };
+
+  return (
+    <div className="export-menu" ref={rootRef}>
+      <button
+        type="button"
+        className="btn btn--small export-menu__toggle"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen((v) => !v)}
+        title="Экспорт изображений сцен и выбранных данных (CSV/JSON)"
+      >
+        ⤓ Экспорт
+      </button>
+      {open && (
+        <div className="export-menu__popup" role="menu" aria-label="Экспорт">
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!hasScene}
+            onClick={() => {
+              const n = exportScenesPng(viewMode);
+              setNotice(n > 0 ? `Сохранено изображений: ${n}` : "На экране нет сцен");
+              window.setTimeout(() => setNotice(null), 4000);
+              setOpen(false);
+            }}
+            title="PNG того, что сейчас на экране (сцены и 2D-графики)"
+          >
+            Сцены на экране → PNG
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!activeCloud}
+            onClick={() =>
+              void run(() => {
+                if (!activeCloud) return;
+                return downloadFromApi(
+                  exportUrls.projectionPoints(pid, activeCloud.projection.id, "csv"),
+                  "points.csv",
+                );
+              }, "Точки проекции сохранены (CSV)")
+            }
+            title={
+              activeCloud
+                ? `CSV: координаты + метаданные всех точек (${activeCloud.projection.method_display_name} · ${activeCloud.points.count})`
+                : "В активном виде ничего не показано"
+            }
+          >
+            Точки активной проекции → CSV
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={selectedIds.length === 0}
+            onClick={() =>
+              void run(
+                () =>
+                  downloadFromApi(exportUrls.fragments(pid), "selection.csv", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ fragment_ids: selectedIds }),
+                  }),
+                `Выделение сохранено (CSV, ${selectedIds.length})`,
+              )
+            }
+            title="CSV метаданных выделенных фрагментов (пути, строки, символы)"
+          >
+            Выделение ({selectedIds.length}) → CSV
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() =>
+              void run(
+                () => downloadFromApi(exportUrls.relations(pid), "relations.csv"),
+                "Связи сохранены (CSV)",
+              )
+            }
+            title="CSV всех структурных связей (с происхождением и свидетельствами)"
+          >
+            Все связи → CSV
+          </button>
+          {notice && <div className="export-menu__notice">{notice}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The whole top bar: mode toggle + per-mode selectors + cleanup + export. */
 export function ViewBar() {
   const viewMode = useSpaceStore((s) => s.viewMode);
   return (
@@ -179,6 +313,8 @@ export function ViewBar() {
       {(viewMode === "2d" || viewMode === "split") && <ViewSelect kind="2d" />}
       {viewMode === "4d" && <ViewSelect kind="4d" />}
       <DeleteAllProjectionsButton />
+      <span className="view-bar__separator" aria-hidden="true" />
+      <ExportMenu />
     </div>
   );
 }

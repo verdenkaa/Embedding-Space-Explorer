@@ -2911,3 +2911,240 @@ code,
   color: var(--color-text-faint);
   font-size: 10px;
 }
+
+/* ---------------------------------------------------------------------------
+   Stage 5: metrics panel, export menu, saved experiments
+   ------------------------------------------------------------------------- */
+
+.metrics-panel {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px 10px;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+
+.metrics-panel__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.metrics-panel__field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+}
+
+.metrics-panel__num {
+  width: 72px;
+}
+
+.metrics-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metrics-panel__belongs {
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+}
+
+.metrics-panel__blocks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.metric-block {
+  flex: 1 1 220px;
+  min-width: 200px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  padding: 4px 8px;
+  font-size: var(--text-xs);
+}
+
+.metric-block__summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.metric-block__summary::-webkit-details-marker {
+  display: none;
+}
+
+.metric-block__label {
+  color: var(--color-text-dim);
+}
+
+.metric-block__value {
+  font-size: var(--text-md);
+  color: var(--color-accent);
+}
+
+.metric-block__k {
+  margin-left: auto;
+  color: var(--color-text-faint);
+}
+
+.metric-block__explain {
+  margin-top: 4px;
+  color: var(--color-text-dim);
+  line-height: 1.45;
+}
+
+.metric-block__counts {
+  margin-top: 4px;
+  color: var(--color-text-faint);
+  font-size: 10px;
+}
+
+.metrics-panel__warnings {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--text-xs);
+  color: var(--color-warn, #d9a441);
+}
+
+.metrics-panel__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.export-menu {
+  position: relative;
+  margin-left: auto;
+}
+
+.export-menu__popup {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 240px;
+  padding: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 45%);
+}
+
+.export-menu__popup button {
+  text-align: left;
+  padding: 4px 8px;
+  font-size: var(--text-xs);
+  background: none;
+  border: none;
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.export-menu__popup button:hover:not(:disabled) {
+  background: var(--color-hover, rgb(255 255 255 / 6%));
+}
+
+.export-menu__popup button:disabled {
+  color: var(--color-text-faint);
+  cursor: default;
+}
+
+.export-menu__notice {
+  padding: 4px 8px;
+  font-size: 10px;
+  color: var(--color-text-dim);
+  border-top: 1px solid var(--color-border);
+}
+
+.saved-exp__form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.saved-exp__name {
+  width: 200px;
+}
+
+.saved-exp__desc {
+  flex: 1 1 240px;
+}
+
+.saved-exp__report {
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  font-size: var(--text-xs);
+}
+
+.saved-exp__report-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--color-text-dim);
+  margin-bottom: 2px;
+}
+
+.saved-exp__report-skipped {
+  color: var(--color-warn, #d9a441);
+}
+
+.saved-exp__name-cell {
+  display: block;
+  font-weight: 600;
+}
+
+.saved-exp__desc-cell {
+  display: block;
+  color: var(--color-text-faint);
+  font-size: 10px;
+}
+
+.saved-exp__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.saved-exp__chip {
+  font-weight: 400;
+}
+
+.saved-exp__actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.saved-exp__row--cmp td {
+  background: rgb(255 255 255 / 4%);
+}
+
+.saved-exp__compare-bar {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.saved-exp__compare td,
+.saved-exp__compare th {
+  font-size: var(--text-xs);
+}

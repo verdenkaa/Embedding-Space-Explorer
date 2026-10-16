@@ -10,15 +10,20 @@ import type {
   ClusteringRunDTO,
   ComputeClusteringRequest,
   ComputeEmbeddingsRequest,
+  ComputeMetricsRequest,
   ComputeProjectionRequest,
   ComputeSliceRequest,
   CreateGroupRequest,
   CreateProjectRequest,
+  CreateExperimentRequest,
   CreateRelationRequest,
   CreateSliceRequest,
   EmbeddingRunDTO,
+  ExperimentDTO,
   FragmentGroupDTO,
+  ExperimentSummaryDTO,
   ImportRelationsResponse,
+  MetricRunDTO,
   ModelInfo,
   NeighborMetric,
   NeighborsResponse,
@@ -294,9 +299,63 @@ export const api = {
   deleteGroup: (pid: string, groupId: string): Promise<{ deleted: string }> =>
     request<{ deleted: string }>(`/api/projects/${pid}/groups/${groupId}`, { method: "DELETE" }),
 
+  /* metrics (stage 5) */
+  computeMetrics: (pid: string, payload: ComputeMetricsRequest): Promise<JobInfo> =>
+    request<JobInfo>(`/api/projects/${pid}/metrics/compute`, jsonInit("POST", payload)),
+  listMetricRuns: (pid: string): Promise<MetricRunDTO[]> =>
+    request<MetricRunDTO[]>(`/api/projects/${pid}/metrics`),
+  getMetricRun: (pid: string, metricId: string): Promise<MetricRunDTO> =>
+    request<MetricRunDTO>(`/api/projects/${pid}/metrics/${metricId}`),
+  deleteMetricRun: (pid: string, metricId: string): Promise<{ deleted: string }> =>
+    request<{ deleted: string }>(`/api/projects/${pid}/metrics/${metricId}`, {
+      method: "DELETE",
+    }),
+
+  /* saved experiments (stage 5) */
+  listExperiments: (pid: string): Promise<ExperimentSummaryDTO[]> =>
+    request<ExperimentSummaryDTO[]>(`/api/projects/${pid}/experiments`),
+  saveExperiment: (pid: string, payload: CreateExperimentRequest): Promise<ExperimentDTO> =>
+    request<ExperimentDTO>(`/api/projects/${pid}/experiments`, jsonInit("POST", payload)),
+  getExperiment: (pid: string, experimentId: string): Promise<ExperimentDTO> =>
+    request<ExperimentDTO>(`/api/projects/${pid}/experiments/${experimentId}`),
+  deleteExperiment: (pid: string, experimentId: string): Promise<{ deleted: string }> =>
+    request<{ deleted: string }>(`/api/projects/${pid}/experiments/${experimentId}`, {
+      method: "DELETE",
+    }),
+
   /* filesystem browser (root picker) */
   listDirs: (path?: string): Promise<FsListResponse> =>
     request<FsListResponse>(
       `/api/fs/list-dirs${path ? `?path=${encodeURIComponent(path)}` : ""}`,
     ),
+};
+
+/* ---------------------------------------------------------------------------
+ * Export URL builders (stage 5, TZ §13.17). Pure string helpers — the actual
+ * download goes through downloadFromApi (blob + Content-Disposition).
+ * ------------------------------------------------------------------------- */
+
+export const exportUrls = {
+  projectionPoints: (
+    pid: string,
+    projectionId: string,
+    format: "csv" | "json" = "csv",
+  ): string =>
+    `/api/projects/${pid}/exports/projection/${projectionId}/points?format=${format}`,
+  relations: (
+    pid: string,
+    filters: { kind?: string; origin?: string; fragmentId?: string } = {},
+    format: "csv" | "json" = "csv",
+  ): string => {
+    const params = new URLSearchParams({ format });
+    if (filters.kind) params.set("kind", filters.kind);
+    if (filters.origin) params.set("origin", filters.origin);
+    if (filters.fragmentId) params.set("fragment_id", filters.fragmentId);
+    return `/api/projects/${pid}/exports/relations?${params.toString()}`;
+  },
+  fragments: (pid: string): string => `/api/projects/${pid}/exports/fragments`,
+  metricRun: (pid: string, metricId: string): string =>
+    `/api/projects/${pid}/exports/metrics/${metricId}`,
+  experiment: (pid: string, experimentId: string): string =>
+    `/api/projects/${pid}/exports/experiments/${experimentId}`,
 };

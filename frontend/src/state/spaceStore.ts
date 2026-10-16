@@ -102,6 +102,9 @@ export interface SliceOverlay {
   /** Explicit normal vector when the overlay was applied from one (saved
    *  slices); null for axis/pca specs re-resolved by the backend. */
   vector: number[] | null;
+  /** Saved-slice row this overlay came from (experiments restore by it);
+   *  null for ad-hoc axis/pca specs. */
+  savedSliceId: string | null;
 }
 
 export type SliceDisplayMode = "off" | "dim" | "only";
@@ -142,6 +145,8 @@ interface SpaceState {
   clusterLabels: Map<string, number> | null;
   /** Human label of the applied clustering («DBSCAN · исходное · eps 0.5»). */
   clusterCaption: string | null;
+  /** Clustering run the applied labels came from (experiment capture). */
+  clusterRunId: string | null;
   /** Draw structural relations of the active fragment in the 3D scene. */
   relationLines: boolean;
 
@@ -162,7 +167,11 @@ interface SpaceState {
   patchSliceOverlay: (patch: Partial<Pick<SliceOverlay, "position" | "thickness">>) => void;
   setSliceDisplay: (mode: SliceDisplayMode) => void;
   setColorBy: (colorBy: ColorBy) => void;
-  setClusterLabels: (labels: Map<string, number> | null, caption: string | null) => void;
+  setClusterLabels: (
+    labels: Map<string, number> | null,
+    caption: string | null,
+    runId?: string | null,
+  ) => void;
   setRelationLines: (enabled: boolean) => void;
   /** Point the views at what a finished build produced (and show it). */
   applyBuiltProjections: (projections: ProjectionRunDTO[], pending: PendingBuild) => void;
@@ -284,6 +293,7 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
   colorBy: "kind",
   clusterLabels: null,
   clusterCaption: null,
+  clusterRunId: null,
   relationLines: false,
 
   setViewMode: (mode) => set({ viewMode: mode }),
@@ -392,8 +402,13 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
   },
   setSliceDisplay: (mode) => set({ sliceDisplay: mode }),
   setColorBy: (colorBy) => set({ colorBy }),
-  setClusterLabels: (labels, caption) =>
-    set({ clusterLabels: labels, clusterCaption: caption, colorBy: labels ? "cluster" : "kind" }),
+  setClusterLabels: (labels, caption, runId = null) =>
+    set({
+      clusterLabels: labels,
+      clusterCaption: caption,
+      clusterRunId: labels ? runId : null,
+      colorBy: labels ? "cluster" : "kind",
+    }),
   setRelationLines: (enabled) => set({ relationLines: enabled }),
 
   applyBuiltProjections: (projections, pending) => {
@@ -481,6 +496,7 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
       colorBy: "kind",
       clusterLabels: null,
       clusterCaption: null,
+      clusterRunId: null,
       relationLines: false,
     }),
 }));

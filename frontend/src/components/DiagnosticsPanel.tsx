@@ -161,7 +161,7 @@ export function DiagnosticsPanel() {
         <h1 className="diagnostics__title">Диагностика — Этап 0</h1>
         <p className="diagnostics__subtitle">
           Каркас приложения: локальный backend (FastAPI, только 127.0.0.1) и интерфейс-оболочка.
-          Разделы SPACE / RELATIONS / EXPERIMENTS появляются по этапам разработки.
+          Разделы SPACE / RELATIONS / EXPERIMENTS доступны; оставшиеся этапы — стабилизация и приёмка.
         </p>
       </div>
 

@@ -12,6 +12,7 @@ import { JobPoller } from "../corpus/JobProgress";
 import { SourceInspector } from "../inspector/SourceInspector";
 import { AnalysisJobPoller } from "../analysis/NeighborsTab";
 import { Projection2D } from "./Projection2D";
+import { MetricsPanel } from "./MetricsPanel";
 import { ExperimentJobPoller, ProjectionControls } from "./ProjectionControls";
 import { Scene3D } from "./Scene3D";
 import { Scene4D } from "./Scene4D";
@@ -114,6 +115,7 @@ export function SpaceSection() {
               )}
             </Allotment>
             <SliceControls />
+            <MetricsPanel />
             <ProjectionControls />
           </div>
         </Allotment.Pane>
