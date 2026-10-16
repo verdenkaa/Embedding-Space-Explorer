@@ -397,6 +397,7 @@ describe("Scene3D stage-4 overlays", () => {
         ]),
         note: "",
         vector: null,
+        savedSliceId: null,
       },
       sliceDisplay: "only",
     });
@@ -420,6 +421,7 @@ describe("Scene3D stage-4 overlays", () => {
         uById: new Map(),
         note: "",
         vector: null,
+        savedSliceId: null,
       },
       sliceDisplay: "only",
     });
