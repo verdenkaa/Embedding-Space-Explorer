@@ -167,33 +167,61 @@ def compute_projection(
         run_dim = emb_run.dim
 
     try:
-        normalized = method.validate_params(payload.params)
-        if method.method_id == "raw_axes":
-            axes = _validated_axes(normalized, run_dim)
-            # One display coordinate per selected axis — components are
-            # DERIVED, never guessed (a 2-axis preset cannot fill the 3D view).
-            components = [len(axes)]
+        specs: list[tuple[int, dict[str, object]]]
+        if payload.axis_sets is not None:
+            if method.method_id != "raw_axes":
+                raise ProjectionParamsError(
+                    f"axis_sets is supported only by the raw_axes method (got '{method.method_id}')"
+                )
+            if "axes" in payload.params:
+                raise ProjectionParamsError(
+                    "params.axes must not be combined with axis_sets "
+                    "(axis_sets already defines the axes of every plot)"
+                )
+            # Multi-plot 2D comparison: one spec (2 components) per axis pair.
+            specs = []
+            for axis_pair in payload.axis_sets:
+                pair_params = dict(payload.params)
+                pair_params["axes"] = list(axis_pair)
+                normalized_pair = method.validate_params(pair_params)
+                _validated_axes(normalized_pair, run_dim)
+                specs.append((2, normalized_pair))
         else:
-            components = normalize_components(payload.components)
+            normalized = method.validate_params(payload.params)
+            if method.method_id == "raw_axes":
+                axes = _validated_axes(normalized, run_dim)
+                # One display coordinate per selected axis — components are
+                # DERIVED, never guessed (a 2-axis preset cannot fill the 3D
+                # view; 4 axes feed the 4D view).
+                specs = [(len(axes), normalized)]
+            else:
+                wanted = normalize_components(payload.components)
+                specs = [(n, normalized) for n in wanted]
     except ProjectionParamsError as exc:
         raise ApiError(400, "invalid_projection_params", str(exc)) from None
 
     # A projection must not race embedding recomputation or another fit.
     reject_if_active_job(ctx, ("projection", "embed", "model_download"), "projection_job_active")
 
+    job_params: dict[str, object] = {
+        "embedding_run_id": payload.embedding_run_id,
+        "method": method.method_id,
+        "components": sorted({n for n, _ in specs}, reverse=True),
+        "seed": payload.seed,
+    }
+    if payload.axis_sets is not None:
+        job_params["axis_sets"] = [list(s) for s in payload.axis_sets]
+        job_params["params"] = {
+            k: v for k, v in specs[0][1].items() if k != "axes"
+        }  # shared non-axis params (e.g. standardize)
+    else:
+        job_params["params"] = specs[0][1]
+
     job_id = manager.submit(
         ctx,
         "projection",
-        make_projection_runner(
-            payload.embedding_run_id, method.method_id, components, normalized, payload.seed
-        ),
-        params={
-            "embedding_run_id": payload.embedding_run_id,
-            "method": method.method_id,
-            "components": components,
-            "params": normalized,
-            "seed": payload.seed,
-        },
+        make_projection_runner(payload.embedding_run_id, method.method_id, specs, payload.seed),
+        params=job_params,
     )
     response.status_code = 202
     with ctx.session_factory() as session:
@@ -333,6 +361,64 @@ def get_projection_points(
         dropped_orphans=dropped,
         points=points,
     )
+
+
+# ---------------------------------------------------------------------------
+# Projection deletion (inventory hygiene: runs accumulate fast)
+# ---------------------------------------------------------------------------
+
+
+@projections_router.delete("/projections")
+def delete_all_projections(
+    ctx: Annotated[ProjectContext, Depends(get_project)],
+    confirm: bool = False,
+) -> dict[str, int]:
+    """Delete EVERY projection run of the project (rows + coordinate caches).
+
+    Requires explicit `confirm=true` (TZ §12: destructive actions need
+    confirmation). Embedding vectors, presets and the corpus are untouched.
+    """
+    if not confirm:
+        raise ApiError(
+            400,
+            "confirmation_required",
+            "Deleting all projections requires explicit confirmation.",
+            "Repeat the request with ?confirm=true (the UI asks before sending it).",
+        )
+    reject_if_active_job(ctx, ("projection",), "projection_job_active")
+    with ctx.session_factory() as session:
+        rows = session.execute(select(ProjectionRunRow)).scalars().all()
+        count = len(rows)
+        for row in rows:
+            session.delete(row)
+        session.commit()
+    projections_dir = ctx.project_dir / "cache" / "projections"
+    if projections_dir.is_dir():
+        for npz in projections_dir.glob("*.npz"):
+            npz.unlink(missing_ok=True)
+    return {"deleted": count}
+
+
+@projections_router.delete("/projections/{projection_id}")
+def delete_projection(
+    ctx: Annotated[ProjectContext, Depends(get_project)],
+    projection_id: str,
+) -> dict[str, str]:
+    """Delete one projection run: inventory row + its .npz coordinate cache."""
+    reject_if_active_job(ctx, ("projection",), "projection_job_active")
+    with ctx.session_factory() as session:
+        row = session.get(ProjectionRunRow, projection_id)
+        if row is None:
+            raise ApiError(
+                404,
+                "projection_not_found",
+                f"Projection '{projection_id}' does not exist in this project.",
+            )
+        npz_relpath = row.npz_relpath
+        session.delete(row)
+        session.commit()
+    (ctx.project_dir / npz_relpath).unlink(missing_ok=True)
+    return {"deleted": projection_id}
 
 
 # ---------------------------------------------------------------------------

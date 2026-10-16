@@ -26,8 +26,9 @@ import numpy as np
 
 ParamType = Literal["int", "float", "bool", "choice", "int_list"]
 
-#: Display components a projection can be computed for (2D map / 3D scene).
-SUPPORTED_COMPONENTS: tuple[int, ...] = (2, 3)
+#: Display components a projection can be computed for (2D map / 3D scene /
+#: 4D view = 3D scene + the 4th axis as a "time" slider).
+SUPPORTED_COMPONENTS: tuple[int, ...] = (2, 3, 4)
 
 
 class ProjectionParamsError(ValueError):

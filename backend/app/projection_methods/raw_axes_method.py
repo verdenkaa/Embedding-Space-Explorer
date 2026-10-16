@@ -1,8 +1,9 @@
 """Raw-axes projection: display selected dimensions of the ORIGINAL space.
 
-The user picks 2–3 axis indices (0..D-1) of the embedding vectors and sees
+The user picks 2–4 axis indices (0..D-1) of the embedding vectors and sees
 their exact coordinates — the only "projection" that distorts nothing inside
-the chosen subspace. Honesty requirements (TZ §5.1):
+the chosen subspace (4 axes feed the 4D view: first three are the scene,
+the fourth is the "time" slider). Honesty requirements (TZ §5.1):
 - axes are model dimensions; the app never claims human-interpretable
   semantics for an individual axis (the UI says so);
 - distances on such a map ignore all non-selected dimensions — they are NOT
@@ -39,10 +40,9 @@ class RawAxesMethod(ProjectionMethod):
     method_id = "raw_axes"
     display_name = "Сырые оси"
     description = (
-        "Координаты выбранных осей ИСХОДНОГО embedding-пространства (2–3 измерения "
+        "Координаты выбранных осей ИСХОДНОГО embedding-пространства (2–4 измерения "
         "из D) без преобразований: внутри выбранного подпространства ничего не "
-        "искажается. Оси — измерения модели и не имеют «человеческой» семантики "
-        "(ТЗ §5.1)."
+        "искажается. Оси — измерения модели и не имеют «человеческой» семантики."
     )
     caveat = (
         "Расстояния на такой карте учитывают только выбранные оси и НЕ равны "
@@ -56,10 +56,11 @@ class RawAxesMethod(ProjectionMethod):
             default=[],
             description=(
                 "Индексы осей исходного пространства (0-индексация), по одной на "
-                "компоненту отображения: 2 оси → 2D-карта, 3 оси → 3D-сцена."
+                "компоненту отображения: 2 оси → 2D-карта, 3 оси → 3D-сцена, "
+                "4 оси → 4D-вид (первые три — сцена, четвёртая — слайдер «времени»)."
             ),
             min_items=2,
-            max_items=3,
+            max_items=4,
         ),
         ParamSpec(
             name="standardize",

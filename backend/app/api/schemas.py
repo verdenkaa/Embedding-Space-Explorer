@@ -366,11 +366,33 @@ class ProjectionMethodInfoDTO(BaseModel):
 class ComputeProjectionRequest(BaseModel):
     embedding_run_id: str = Field(min_length=1, max_length=32)
     method: str = Field(min_length=1, max_length=32)
-    #: which display spaces to compute: 3 (3D scene), 2 (2D map); both by
-    #: default. Ignored (derived from `axes`) for the raw_axes method.
+    #: which display spaces to compute: 3 (3D scene), 2 (2D map), 4 (4D view:
+    #: 3D scene + "time" slider over the 4th axis); [3, 2] by default.
+    #: Ignored (derived from `axes`) for the raw_axes method.
     components: list[int] = Field(default_factory=lambda: [3, 2], min_length=1, max_length=2)
     params: dict[str, ProjectionParamValue] = Field(default_factory=dict)
     seed: int = Field(default=42, ge=0, le=2_147_483_647)
+    #: raw_axes only: several axis PAIRS in one job — one 2D projection per
+    #: pair, shown side by side for comparison ("0,1;0,2" in the UI). Each
+    #: pair is a normal projection run (own fingerprint/cache/inventory row).
+    axis_sets: list[list[int]] | None = Field(default=None, min_length=2, max_length=6)
+
+    @field_validator("axis_sets")
+    @classmethod
+    def _check_axis_sets(cls, value: list[list[int]] | None) -> list[list[int]] | None:
+        if value is None:
+            return None
+        for item in value:
+            if len(item) != 2:
+                raise ValueError("each axis set must contain exactly 2 axes (2D comparison)")
+            if item[0] == item[1]:
+                raise ValueError(f"axis set {item} repeats the same axis")
+        seen: list[list[int]] = []
+        for item in value:
+            if item in seen:
+                raise ValueError(f"duplicate axis set {item}")
+            seen.append(item)
+        return value
 
     @field_validator("components")
     @classmethod

@@ -1,8 +1,9 @@
-"""Projection jobs: compute 2D/3D display coordinates from stored vectors.
+"""Projection jobs: compute 2D/3D/4D display coordinates from stored vectors.
 
 Design notes (TZ §5.2, §9.3):
-- one job computes every requested component count (default [3, 2]) → one
-  projection run row + one .npz per component count;
+- one job computes every requested spec (by default the [3, 2] pair, for
+  raw_axes also several axis pairs compared side by side) → one projection
+  run row + one .npz per spec;
 - source vectors are READ ONLY: a projection never touches the embedding
   cache, so UMAP parameters can never invalidate original vectors;
 - the run stores the embedding cache signature at compute time; when vectors
@@ -24,11 +25,7 @@ import numpy as np
 from sqlalchemy import func, select
 
 from app.jobs.manager import JobContext, JobRunner
-from app.projection_methods.base import (
-    ProjectionResult,
-    normalize_components,
-    projection_fingerprint,
-)
+from app.projection_methods.base import ProjectionResult, projection_fingerprint
 from app.projection_methods.cache import ProjectionCache
 from app.projection_methods.registry import library_versions, require_method
 from app.storage.models import EmbeddingRunRow, FileRow, FragmentRow, ProjectionRunRow
@@ -43,15 +40,21 @@ def _utc_now() -> str:
 def make_projection_runner(
     embedding_run_id: str,
     method_id: str,
-    components: list[int],
-    params: dict[str, object],
+    specs: list[tuple[int, dict[str, object]]],
     seed: int,
 ) -> JobRunner:
+    """Runner over an explicit list of (n_components, params) specs.
+
+    One job can produce several projection runs: the usual [3, 2] pair of a
+    method, a single raw-axes set, or several raw-axes PAIRS compared side
+    by side (multi-plot 2D). Every spec gets its own fingerprint/cache/row.
+    """
+
     def runner(ctx: JobContext) -> str:
         project = ctx.project
         method = require_method(method_id)  # validated at POST time; re-checked here
-        normalized = method.validate_params(params)
-        wanted = normalize_components(components)
+        if not specs:
+            raise ValueError("projection job without specs")
         if not method.is_available():
             raise RuntimeError(
                 f"projection method '{method.display_name}' is unavailable: "
@@ -72,7 +75,7 @@ def make_projection_runner(
                 .where(FileRow.status == "indexed")
             ).scalar_one()
 
-        ctx.progress(0, len(wanted), "loading vectors", force=True)
+        ctx.progress(0, len(specs), "loading vectors", force=True)
         vectors_cache = NpzEmbeddingCache.load(project.project_dir / npz_relpath)
         if len(vectors_cache) == 0:
             raise ValueError("the embedding run has no vectors; compute embeddings first")
@@ -87,13 +90,18 @@ def make_projection_runner(
         vectors = vectors_cache.vectors
         started = time.monotonic()
         made: list[str] = []
-        for stage, n_components in enumerate(wanted):
+        for stage, (n_components, spec_params) in enumerate(specs):
             ctx.check_cancelled()
+            normalized = method.validate_params(spec_params)
             label = f"{method.display_name}-{n_components}D"
+            if method_id == "raw_axes":
+                axes_obj = normalized.get("axes", [])
+                axes_list = [int(a) for a in axes_obj] if isinstance(axes_obj, list) else []
+                label += f" [{', '.join(str(a) for a in axes_list)}]"
             hint = " (first UMAP run is slower: numba compilation)" if method_id == "umap" else ""
             ctx.progress(
                 stage,
-                len(wanted),
+                len(specs),
                 f"fitting {label} on {len(ids)}×{vectors.shape[1]} vectors{hint}",
                 force=True,
             )
@@ -128,7 +136,7 @@ def make_projection_runner(
                 signature=signature,
             )
             made.append(label)
-            ctx.progress(stage + 1, len(wanted), f"{label} ready", force=True)
+            ctx.progress(stage + 1, len(specs), f"{label} ready", force=True)
 
         ctx.check_cancelled()
         elapsed = round(time.monotonic() - started, 1)
