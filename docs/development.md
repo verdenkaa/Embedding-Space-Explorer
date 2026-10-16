@@ -77,7 +77,7 @@ scripts\checks.bat            # Windows (или scripts/checks.ps1 из PowerShe
 проекта может не быть:
 
 ```powershell
-.venv\Scripts\python -m pytest          # юнит-тесты (170)
+.venv\Scripts\python -m pytest          # юнит-тесты (188)
 .venv\Scripts\python -m ruff check .    # линтер
 .venv\Scripts\python -m ruff format --check .   # форматирование
 .venv\Scripts\python -m mypy .          # строгая типизация
@@ -105,7 +105,7 @@ UMAP-тестов медленнее: numba компилирует kernel'ы (~1
 Из каталога `frontend/` (в корне репозитория нет `package.json`):
 
 ```powershell
-npm run test        # vitest (jsdom, 233 теста)
+npm run test        # vitest (jsdom, 270 тестов)
 npm run lint        # eslint (flat config, typescript-eslint)
 npm run typecheck   # tsc --noEmit, strict
 npm run build       # production-сборка
@@ -159,14 +159,26 @@ ASCII-пунктуацию (обычные кавычки и дефис). Без
   честная оговорка об интерпретации (`caveat`), тяжёлые импорты — lazy.
   Обязательны тесты: геометрия на известном синтетическом наборе, guards на
   вырожденные входы, API-поток compute → points.
-- **Новая метрика** — `metrics/` (этап 5): явные входы, определение положительных пар,
-  текст-пояснение для UI.
-- **Новый экспортёр** — `exporters/` (этап 5).
+- **Новая метрика** — чистая функция в `backend/app/metrics/compute.py` (массивы на
+  входе, значение + счётчики на выходе), пояснение в `METRIC_EXPLANATIONS`,
+  подключении в `compute_metric_bundle` и label в `frontend/src/space/metricLabels.ts`.
+  Правила: явные входы и выборка (seed), определение положительных пар, при отсутствии
+  данных — `null` + warning (никогда «подозрительный 0.0»), неизвестная пара не
+  считается негативом. Обязательны тесты на синтетике с известной истиной.
+- **Новый экспортёр** — чистый билдер в `backend/app/exporters/builders.py` (CSV с BOM)
+  + маршрут в `app/api/routes_exports.py` (явная цель, `Content-Disposition:
+  attachment`), URL-билдер в `frontend/src/api/client.ts` (`exportUrls`) и пункт меню
+  «Экспорт» (`ViewBar.tsx`). Экспортируются только явно выбранные данные.
+- **Новый сохранённый артефакт в эксперимент** — поле в `ExperimentConfigDTO`
+  (backend, `extra="forbid"`), проверка ссылки в `experiment_manager.manager`
+  (`iter_references` + `_exists`), снимок/сводка/сравнение там же, capture и
+  восстановление — `frontend/src/state/savedExperimentsStore.ts`.
 - **Новая панель UI** — компонент в `frontend/src/components/`, данные только через
   `src/api/client.ts`; состояние — в соответствующем zustand-store: интерфейс —
   `uiStore`, проект/корпус/общее выделение — `projectStore`, эксперименты
   (эмбеддинги, проекции) — `experimentStore`, состояние SPACE-представления —
-  `spaceStore`. Чистую математику видов (пикнинг, рамки, тики) выносите в
+  `spaceStore`, соседи/связи/кластеры/срезы/метрики и их задачи —
+  `analysisStore`, сохранённые эксперименты — `savedExperimentsStore`. Чистую математику видов (пикнинг, рамки, тики) выносите в
   `src/space/` без импортов three.js — так она тестируется в jsdom.
   Monaco подключается «slim»
   (`src/monaco/setup.ts`): новый язык подсветки — импорт
