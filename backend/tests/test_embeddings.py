@@ -396,10 +396,20 @@ def test_db_migration_from_v1_is_additive(settings: Settings) -> None:
         session.commit()
 
     # Downgrade: simulate a v1 database (drop later tables, set meta=1).
+    # Children before parents: stage-4/5 tables reference embedding_runs /
+    # projection_runs through foreign keys.
     with ctx.engine.begin() as conn:
-        conn.execute(text("DROP TABLE embedding_runs"))
-        conn.execute(text("DROP TABLE projection_runs"))
-        conn.execute(text("DROP TABLE projection_presets"))
+        for table in (
+            "fragment_group_members",
+            "fragment_groups",
+            "relations",
+            "clustering_runs",
+            "saved_slices",
+            "projection_presets",
+            "projection_runs",
+            "embedding_runs",
+        ):
+            conn.execute(text(f"DROP TABLE {table}"))
         conn.execute(text("UPDATE meta SET value='1' WHERE key='schema_version'"))
     store.close_all()
 
@@ -424,6 +434,12 @@ def test_db_migration_from_v1_is_additive(settings: Settings) -> None:
     assert "embedding_runs" in tables
     assert "projection_runs" in tables
     assert "projection_presets" in tables
+    # stage-4 tables are recreated by the same additive migration (db v5)
+    assert "relations" in tables
+    assert "clustering_runs" in tables
+    assert "fragment_groups" in tables
+    assert "fragment_group_members" in tables
+    assert "saved_slices" in tables
     assert "files" in tables
     backups = list(ctx.project_dir.glob("project.db.bak-*"))
     assert len(backups) == 1
