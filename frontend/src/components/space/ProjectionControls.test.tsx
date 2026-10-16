@@ -26,7 +26,7 @@ const RAW_AXES: ProjectionMethodInfo = {
   description: "Оси исходного пространства",
   caveat: "Расстояния учитывают только выбранные оси",
   available: true,
-  supported_components: [2, 3],
+  supported_components: [2, 3, 4],
   params: [
     {
       name: "axes",
@@ -38,7 +38,7 @@ const RAW_AXES: ProjectionMethodInfo = {
       step: null,
       choices: null,
       min_items: 2,
-      max_items: 3,
+      max_items: 4,
     },
     {
       name: "standardize",
@@ -62,7 +62,7 @@ const METHODS_BASE: ProjectionMethodInfo[] = [
     description: "Линейная проекция",
     caveat: "Оси принадлежат проекции",
     available: true,
-    supported_components: [2, 3],
+    supported_components: [2, 3, 4],
     params: [
       {
         name: "whiten",
@@ -84,7 +84,7 @@ const METHODS_BASE: ProjectionMethodInfo[] = [
     description: "Нелинейная",
     caveat: "Расстояния искажены",
     available: true,
-    supported_components: [2, 3],
+    supported_components: [2, 3, 4],
     params: [
       {
         name: "n_neighbors",
@@ -189,6 +189,9 @@ beforeEach(() => {
     projMethod: "pca",
     projParams: {},
     projSeed: 42,
+    projAxesGroups: [],
+    projAxesProblem: null,
+    pendingBuild: null,
     presets: null,
     presetName: "",
     activeJob: null,
@@ -257,25 +260,28 @@ describe("ProjectionControls", () => {
     });
   });
 
-  it("3D-view select lists cached projections with honest staleness labels", async () => {
+  it("PCA/UMAP get an explicit 4D build (components [4]) next to 3D+2D", async () => {
+    const { fetchMock, calls } = mockFetch({
+      "/api/projects/p1/embeddings": [EMB_RUN],
+      "/api/projects/p1/projections": [PROJ_3D],
+      "/api/projects/p1/projection-presets": [PRESET],
+      "/api/projections/methods": METHODS,
+      "POST /api/projects/p1/projections/compute": mockResponse(202, JOB),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
     render(<ProjectionControls />);
-    await waitFor(() => expect(useExperimentStore.getState().projections).not.toBeNull());
+    await waitFor(() => expect(useExperimentStore.getState().projectionMethods).not.toBeNull());
 
-    const select = screen.getByLabelText("Проекция для 3D-сцены") as HTMLSelectElement;
-    const optionText = Array.from(select.options)
-      .map((o) => o.textContent)
-      .join("|");
-    expect(optionText).toContain("PCA · 3D · 21 точ. · seed 42 · УСТАРЕЛА");
-  });
-
-  it("switching a view activates that projection in the space store", async () => {
-    const setActive = vi.spyOn(useSpaceStore.getState(), "setActiveProjection");
-    render(<ProjectionControls />);
-    await waitFor(() => expect(useExperimentStore.getState().projections).not.toBeNull());
-
-    const select = screen.getByLabelText("Проекция для 3D-сцены");
-    fireEvent.change(select, { target: { value: "proj3d" } });
-    expect(setActive).toHaveBeenCalledWith("3d", "proj3d");
+    fireEvent.click(screen.getByRole("button", { name: "Построить 4D" }));
+    await waitFor(() => expect(useExperimentStore.getState().activeJob?.id).toBe("jobP"));
+    const post = calls.find((c) => c.method === "POST" && c.url.includes("/compute"));
+    expect(post?.body).toMatchObject({ method: "pca", components: [4] });
+    expect(useExperimentStore.getState().pendingBuild).toEqual({
+      mode: "single",
+      components: [4],
+      embeddingRunId: "emb1",
+    });
   });
 
   it("raw_axes: axes field validates inline and drives the build request", async () => {
@@ -322,6 +328,89 @@ describe("ProjectionControls", () => {
       components: [3], // derived from the axes count — never [3,2]
       params: { axes: [12, 57, 200], standardize: false },
     });
+
+    // four axes → the 4D view (first three = scene, fourth = "time")
+    fireEvent.change(axesInput, { target: { value: "12, 57, 200, 300" } });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Построить проекцию (4D)" })).toBeTruthy(),
+    );
+  });
+
+  it("raw_axes multi: «0,1;0,2» builds one 2D projection per pair", async () => {
+    const { fetchMock, calls } = mockFetch({
+      "/api/projects/p1/embeddings": [EMB_RUN],
+      "/api/projects/p1/projections": [],
+      "/api/projects/p1/projection-presets": [],
+      "/api/projections/methods": METHODS,
+      "POST /api/projects/p1/projections/compute": mockResponse(202, JOB),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ProjectionControls />);
+    await waitFor(() => expect(useExperimentStore.getState().projectionMethods).not.toBeNull());
+    fireEvent.change(screen.getByLabelText("Метод проекции"), { target: { value: "raw_axes" } });
+    const axesInput = await screen.findByLabelText("axes");
+
+    fireEvent.change(axesInput, { target: { value: "0,1;0,2" } });
+    await waitFor(() =>
+      expect(useExperimentStore.getState().projAxesGroups).toEqual([
+        [0, 1],
+        [0, 2],
+      ]),
+    );
+    const build = screen.getByRole("button", { name: "Построить графики (2D×2)" });
+    expect((build as HTMLButtonElement).disabled).toBe(false);
+    // a preset saves ONE combination — saving is honestly disabled in multi mode
+    fireEvent.change(screen.getByLabelText("Имя нового пресета"), {
+      target: { value: "пара" },
+    });
+    expect(
+      (screen.getByRole("button", { name: "Сохранить пресет" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    fireEvent.click(build);
+    await waitFor(() => expect(useExperimentStore.getState().activeJob?.id).toBe("jobP"));
+    const post = calls.find((c) => c.method === "POST" && c.url.includes("/compute"));
+    expect(post?.body).toEqual({
+      embedding_run_id: "emb1",
+      method: "raw_axes",
+      components: [2],
+      params: { standardize: false }, // axes travel inside axis_sets only
+      seed: 42,
+      axis_sets: [
+        [0, 1],
+        [0, 2],
+      ],
+    });
+    expect(useExperimentStore.getState().pendingBuild).toEqual({
+      mode: "multi2d",
+      sets: [
+        [0, 1],
+        [0, 2],
+      ],
+      embeddingRunId: "emb1",
+      seed: 42,
+      standardize: false,
+    });
+  });
+
+  it("raw_axes multi: invalid groups block the build with an inline reason", async () => {
+    render(<ProjectionControls />);
+    await waitFor(() => expect(useExperimentStore.getState().projectionMethods).not.toBeNull());
+    fireEvent.change(screen.getByLabelText("Метод проекции"), { target: { value: "raw_axes" } });
+    const axesInput = await screen.findByLabelText("axes");
+
+    fireEvent.change(axesInput, { target: { value: "0,1;0,2;0,3;1,2;1,3;2,3;0,4" } });
+    expect(screen.getByText(/не больше 6 групп/)).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: /Построить/ }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    fireEvent.change(axesInput, { target: { value: "0,1,2;0,3" } });
+    expect(screen.getByText(/ровно 2 оси/)).toBeTruthy();
+
+    fireEvent.change(axesInput, { target: { value: "0,1;0,1" } });
+    expect(screen.getByText(/группы не должны повторяться/)).toBeTruthy();
   });
 
   it("presets: apply fills the form, save posts the current state, delete removes", async () => {

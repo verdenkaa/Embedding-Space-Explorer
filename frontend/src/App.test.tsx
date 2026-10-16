@@ -64,7 +64,7 @@ beforeEach(() => {
     health: null,
     error: null,
     lastCheckedAt: null,
-    activeSection: "corpus",
+    activeSection: "space",
   });
   useProjectStore.setState({ current: null, projects: null, error: null });
 });
@@ -132,14 +132,17 @@ describe("App shell", () => {
     expect(useUiStore.getState().connection).toBe("offline");
   });
 
-  it("CORPUS, SPACE and EXPERIMENTS are available; future sections are visibly disabled", async () => {
+  it("SPACE and EXPERIMENTS are available; CORPUS is gone (merged into SPACE); future sections are visibly disabled", async () => {
     stubOnline();
     render(<App />);
 
-    for (const name of ["CORPUS", "SPACE", "EXPERIMENTS"]) {
+    for (const name of ["SPACE", "EXPERIMENTS"]) {
       const tab = screen.getByRole("button", { name: new RegExp(name) });
       expect((tab as HTMLButtonElement).disabled).toBe(false);
     }
+
+    // the CORPUS tab was removed: everything it showed lives inside SPACE
+    expect(screen.queryByRole("button", { name: /CORPUS/ })).toBeNull();
 
     for (const [name, stage] of [["RELATIONS", "этап 4"]] as const) {
       const tab = screen.getByRole("button", { name: new RegExp(name) });

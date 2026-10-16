@@ -10,7 +10,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProjectionPoints, ProjectionRunDTO } from "../api/types";
 import { mockFetch, mockReject, mockResponse } from "../testUtils";
 import { useProjectStore } from "./projectStore";
-import { buildCloud, pickActiveProjections, useSpaceStore } from "./spaceStore";
+import {
+  DEFAULT_SLICE_4D,
+  buildCloud,
+  pickActiveProjections,
+  useSpaceStore,
+} from "./spaceStore";
 
 const PROJECT = { id: "p1", name: "Sample" } as never;
 
@@ -79,14 +84,17 @@ beforeEach(() => {
   useProjectStore.setState({ current: PROJECT });
   useSpaceStore.setState({
     cloud3d: null,
-    cloud2d: null,
+    clouds2d: [],
+    cloud4d: null,
     loading3d: false,
     loading2d: false,
+    loading4d: false,
     error: null,
     hoveredId: null,
     hoverScreen: null,
-    interactionMode: "orbit",
     pointSize: 3,
+    viewMode: "3d",
+    slice4d: { ...DEFAULT_SLICE_4D },
   });
 });
 
@@ -273,9 +281,173 @@ describe("view state", () => {
     useSpaceStore.getState().reset();
     const s = useSpaceStore.getState();
     expect(s.cloud3d).toBeNull();
-    expect(s.cloud2d).toBeNull();
+    expect(s.clouds2d).toEqual([]);
+    expect(s.cloud4d).toBeNull();
     expect(s.hoveredId).toBeNull();
     expect(s.loading3d).toBe(false);
     expect(s.error).toBeNull();
+    expect(s.slice4d).toEqual(DEFAULT_SLICE_4D);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Stage-3 polish: 4D clouds, multi-plot 2D, build hand-off, slice     */
+/* ------------------------------------------------------------------ */
+
+function points4D(): ProjectionPoints {
+  return pointsDTO({
+    projection_id: "proj4d",
+    n_components: 4,
+    axis_labels: ["PC1", "PC2", "PC3", "PC4"],
+    axis_info: [0.5, 0.25, 0.15, 0.1],
+    points: [
+      {
+        fragment_id: "fragA",
+        file_id: "fa",
+        rel_path: "src/a.py",
+        kind: "method",
+        name: "m",
+        symbol_path: "Cls.m",
+        start_line: 5,
+        end_line: 9,
+        coords: [-2, 0, 0.5, 10],
+      },
+      {
+        fragment_id: "fragB",
+        file_id: "fb",
+        rel_path: "src/b.py",
+        kind: "class",
+        name: "B",
+        symbol_path: "B",
+        start_line: 1,
+        end_line: 30,
+        coords: [2, 1, -0.5, -10],
+      },
+    ],
+  });
+}
+
+describe("buildCloud with 4 components", () => {
+  it("keeps all four raw coordinates but displays only the first three", () => {
+    const cloud = buildCloud(points4D(), run({ id: "proj4d", n_components: 4 }));
+    expect(cloud.stride).toBe(4);
+    expect(cloud.displayStride).toBe(3);
+    expect(Array.from(cloud.coords)).toEqual([-2, 0, 0.5, 10, 2, 1, -0.5, -10]);
+    expect(cloud.display).toHaveLength(2 * 3);
+    for (const v of Array.from(cloud.display)) {
+      expect(Math.abs(v)).toBeLessThanOrEqual(1 + 1e-6);
+    }
+  });
+});
+
+describe("setActive2dProjections", () => {
+  const runA = run({ id: "pA", n_components: 2, params: { axes: [0, 1], standardize: false } });
+  const runB = run({ id: "pB", n_components: 2, params: { axes: [0, 2], standardize: false } });
+  const pointsA = pointsDTO({ projection_id: "pA", n_components: 2 });
+  const pointsB = pointsDTO({ projection_id: "pB", n_components: 2 });
+
+  it("loads several plots side by side, in order", async () => {
+    const { fetchMock } = mockFetch({
+      "/api/projects/p1/projections/pA/points": pointsA,
+      "/api/projects/p1/projections/pB/points": pointsB,
+      "/api/projects/p1/projections": [runB, runA],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useSpaceStore.getState().setActive2dProjections(["pA", "pB"]);
+    const { clouds2d, loading2d, error } = useSpaceStore.getState();
+    expect(error).toBeNull();
+    expect(loading2d).toBe(false);
+    expect(clouds2d.map((c) => c.projection.id)).toEqual(["pA", "pB"]);
+
+    // empty list clears the plots
+    await useSpaceStore.getState().setActive2dProjections([]);
+    expect(useSpaceStore.getState().clouds2d).toEqual([]);
+  });
+});
+
+describe("applyBuiltProjections", () => {
+  const run2a = run({
+    id: "m1",
+    method: "raw_axes",
+    n_components: 2,
+    params: { axes: [0, 1], standardize: false },
+    seed: 5,
+  });
+  const run2b = run({
+    id: "m2",
+    method: "raw_axes",
+    n_components: 2,
+    params: { axes: [0, 2], standardize: false },
+    seed: 5,
+  });
+  const run4 = run({ id: "f4", n_components: 4, axis_labels: ["PC1", "PC2", "PC3", "PC4"] });
+
+  it("multi2d: shows every built pair and switches to the 2D mode", async () => {
+    const { fetchMock } = mockFetch({
+      "/api/projects/p1/projections/m1/points": pointsDTO({ projection_id: "m1", n_components: 2 }),
+      "/api/projects/p1/projections/m2/points": pointsDTO({ projection_id: "m2", n_components: 2 }),
+      "/api/projects/p1/projections": [run2b, run2a],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    useSpaceStore.setState({ viewMode: "3d" });
+
+    useSpaceStore.getState().applyBuiltProjections([run2b, run2a], {
+      mode: "multi2d",
+      sets: [
+        [0, 1],
+        [0, 2],
+      ],
+      embeddingRunId: "emb1",
+      seed: 5,
+      standardize: false,
+    });
+
+    await vi.waitFor(() => {
+      expect(useSpaceStore.getState().clouds2d.map((c) => c.projection.id)).toEqual(["m1", "m2"]);
+    });
+    expect(useSpaceStore.getState().viewMode).toBe("2d");
+  });
+
+  it("single [4]: shows the built 4D run and switches to the 4D mode", async () => {
+    const { fetchMock } = mockFetch({
+      "/api/projects/p1/projections/f4/points": points4D(),
+      "/api/projects/p1/projections": [run4],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    useSpaceStore.setState({ viewMode: "split" });
+
+    useSpaceStore.getState().applyBuiltProjections([run4], {
+      mode: "single",
+      components: [4],
+      embeddingRunId: "emb1",
+    });
+
+    await vi.waitFor(() => {
+      expect(useSpaceStore.getState().cloud4d?.projection.id).toBe("f4");
+    });
+    expect(useSpaceStore.getState().viewMode).toBe("4d");
+  });
+});
+
+describe("slice4d state", () => {
+  it("patches position/thickness and play flag independently", () => {
+    const st = useSpaceStore.getState();
+    st.setSlice4d({ tFrac: 0.25 });
+    expect(useSpaceStore.getState().slice4d).toEqual({ ...DEFAULT_SLICE_4D, tFrac: 0.25 });
+    st.setSlice4d({ wFrac: 0.5 });
+    expect(useSpaceStore.getState().slice4d.tFrac).toBe(0.25);
+    expect(useSpaceStore.getState().slice4d.wFrac).toBe(0.5);
+    useSpaceStore.getState().setSlicePlaying(true);
+    expect(useSpaceStore.getState().slice4d.playing).toBe(true);
+  });
+});
+
+describe("pickActiveProjections 4D", () => {
+  it("picks the freshest 4-component run", () => {
+    const fourOld = run({ id: "f4old", n_components: 4, updated_at: "2026-10-15T11:00:00+00:00" });
+    const fourNew = run({ id: "f4new", n_components: 4, updated_at: "2026-10-15T13:00:00+00:00" });
+    const picked = pickActiveProjections([fourNew, fourOld], "emb1");
+    expect(picked.four?.id).toBe("f4new");
   });
 });

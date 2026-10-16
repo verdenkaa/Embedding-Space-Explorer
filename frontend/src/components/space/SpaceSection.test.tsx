@@ -24,6 +24,7 @@ vi.mock("allotment", () => {
   return { Allotment, default: Allotment };
 });
 vi.mock("./Scene3D", () => ({ Scene3D: () => <div data-testid="scene3d" /> }));
+vi.mock("./Scene4D", () => ({ Scene4D: () => <div data-testid="scene4d" /> }));
 vi.mock("./Projection2D", () => ({ Projection2D: () => <div data-testid="projection2d" /> }));
 vi.mock("./ProjectionControls", () => ({
   ProjectionControls: () => <div data-testid="projection-controls" />,
@@ -154,8 +155,9 @@ describe("SpaceSection", () => {
     expect(screen.getByTestId("scene3d")).toBeTruthy();
     expect(screen.getByTestId("projection-controls")).toBeTruthy();
     expect(screen.getByTestId("inspector")).toBeTruthy();
-    // default view mode is 3D-only: the 2D map is not rendered
+    // default view mode is 3D-only: the 2D map and the 4D view are not rendered
     expect(screen.queryByTestId("projection2d")).toBeNull();
+    expect(screen.queryByTestId("scene4d")).toBeNull();
   });
 
   it("view-mode toggle switches between 3D, 2D and both", () => {
@@ -171,6 +173,15 @@ describe("SpaceSection", () => {
     fireEvent.click(screen.getByRole("button", { name: /^2D$/ }));
     expect(screen.queryByTestId("scene3d")).toBeNull();
     expect(screen.getByTestId("projection2d")).toBeTruthy();
+  });
+
+  it("4D mode renders the 4D scene alone", () => {
+    render(<SpaceSection />);
+    fireEvent.click(screen.getByRole("button", { name: /^4D$/ }));
+    expect(screen.getByTestId("scene4d")).toBeTruthy();
+    expect(screen.queryByTestId("scene3d")).toBeNull();
+    expect(screen.queryByTestId("projection2d")).toBeNull();
+    expect(useSpaceStore.getState().viewMode).toBe("4d");
   });
 
   it("inspector pane follows uiStore visibility with a reopen strip", () => {
@@ -192,7 +203,7 @@ describe("SpaceSection", () => {
     await waitFor(() => {
       const s = useSpaceStore.getState();
       expect(s.cloud3d?.projection.id).toBe("p3fresh");
-      expect(s.cloud2d?.projection.id).toBe("p2fresh");
+      expect(s.clouds2d[0]?.projection.id).toBe("p2fresh");
     });
     // coordinates are the served ones (never fabricated; stored as float32)
     const cloud3d = useSpaceStore.getState().cloud3d;
@@ -216,6 +227,6 @@ describe("SpaceSection", () => {
       expect(useSpaceStore.getState().cloud3d?.projection.id).toBe("p3old");
     });
     expect(useSpaceStore.getState().cloud3d?.projection.stale).toBe(true);
-    expect(useSpaceStore.getState().cloud2d).toBeNull();
+    expect(useSpaceStore.getState().clouds2d).toEqual([]);
   });
 });

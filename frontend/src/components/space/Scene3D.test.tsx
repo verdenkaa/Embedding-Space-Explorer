@@ -2,7 +2,8 @@
  * Scene3D tests. The R3F Canvas cannot run in jsdom (no WebGL), so
  * @react-three/fiber and drei are mocked (same strategy as Monaco in
  * SourceInspector.test): we verify everything AROUND the canvas — states,
- * badge/legend honesty, toolbar wiring, tooltip, selection clearing — and
+ * badge/legend honesty, toolbar wiring, tooltip, selection clearing, and
+ * the Shift-held marquee model (no explicit mode buttons anymore) — while
  * the pure selection math is covered by selectionMath.test.ts.
  */
 
@@ -85,7 +86,6 @@ function seedCloud(stale = false) {
     error: null,
     hoveredId: null,
     hoverScreen: null,
-    interactionMode: "orbit",
   });
 }
 
@@ -100,11 +100,14 @@ beforeEach(() => {
   });
   useSpaceStore.setState({
     cloud3d: null,
+    clouds2d: [],
+    cloud4d: null,
     loading3d: false,
+    loading2d: false,
+    loading4d: false,
     error: null,
     hoveredId: null,
     hoverScreen: null,
-    interactionMode: "orbit",
     pointSize: 3,
   });
 });
@@ -181,18 +184,56 @@ describe("Scene3D with a cloud", () => {
     expect(screen.getByLabelText(/Легенда/).textContent).toContain("method");
   });
 
-  it("toolbar switches the interaction mode", () => {
+  it("has NO explicit interaction-mode buttons: Shift arms the marquee", () => {
     seedCloud();
+    const { container } = render(<Scene3D />);
+    // the old ⟲ Орбита / ▭ Область buttons are gone (user feedback): the
+    // mode is transient — hold Shift, drag, release; orbit is the default.
+    expect(screen.queryByRole("button", { name: /Область/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Орбита/ })).toBeNull();
+
+    const scene = container.querySelector(".point-scene");
+    expect(scene).toBeTruthy();
+    expect(scene!.className).not.toContain("point-scene--marquee");
+
+    // holding Shift arms the marquee (crosshair cursor via the class)
+    fireEvent.keyDown(window, { key: "Shift" });
+    expect(container.querySelector(".point-scene--marquee")).toBeTruthy();
+
+    // Shift+drag draws the marquee rectangle overlay
+    const target = scene!;
+    fireEvent.pointerDown(target, { button: 0, shiftKey: true, clientX: 10, clientY: 10 });
+    expect(container.querySelector(".marquee-rect")).toBeTruthy();
+    fireEvent.pointerMove(target, { button: 0, shiftKey: true, clientX: 60, clientY: 50 });
+    fireEvent.pointerUp(target, { button: 0, shiftKey: true, clientX: 60, clientY: 50 });
+    expect(container.querySelector(".marquee-rect")).toBeNull();
+
+    // releasing Shift returns to orbit mode
+    fireEvent.keyUp(window, { key: "Shift" });
+    expect(container.querySelector(".point-scene--marquee")).toBeNull();
+  });
+
+  it("a Shift-click without a drag never wipes the selection", () => {
+    seedCloud();
+    useProjectStore.setState({ selectedFragmentIds: ["fragA", "fragS"] });
+    const { container } = render(<Scene3D />);
+    const scene = container.querySelector(".point-scene")!;
+    fireEvent.keyDown(window, { key: "Shift" });
+    // degenerate marquee (pointer down+up in place, e.g. clicking a toolbar
+    // button while Shift is held) — the old regression cleared everything
+    fireEvent.pointerDown(scene, { button: 0, shiftKey: true, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(scene, { button: 0, shiftKey: true, clientX: 21, clientY: 20 });
+    expect(useProjectStore.getState().selectedFragmentIds).toEqual(["fragA", "fragS"]);
+  });
+
+  it("selection survives returning to orbit (Shift released)", () => {
+    seedCloud();
+    useProjectStore.setState({ selectedFragmentIds: ["fragA"] });
     render(<Scene3D />);
-    const marqueeBtn = screen.getByRole("button", { name: /Область/ });
-    expect(marqueeBtn.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(marqueeBtn);
-    expect(useSpaceStore.getState().interactionMode).toBe("marquee");
-    expect(
-      screen.getByRole("button", { name: /Орбита/ }).getAttribute("aria-pressed"),
-    ).toBe("false");
-    fireEvent.click(screen.getByRole("button", { name: /Орбита/ }));
-    expect(useSpaceStore.getState().interactionMode).toBe("orbit");
+    fireEvent.keyDown(window, { key: "Shift" });
+    fireEvent.keyUp(window, { key: "Shift" });
+    expect(useProjectStore.getState().selectedFragmentIds).toEqual(["fragA"]);
+    expect(useProjectStore.getState().activeFragmentId).toBeNull();
   });
 
   it("clear-selection button resets the shared selection", () => {

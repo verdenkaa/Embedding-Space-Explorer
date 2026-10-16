@@ -8,18 +8,29 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MAX_ZOOM,
+  MIN_ZOOM,
   applyFit,
+  applyFitStrided,
+  axisExtent,
   canvasToData,
   computeBounds2D,
   computeFit,
+  computeFitStrided,
   dataToCanvas,
   formatTick,
   hitTest2D,
   indicesInDataRect,
   indicesInNdcRect,
+  layerMask4D,
   makeTicks,
+  marqueeExceedsSlop,
   normalizeRect,
+  panBounds,
+  zoomBoundsAt,
+  zoomLevel,
   type Padding,
+  type PlotBounds,
   type PlotGeometry,
 } from "./selectionMath";
 import { buildLegend, hexToRgb, kindColor } from "./palette";
@@ -187,5 +198,141 @@ describe("palette", () => {
     const legend = buildLegend(["method", "class", "method", "chunk", "section"]);
     expect(legend.map((e) => e.kind)).toEqual(["method", "class", "section", "chunk"]);
     expect(legend[0].count).toBe(2);
+  });
+});
+
+
+/* ------------------------------------------------------------------ */
+/* Stage-3 polish: strided fit, 4D layer, marquee slop, 2D zoom & pan  */
+/* ------------------------------------------------------------------ */
+
+describe("computeFitStrided / applyFitStrided", () => {
+  it("fits the first k of stride components (4D cloud → 3D scene)", () => {
+    // two points, stride 4; the 4th column must not influence the fit
+    const coords = new Float32Array([-1, 0, 2, 1000, 3, 4, -2, -1000]);
+    const fit = computeFitStrided(coords, 2, 4, 3);
+    expect(fit.center).toEqual([1, 2, 0]);
+    expect(fit.extent).toBe(2); // largest half-extent among axes 0..2
+    const display = applyFitStrided(coords, fit, 4, 3);
+    expect(display).toHaveLength(6);
+    expect(Array.from(display)).toEqual([-1, -1, 1, 1, 1, -1]);
+  });
+
+  it("k == stride degenerates to the classic fit", () => {
+    const coords = new Float32Array([0, 0, 2, 4]);
+    const fit = computeFitStrided(coords, 2, 2, 2);
+    expect(fit).toEqual(computeFit(coords, 2, 2));
+    expect(Array.from(applyFitStrided(coords, fit, 2, 2))).toEqual(
+      Array.from(applyFit(coords, fit)),
+    );
+  });
+});
+
+describe("axisExtent", () => {
+  it("reads min/max of one interleaved component", () => {
+    const coords = new Float32Array([0, 0, 0, 5, 1, 1, 1, -3, 2, 2, 2, 9]);
+    expect(axisExtent(coords, 3, 4, 3)).toEqual({ min: -3, max: 9 });
+  });
+
+  it("degenerate/empty input gives a zero range", () => {
+    expect(axisExtent(new Float32Array(0), 0, 4, 3)).toEqual({ min: 0, max: 0 });
+  });
+});
+
+describe("layerMask4D (the 4D 'time' window)", () => {
+  // three points on axis 3: 0, 5, 10 (range 10)
+  const coords = new Float32Array([
+    0, 0, 0, 0,
+    0, 0, 0, 5,
+    0, 0, 0, 10,
+  ]);
+
+  it("keeps points inside [t ± w/2] and counts them", () => {
+    // t = 0.5 → 5, window 0.4 → ±2 → only the middle point
+    const layer = layerMask4D(coords, 3, 4, 3, 0.5, 0.4);
+    expect(Array.from(layer.mask)).toEqual([0, 1, 0]);
+    expect(layer.inLayer).toBe(1);
+    expect(layer.t).toBeCloseTo(5);
+    expect(layer.width).toBeCloseTo(4);
+  });
+
+  it("window edges are inclusive", () => {
+    // t = 0.25 → 2.5, w = 0.5 → ±2.5 → points 0 and 5 both on the edge
+    const layer = layerMask4D(coords, 3, 4, 3, 0.25, 0.5);
+    expect(Array.from(layer.mask)).toEqual([1, 1, 0]);
+  });
+
+  it("full window covers everything; degenerate axis puts all in layer", () => {
+    expect(layerMask4D(coords, 3, 4, 3, 0.5, 1).inLayer).toBe(3);
+    const flat = new Float32Array([0, 0, 0, 7, 0, 0, 0, 7]);
+    expect(layerMask4D(flat, 2, 4, 3, 0, 0).inLayer).toBe(2);
+  });
+
+  it("t/w fractions clamp into [0, 1]", () => {
+    const layer = layerMask4D(coords, 3, 4, 3, 5, -2);
+    expect(layer.t).toBe(10); // clamped to the max
+    expect(layer.width).toBe(0); // clamped to 0 → only the exact edge point
+    expect(Array.from(layer.mask)).toEqual([0, 0, 1]);
+  });
+});
+
+describe("marqueeExceedsSlop", () => {
+  it("separates a real drag from a click (the selection-wipe regression)", () => {
+    expect(marqueeExceedsSlop({ x0: 0, y0: 0, x1: 0, y1: 0 }, 4)).toBe(false);
+    expect(marqueeExceedsSlop({ x0: 10, y0: 10, x1: 12, y1: 11 }, 4)).toBe(false);
+    expect(marqueeExceedsSlop({ x0: 10, y0: 10, x1: 15, y1: 10 }, 4)).toBe(true);
+    expect(marqueeExceedsSlop({ x0: 10, y0: 10, x1: 10, y1: 4 }, 4)).toBe(true);
+  });
+});
+
+describe("2D zoom & pan (bounds-space camera)", () => {
+  const FIT: PlotBounds = { minX: -10, maxX: 10, minY: -5, maxY: 5 };
+  const geom: PlotGeometry = { width: 400, height: 200, padding: PAD, bounds: FIT };
+
+  it("zoomLevel: 1 at fit, 2 when the span halves", () => {
+    expect(zoomLevel(FIT, FIT)).toBeCloseTo(1);
+    const half: PlotBounds = { minX: -5, maxX: 5, minY: -2.5, maxY: 2.5 };
+    expect(zoomLevel(half, FIT)).toBeCloseTo(2);
+  });
+
+  it("zoomBoundsAt keeps the anchor fixed and clamps to MIN/MAX_ZOOM", () => {
+    const anchor = { x: 2, y: 1 };
+    const zoomed = zoomBoundsAt(FIT, FIT, 2, anchor);
+    // span halves around the anchor: anchor stays at the same fraction
+    expect(zoomed.maxX - zoomed.minX).toBeCloseTo(10);
+    const fracBefore = (anchor.x - FIT.minX) / (FIT.maxX - FIT.minX);
+    const fracAfter = (anchor.x - zoomed.minX) / (zoomed.maxX - zoomed.minX);
+    expect(fracAfter).toBeCloseTo(fracBefore);
+    expect(zoomLevel(zoomed, FIT)).toBeCloseTo(2);
+
+    // clamping: extreme zoom-in never exceeds MAX_ZOOM …
+    let b = FIT;
+    for (let i = 0; i < 40; i++) b = zoomBoundsAt(b, FIT, 3, anchor);
+    expect(zoomLevel(b, FIT)).toBeLessThanOrEqual(MAX_ZOOM + 1e-9);
+    // … and zooming out never shrinks below MIN_ZOOM (cloud stays reachable)
+    let out = FIT;
+    for (let i = 0; i < 40; i++) out = zoomBoundsAt(out, FIT, 1 / 3, anchor);
+    expect(zoomLevel(out, FIT)).toBeGreaterThanOrEqual(MIN_ZOOM - 1e-9);
+  });
+
+  it("panBounds moves the content with the cursor", () => {
+    // plot area: 400 - 50 - 10 = 340 px wide for a 20-unit span
+    const panned = panBounds(FIT, 34, 0, geom);
+    expect(panned.minX).toBeCloseTo(-12); // dragged right → view shifts left
+    expect(panned.maxX).toBeCloseTo(8);
+    // vertical: canvas y grows down, data y grows up (160 px plot = 10 units)
+    const pannedY = panBounds(FIT, 0, 16, geom);
+    expect(pannedY.minY).toBeCloseTo(-4);
+    expect(pannedY.maxY).toBeCloseTo(6);
+  });
+
+  it("zoom → data → canvas round-trip stays consistent (hit-testing)", () => {
+    const zoomed = zoomBoundsAt(FIT, FIT, 4, { x: 0, y: 0 });
+    const g: PlotGeometry = { ...geom, bounds: zoomed };
+    const data = { x: 3.5, y: -1.25 };
+    const px = dataToCanvas(data.x, data.y, g);
+    const back = canvasToData(px.cx, px.cy, g);
+    expect(back.x).toBeCloseTo(data.x, 5);
+    expect(back.y).toBeCloseTo(data.y, 5);
   });
 });

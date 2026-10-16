@@ -2,7 +2,8 @@
  * Projection2D tests. jsdom has no canvas backend — getContext is stubbed
  * with a recorder; geometry/hit-testing logic is verified through real
  * pointer events using coordinates computed with the SAME pure helpers the
- * component uses (no magic numbers).
+ * component uses (no magic numbers). Stage-3 polish adds: several plots
+ * side by side, wheel zoom + drag pan, and the point-size slider.
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -131,9 +132,19 @@ function stubCanvasContext() {
   return recorded;
 }
 
-function seedCloud(dto: ProjectionPoints = pointsDTO(), run: ProjectionRunDTO = RUN) {
+function cloudOf(
+  dto: ProjectionPoints = pointsDTO(),
+  run: ProjectionRunDTO = RUN,
+) {
+  return buildCloud(dto, { ...run, stale: dto.stale });
+}
+
+function seedClouds(
+  dto: ProjectionPoints = pointsDTO(),
+  run: ProjectionRunDTO = RUN,
+) {
   useSpaceStore.setState({
-    cloud2d: buildCloud(dto, { ...run, stale: dto.stale }),
+    clouds2d: [cloudOf(dto, run)],
     loading2d: false,
     error: null,
     hoveredId: null,
@@ -175,6 +186,14 @@ beforeEach(() => {
     selectedFragmentIds: [],
     error: null,
   });
+  useSpaceStore.setState({
+    clouds2d: [],
+    loading2d: false,
+    error: null,
+    hoveredId: null,
+    hoverScreen: null,
+    pointSize: 4,
+  });
 });
 
 afterEach(() => {
@@ -186,16 +205,16 @@ afterEach(() => {
 
 describe("Projection2D", () => {
   it("shows an honest empty state when no projection is loaded", () => {
-    useSpaceStore.setState({ cloud2d: null, loading2d: false });
+    useSpaceStore.setState({ clouds2d: [], loading2d: false });
     render(<Projection2D />);
     expect(screen.getByText(/2D-проекция появится/)).toBeTruthy();
-    expect(screen.getByText("нет данных")).toBeTruthy();
+    expect(screen.getByText(/0,1;0,2/)).toBeTruthy(); // multi-plot hint
   });
 
-  it("header names the method, axes, explained variance and staleness", () => {
-    seedCloud(pointsDTO({ stale: true }), { ...RUN, stale: true });
+  it("plot header names the method, axes, explained variance and staleness", () => {
+    seedClouds(pointsDTO({ stale: true }), { ...RUN, stale: true });
     render(<Projection2D />);
-    expect(screen.getByText(/PCA · 3 точек/)).toBeTruthy();
+    expect(screen.getByText(/PCA · 3 точ\./)).toBeTruthy();
     expect(screen.getByText(/оси: PC1 \/ PC2 \(62% \/ 24% дисперсии\)/)).toBeTruthy();
     expect(screen.getByText("устарела")).toBeTruthy();
     // the projection-vs-slice distinction is always visible (TZ §5.4)
@@ -204,7 +223,7 @@ describe("Projection2D", () => {
 
   it("draws points, axes and selection marks on the canvas", () => {
     const recorded = stubCanvasContext();
-    seedCloud();
+    seedClouds();
     useProjectStore.setState({ selectedFragmentIds: ["fragB"], activeFragmentId: "fragA" });
     render(<Projection2D />);
     // frame + ticks + point glyphs + rings were actually painted
@@ -216,7 +235,7 @@ describe("Projection2D", () => {
 
   it("click on a point selects it and syncs the shared selection state", async () => {
     const dto = pointsDTO();
-    seedCloud(dto);
+    seedClouds(dto);
     render(<Projection2D />);
     const canvas = screen.getByRole("img", { name: /2D-проекция/ });
 
@@ -232,7 +251,7 @@ describe("Projection2D", () => {
   });
 
   it("click on empty space clears the selection", async () => {
-    seedCloud();
+    seedClouds();
     useProjectStore.setState({ activeFragmentId: "fragA", selectedFragmentIds: ["fragA"] });
     render(<Projection2D />);
     const canvas = screen.getByRole("img", { name: /2D-проекция/ });
@@ -250,7 +269,7 @@ describe("Projection2D", () => {
 
   it("hover over a point publishes the hovered fragment id", async () => {
     const dto = pointsDTO();
-    seedCloud(dto);
+    seedClouds(dto);
     render(<Projection2D />);
     const canvas = screen.getByRole("img", { name: /2D-проекция/ });
 
@@ -269,7 +288,7 @@ describe("Projection2D", () => {
 
   it("shift+drag marquee selects every point inside the rectangle", async () => {
     const dto = pointsDTO();
-    seedCloud(dto);
+    seedClouds(dto);
     render(<Projection2D />);
     const canvas = screen.getByRole("img", { name: /2D-проекция/ });
 
@@ -292,9 +311,19 @@ describe("Projection2D", () => {
     });
   });
 
+  it("a shift-click without a drag never touches the selection", () => {
+    seedClouds();
+    useProjectStore.setState({ selectedFragmentIds: ["fragA"] });
+    render(<Projection2D />);
+    const canvas = screen.getByRole("img", { name: /2D-проекция/ });
+    fireEvent.pointerDown(canvas, { clientX: 5, clientY: 5, button: 0, shiftKey: true });
+    fireEvent.pointerUp(canvas, { clientX: 6, clientY: 5, button: 0, shiftKey: true });
+    expect(useProjectStore.getState().selectedFragmentIds).toEqual(["fragA"]);
+  });
+
   it("ctrl+drag marquee ADDS the area to the current selection", async () => {
     const dto = pointsDTO();
-    seedCloud(dto);
+    seedClouds(dto);
     useProjectStore.setState({ selectedFragmentIds: ["fragC"] });
     render(<Projection2D />);
     const canvas = screen.getByRole("img", { name: /2D-проекция/ });
@@ -316,5 +345,63 @@ describe("Projection2D", () => {
       expect(selected).toContain("fragA"); // area added
       expect(selected).not.toContain("fragB");
     });
+  });
+});
+
+describe("Projection2D camera and multi-plot", () => {
+  it("has a point-size slider wired to the shared store value", () => {
+    seedClouds();
+    render(<Projection2D />);
+    const slider = screen.getByLabelText("Размер точек");
+    fireEvent.change(slider, { target: { value: "7" } });
+    expect(useSpaceStore.getState().pointSize).toBe(7);
+  });
+
+  it("wheel zooms the view and ⌂ returns to the auto-fit", async () => {
+    seedClouds();
+    render(<Projection2D />);
+    const canvas = screen.getByRole("img", { name: /2D-проекция/ });
+    expect(screen.getByText("100%")).toBeTruthy();
+
+    fireEvent.wheel(canvas, { deltaY: -240, clientX: 300, clientY: 150 });
+    await waitFor(() => {
+      expect(screen.queryByText("100%")).toBeNull(); // zoomed in past the fit
+    });
+
+    const reset = screen.getByRole("button", { name: "⌂" });
+    expect((reset as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(reset);
+    expect(screen.getByText("100%")).toBeTruthy();
+    expect((reset as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("drag without Shift pans (content follows the cursor)", () => {
+    seedClouds();
+    const { container } = render(<Projection2D />);
+    const canvas = screen.getByRole("img", { name: /2D-проекция/ });
+
+    fireEvent.pointerDown(canvas, { clientX: 300, clientY: 150, button: 0 });
+    expect(container.querySelector(".plot2d--panning")).toBeTruthy();
+    fireEvent.pointerMove(canvas, { clientX: 260, clientY: 130, button: 0 });
+    fireEvent.pointerUp(canvas, { clientX: 260, clientY: 130, button: 0 });
+    expect(container.querySelector(".plot2d--panning")).toBeNull();
+    // panning is not a click: the selection stays untouched
+    expect(useProjectStore.getState().selectedFragmentIds).toEqual([]);
+  });
+
+  it("several clouds render several plots side by side", () => {
+    const dtoA = pointsDTO({ projection_id: "pA" });
+    const dtoB = pointsDTO({ projection_id: "pB" });
+    const runA = { ...RUN, id: "pA", axis_labels: ["dim 0", "dim 1"] };
+    const runB = { ...RUN, id: "pB", axis_labels: ["dim 0", "dim 2"] };
+    useSpaceStore.setState({ clouds2d: [cloudOf(dtoA, runA), cloudOf(dtoB, runB)] });
+    render(<Projection2D />);
+
+    expect(screen.getByText(/2 графика рядом/)).toBeTruthy();
+    expect(screen.getAllByRole("img", { name: /2D-проекция/ })).toHaveLength(2);
+    expect(screen.getByText(/оси: dim 0 \/ dim 1/)).toBeTruthy();
+    expect(screen.getByText(/оси: dim 0 \/ dim 2/)).toBeTruthy();
+    // each plot has its own zoom reset
+    expect(screen.getAllByRole("button", { name: "⌂" })).toHaveLength(2);
   });
 });
