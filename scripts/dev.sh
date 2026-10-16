@@ -47,23 +47,52 @@ fi
 ok "Node.js $(node --version)"
 
 # --- 2. Зависимости ----------------------------------------------------------
+# Установка выполняется только когда она действительно нужна:
+# - pip: stamp-файл .venv/.ese-deps.stamp старше requirements*.txt И ключевые
+#   пакеты импортируются;
+# - npm: node_modules на месте И package-lock.json не новее маркера
+#   node_modules/.package-lock.json (npm ci каждый запуск стирал бы
+#   node_modules и переустанавливал всё заново — долгие старты, нагрузка на ПК).
+# Принудительная переустановка: FORCE_INSTALL=1 ./scripts/dev.sh
 if [ ! -x "$VENV_PY" ]; then
     step "Создание виртуального окружения backend/.venv"
     "$PYTHON_BIN" -m venv "$BACKEND_DIR/.venv"
 fi
 
-if [ "${SKIP_INSTALL:-0}" != "1" ]; then
+DEPS_STAMP="$BACKEND_DIR/.venv/.ese-deps.stamp"
+NPM_MARKER="$FRONTEND_DIR/node_modules/.package-lock.json"
+
+need_pip=1
+if [ "${FORCE_INSTALL:-0}" != "1" ] && [ -f "$DEPS_STAMP" ] \
+    && [ ! "$BACKEND_DIR/requirements.txt" -nt "$DEPS_STAMP" ] \
+    && [ ! "$BACKEND_DIR/requirements-dev.txt" -nt "$DEPS_STAMP" ] \
+    && "$VENV_PY" -c 'import fastapi, uvicorn, sqlalchemy, numpy, sklearn' >/dev/null 2>&1; then
+    need_pip=0
+fi
+if [ "${SKIP_INSTALL:-0}" != "1" ] && [ "$need_pip" = "1" ]; then
     step "Установка зависимостей backend (pip)"
     "$VENV_PY" -m pip install --disable-pip-version-check --quiet \
         -r "$BACKEND_DIR/requirements.txt" -r "$BACKEND_DIR/requirements-dev.txt"
+    date -u +"%Y-%m-%dT%H:%M:%SZ" > "$DEPS_STAMP"
     ok "Зависимости backend установлены"
+elif [ "$need_pip" = "0" ]; then
+    ok "Зависимости backend актуальны — pip install пропущен (FORCE_INSTALL=1 для переустановки)"
+fi
 
+need_npm=1
+if [ "${FORCE_INSTALL:-0}" != "1" ] && [ -d "$FRONTEND_DIR/node_modules" ] && [ -f "$NPM_MARKER" ] \
+    && [ ! "$FRONTEND_DIR/package-lock.json" -nt "$NPM_MARKER" ]; then
+    need_npm=0
+fi
+if [ "${SKIP_INSTALL:-0}" != "1" ] && [ "$need_npm" = "1" ]; then
     step "Установка зависимостей frontend (npm)"
     (
         cd "$FRONTEND_DIR"
         if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
     )
     ok "Зависимости frontend установлены"
+elif [ "$need_npm" = "0" ]; then
+    ok "Зависимости frontend актуальны — npm ci пропущен (FORCE_INSTALL=1 для переустановки)"
 fi
 
 # --- 3. Запуск ----------------------------------------------------------------

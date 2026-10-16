@@ -7,7 +7,12 @@
     Одна команда для старта всего приложения:
       1. Проверяет версии Python (3.11-3.13) и Node.js (>= 22.12).
       2. При первом запуске создаёт backend\.venv и устанавливает зависимости
-         (pip install -r requirements*.txt, npm ci).
+         (pip install -r requirements*.txt, npm ci). При повторных запусках
+         установка ПРОПУСКАЕТСЯ, если lock-файлы не менялись: pip сверяется
+         со stamp-файлом .venv\.ese-deps.stamp, npm ci выполняется только
+         когда package-lock.json новее node_modules\.package-lock.json
+         (npm ci каждый запуск стирал бы node_modules и переустанавливал
+         всё заново - отсюда долгие старты и нагрузка на диск).
       3. Запускает backend и frontend в двух отдельных окнах PowerShell.
       4. Ждёт ответа backend и открывает http://localhost:5173 в браузере.
 
@@ -21,6 +26,9 @@
 
 .PARAMETER SkipInstall
     Пропустить установку зависимостей (если уже установлены).
+
+.PARAMETER ForceInstall
+    Принудительно переустановить зависимости (игнорируя проверку актуальности).
 
 .PARAMETER NoBrowser
     Не открывать браузер автоматически.
@@ -39,6 +47,7 @@ param(
     [int]$BackendPort = 8000,
     [int]$FrontendPort = 5173,
     [switch]$SkipInstall,
+    [switch]$ForceInstall,
     [switch]$NoBrowser
 )
 
@@ -125,24 +134,61 @@ if (-not $SkipInstall) {
         if ($LASTEXITCODE -ne 0) { Write-Bad "Не удалось создать venv"; exit 1 }
     }
 
-    Write-Step "Установка зависимостей backend (pip) - при первом запуске может занять пару минут"
-    & $venvPython -m pip install --disable-pip-version-check --quiet -r (Join-Path $backendDir "requirements.txt") -r (Join-Path $backendDir "requirements-dev.txt")
-    if ($LASTEXITCODE -ne 0) { Write-Bad "pip install завершился с ошибкой"; exit 1 }
-    Write-Ok "Зависимости backend установлены"
-
-    Write-Step "Установка зависимостей frontend (npm ci) - при первом запуске может занять пару минут"
-    Push-Location $frontendDir
-    try {
-        if (Test-Path "package-lock.json") {
-            & npm ci --no-audit --no-fund
-        } else {
-            & npm install --no-audit --no-fund
+    # --- backend (pip): установка только когда requirements новее stamp-файла
+    # или ключевые пакеты не импортируются (повреждённое окружение).
+    $depsStamp = "$backendDir\.venv\.ese-deps.stamp"
+    $needPip = [bool]$ForceInstall -or -not (Test-Path $depsStamp)
+    if (-not $needPip) {
+        $stampTime = (Get-Item $depsStamp).LastWriteTime
+        foreach ($reqName in @("requirements.txt", "requirements-dev.txt")) {
+            $reqPath = Join-Path $backendDir $reqName
+            if ((Test-Path $reqPath) -and ((Get-Item $reqPath).LastWriteTime -gt $stampTime)) {
+                $needPip = $true
+            }
         }
-        if ($LASTEXITCODE -ne 0) { Write-Bad "npm install завершился с ошибкой"; exit 1 }
-    } finally {
-        Pop-Location
     }
-    Write-Ok "Зависимости frontend установлены"
+    if (-not $needPip) {
+        & $venvPython -c "import fastapi, uvicorn, sqlalchemy, numpy, sklearn" 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) { $needPip = $true }
+    }
+    if ($needPip) {
+        Write-Step "Установка зависимостей backend (pip) - при первом запуске может занять пару минут"
+        & $venvPython -m pip install --disable-pip-version-check --quiet -r (Join-Path $backendDir "requirements.txt") -r (Join-Path $backendDir "requirements-dev.txt")
+        if ($LASTEXITCODE -ne 0) { Write-Bad "pip install завершился с ошибкой"; exit 1 }
+        Set-Content -Path $depsStamp -Value (Get-Date -Format o) -Encoding ASCII
+        Write-Ok "Зависимости backend установлены"
+    } else {
+        Write-Ok "Зависимости backend актуальны - pip install пропущен (-ForceInstall для переустановки)"
+    }
+
+    # --- frontend (npm): npm ci ПОЛНОСТЬЮ стирает node_modules, поэтому
+    # запускаем его только когда node_modules нет или package-lock.json
+    # новее маркера node_modules\.package-lock.json (который npm ci создаёт).
+    $nodeModules = Join-Path $frontendDir "node_modules"
+    $npmMarker = Join-Path $nodeModules ".package-lock.json"
+    $lockPath = Join-Path $frontendDir "package-lock.json"
+    $needNpm = [bool]$ForceInstall -or -not (Test-Path $nodeModules) -or -not (Test-Path $npmMarker)
+    if ((-not $needNpm) -and (Test-Path $lockPath) -and
+        ((Get-Item $lockPath).LastWriteTime -gt (Get-Item $npmMarker).LastWriteTime)) {
+        $needNpm = $true
+    }
+    if ($needNpm) {
+        Write-Step "Установка зависимостей frontend (npm ci) - при первом запуске может занять пару минут"
+        Push-Location $frontendDir
+        try {
+            if (Test-Path "package-lock.json") {
+                & npm ci --no-audit --no-fund
+            } else {
+                & npm install --no-audit --no-fund
+            }
+            if ($LASTEXITCODE -ne 0) { Write-Bad "npm install завершился с ошибкой"; exit 1 }
+        } finally {
+            Pop-Location
+        }
+        Write-Ok "Зависимости frontend установлены"
+    } else {
+        Write-Ok "Зависимости frontend актуальны - npm ci пропущен (-ForceInstall для переустановки)"
+    }
 } elseif (-not (Test-Path $venvPython)) {
     Write-Bad "-SkipInstall указан, но backend\.venv не существует. Запустите сначала без -SkipInstall."
     exit 1
