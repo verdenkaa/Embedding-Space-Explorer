@@ -14,15 +14,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.api.errors import install_error_handlers
+from app.api.routes_clusters import router as clusters_router
 from app.api.routes_embeddings import embeddings_router, models_router, preparation_router
 from app.api.routes_files import router as files_router
 from app.api.routes_fragments import router as fragments_router
 from app.api.routes_fs import router as fs_router
 from app.api.routes_health import router as health_router
 from app.api.routes_jobs import router as jobs_router
+from app.api.routes_neighbors import router as neighbors_router
 from app.api.routes_projections import methods_router as projection_methods_router
 from app.api.routes_projections import projections_router
 from app.api.routes_projects import router as projects_router
+from app.api.routes_relations import router as relations_router
+from app.api.routes_slices import router as slices_router
 from app.config import Settings, ensure_data_dir
 from app.core.logging import get_logger, setup_logging
 from app.core.security import LocalOnlyMiddleware
@@ -96,6 +100,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(embeddings_router)
     app.include_router(projection_methods_router)
     app.include_router(projections_router)
+    app.include_router(slices_router)
+    app.include_router(neighbors_router)
+    app.include_router(relations_router)
+    app.include_router(clusters_router)
     return app
 
 

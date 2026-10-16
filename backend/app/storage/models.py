@@ -1,4 +1,4 @@
-"""SQLAlchemy models for a project database (db schema v4).
+"""SQLAlchemy models for a project database (db schema v5).
 
 Entities and ID rules are documented in docs/data-model.md.
 """
@@ -162,4 +162,138 @@ class ProjectionPresetRow(Base):
     method: Mapped[str] = mapped_column(String(32))
     params_json: Mapped[str] = mapped_column(String(2048))
     seed: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
+class RelationRow(Base):
+    """One structural relation (TZ §7.2): imports/calls/belongs_to/tested_by…
+
+    Endpoints are files AND/OR fragments — an import at the top of a file
+    belongs to no fragment, so file-level endpoints are honest first-class
+    citizens (at least one endpoint object on each side is required; code
+    enforces it). `origin` separates automatically extracted, imported and
+    manual relations (TZ §7.2: never mix provenance).
+    """
+
+    __tablename__ = "relations"
+    __table_args__ = (
+        Index("ix_relations_source_fragment", "source_fragment_id"),
+        Index("ix_relations_target_fragment", "target_fragment_id"),
+        Index("ix_relations_kind", "kind"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    source_file_id: Mapped[str | None] = mapped_column(
+        String(32), ForeignKey("files.id", ondelete="CASCADE"), nullable=True
+    )
+    source_fragment_id: Mapped[str | None] = mapped_column(
+        String(16), ForeignKey("fragments.id", ondelete="CASCADE"), nullable=True
+    )
+    target_file_id: Mapped[str | None] = mapped_column(
+        String(32), ForeignKey("files.id", ondelete="CASCADE"), nullable=True
+    )
+    target_fragment_id: Mapped[str | None] = mapped_column(
+        String(16), ForeignKey("fragments.id", ondelete="CASCADE"), nullable=True
+    )
+    #: imports | calls | belongs_to | tested_by | tests | documents | …
+    kind: Mapped[str] = mapped_column(String(32))
+    #: extracted | imported | manual
+    origin: Mapped[str] = mapped_column(String(16), default="extracted")
+    confidence: Mapped[float | None] = mapped_column(nullable=True)
+    detail: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
+class ClusteringRunRow(Base):
+    """One automatic clustering run (TZ §8.1).
+
+    Identity = fingerprint(embedding_run, space, projection_run, algorithm,
+    params); labels live in cache/clustering/<id>.npz (ids + int32 labels,
+    -1 = noise). The space is EXPLICIT ("original" vectors or one projection
+    run) and stored — the UI must show which one produced the clusters.
+    """
+
+    __tablename__ = "clustering_runs"
+    __table_args__ = (Index("ix_clustering_runs_emb", "embedding_run_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    embedding_run_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("embedding_runs.id", ondelete="CASCADE")
+    )
+    #: "original" | "projection"
+    space: Mapped[str] = mapped_column(String(16), default="original")
+    projection_run_id: Mapped[str | None] = mapped_column(
+        String(32), ForeignKey("projection_runs.id", ondelete="CASCADE"), nullable=True
+    )
+    algorithm: Mapped[str] = mapped_column(String(32), default="dbscan")
+    metric: Mapped[str] = mapped_column(String(32), default="cosine")
+    params_json: Mapped[str] = mapped_column(String(2048))
+    npz_relpath: Mapped[str] = mapped_column(String(512))
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    n_clusters: Mapped[int] = mapped_column(Integer, default=0)
+    noise: Mapped[int] = mapped_column(Integer, default=0)
+    source_signature: Mapped[str] = mapped_column(String(64))
+    versions_json: Mapped[str] = mapped_column(String(512))
+    created_at: Mapped[str] = mapped_column(String(40))
+    updated_at: Mapped[str] = mapped_column(String(40))
+
+
+class FragmentGroupRow(Base):
+    """A named manual group of fragments (TZ §8.2).
+
+    Groups survive automatic clustering (independent entities) and store
+    fragment IDs — not screen coordinates. Members cascade with fragments:
+    a fragment deleted by reindex silently leaves the group (count shrinks;
+    honest, no ghosts).
+    """
+
+    __tablename__ = "fragment_groups"
+    __table_args__ = (UniqueConstraint("name", name="uq_fragment_group_name"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
+class FragmentGroupMemberRow(Base):
+    __tablename__ = "fragment_group_members"
+    __table_args__ = (
+        UniqueConstraint("group_id", "fragment_id", name="uq_group_member"),
+        Index("ix_group_members_fragment", "fragment_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    group_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("fragment_groups.id", ondelete="CASCADE")
+    )
+    fragment_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("fragments.id", ondelete="CASCADE")
+    )
+
+
+class SavedSliceRow(Base):
+    """A saved mathematical slice of the ORIGINAL space (TZ §5.3).
+
+    The normal is stored RESOLVED (exact D-dim unit vector at save time) so
+    the slice stays reproducible even if a later PCA refit flips signs;
+    `normal_kind`/`normal_index` keep the human-readable intent.
+    """
+
+    __tablename__ = "saved_slices"
+    __table_args__ = (Index("ix_saved_slices_emb", "embedding_run_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    embedding_run_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("embedding_runs.id", ondelete="CASCADE")
+    )
+    #: "axis" | "pca" | "vector" — how the normal was specified
+    normal_kind: Mapped[str] = mapped_column(String(16), default="axis")
+    normal_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: resolved unit normal (JSON list of floats, D entries)
+    normal_json: Mapped[str] = mapped_column(String(262144))
+    dim: Mapped[int] = mapped_column(Integer, default=0)
+    #: signed offset of the plane point from the run centroid along n
+    position: Mapped[float] = mapped_column(default=0.0)
+    thickness: Mapped[float] = mapped_column(default=0.0)
     created_at: Mapped[str] = mapped_column(String(40))

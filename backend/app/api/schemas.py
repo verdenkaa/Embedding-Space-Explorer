@@ -478,3 +478,235 @@ class CreatePresetRequest(BaseModel):
     method: str = Field(min_length=1, max_length=32)
     params: dict[str, ProjectionParamValue] = Field(default_factory=dict)
     seed: int = Field(default=42, ge=0, le=2_147_483_647)
+
+
+# ---------------------------------------------------------------------------
+# Stage 4: slices of the ORIGINAL space (TZ §5.3)
+# ---------------------------------------------------------------------------
+
+
+class SliceNormalDTO(BaseModel):
+    """How the hyperplane normal is specified (MVP: axis / PCA direction /
+    explicit vector; the resolved unit vector is returned/stored)."""
+
+    kind: Literal["axis", "pca", "vector"]
+    index: int | None = Field(default=None, ge=0)
+    vector: list[float] | None = None
+
+
+class ComputeSliceRequest(BaseModel):
+    embedding_run_id: str = Field(min_length=1, max_length=32)
+    normal: SliceNormalDTO
+    #: signed offset of the plane point from the run centroid along n
+    position: float = 0.0
+    #: layer thickness t (|d(x)| <= t/2 membership), raw units
+    thickness: float = Field(0.0, ge=0.0)
+
+
+class SliceComputeResponse(BaseModel):
+    embedding_run_id: str
+    normal_kind: str
+    normal_index: int | None = None
+    dim: int
+    position: float
+    thickness: float
+    total: int
+    in_layer: int
+    #: range of the coordinate along the normal (slider bounds for the UI)
+    u_min: float
+    u_max: float
+    #: per fragment: signed coordinate u(x) = dot(x - centroid, n)
+    ids: list[str]
+    u: list[float]
+    #: honest interpretation note (a selection in the ORIGINAL space; the
+    #: points are DISPLAYED through the active projection)
+    note: str
+
+
+class CreateSliceRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    embedding_run_id: str = Field(min_length=1, max_length=32)
+    normal: SliceNormalDTO
+    position: float = 0.0
+    thickness: float = Field(0.0, ge=0.0)
+
+
+class SavedSliceDTO(BaseModel):
+    id: str
+    name: str
+    embedding_run_id: str
+    normal_kind: str
+    normal_index: int | None = None
+    dim: int
+    #: resolved unit normal at save time (reproducibility, TZ §5.3)
+    vector: list[float]
+    position: float
+    thickness: float
+    created_at: str
+
+
+# ---------------------------------------------------------------------------
+# Stage 4: semantic neighbors (TZ §7.1)
+# ---------------------------------------------------------------------------
+
+
+class NeighborsRequest(BaseModel):
+    fragment_id: str = Field(min_length=1, max_length=16)
+    k: int = Field(5, ge=1, le=50)
+    metric: Literal["cosine", "euclidean"] = "cosine"
+    #: None → the most recently updated embedding run
+    embedding_run_id: str | None = Field(default=None, max_length=32)
+
+
+class NeighborDTO(BaseModel):
+    fragment_id: str
+    file_id: str
+    rel_path: str
+    kind: str
+    name: str | None = None
+    symbol_path: str
+    start_line: int
+    end_line: int
+    #: metric-dependent distance (smaller = closer)
+    distance: float
+    #: metric-dependent similarity (larger = closer): cosine → similarity in
+    #: [-1, 1]; euclidean → -distance. The response names the metric.
+    score: float
+
+
+class NeighborsResponse(BaseModel):
+    fragment_id: str
+    embedding_run_id: str
+    metric: str
+    k: int
+    total_vectors: int
+    neighbors: list[NeighborDTO]
+    #: honest note: computed over the ORIGINAL embeddings, never projections
+    note: str
+
+
+# ---------------------------------------------------------------------------
+# Stage 4: structural relations (TZ §7.2, §7.3)
+# ---------------------------------------------------------------------------
+
+
+class RelationEndpointDTO(BaseModel):
+    """One side of a relation: a fragment and/or its file (file-level
+    endpoints are honest first-class citizens — e.g. a top-level import)."""
+
+    file_id: str | None = None
+    fragment_id: str | None = None
+    rel_path: str | None = None
+    name: str | None = None
+    symbol_path: str | None = None
+    start_line: int | None = None
+    end_line: int | None = None
+
+
+class RelationDTO(BaseModel):
+    id: str
+    kind: str
+    #: extracted | imported | manual — provenance is never mixed (TZ §7.2)
+    origin: str
+    confidence: float | None = None
+    detail: str | None = None
+    created_at: str
+    source: RelationEndpointDTO
+    target: RelationEndpointDTO
+
+
+class RelationsResponse(BaseModel):
+    items: list[RelationDTO]
+    total: int
+    limit: int
+    offset: int
+    counts_by_kind: dict[str, int]
+    counts_by_origin: dict[str, int]
+
+
+class CreateRelationRequest(BaseModel):
+    source_fragment_id: str = Field(min_length=1, max_length=16)
+    target_fragment_id: str = Field(min_length=1, max_length=16)
+    kind: str = Field(min_length=1, max_length=32)
+    detail: str | None = Field(default=None, max_length=512)
+
+
+class UnresolvedRelationDTO(BaseModel):
+    index: int
+    kind: str
+    reason: str
+
+
+class ImportRelationsResponse(BaseModel):
+    imported: int
+    duplicates: int
+    unresolved: list[UnresolvedRelationDTO]
+
+
+# ---------------------------------------------------------------------------
+# Stage 4: clustering (TZ §8.1) and manual groups (TZ §8.2)
+# ---------------------------------------------------------------------------
+
+
+class ClusteringParamsDTO(BaseModel):
+    eps: float = Field(0.5, gt=0.0)
+    min_samples: int = Field(5, ge=2)
+
+
+class ComputeClusteringRequest(BaseModel):
+    embedding_run_id: str = Field(min_length=1, max_length=32)
+    #: the space is EXPLICIT and persisted: original vectors or one projection
+    space: Literal["original", "projection"] = "original"
+    projection_run_id: str | None = Field(default=None, max_length=32)
+    algorithm: Literal["dbscan"] = "dbscan"
+    #: default: cosine for original vectors, euclidean for projection coords
+    metric: Literal["cosine", "euclidean"] | None = None
+    #: None → defaults (eps 0.5, min_samples 5) resolved by the endpoint
+    params: ClusteringParamsDTO | None = None
+
+
+class ClusteringRunDTO(BaseModel):
+    id: str
+    embedding_run_id: str
+    space: str
+    projection_run_id: str | None = None
+    algorithm: str
+    metric: str
+    params: ClusteringParamsDTO
+    count: int
+    n_clusters: int
+    #: DBSCAN noise (-1): shown as «шум/не определено», never as a meaning
+    noise: int
+    stale: bool
+    cache_ok: bool
+    versions: dict[str, str]
+    created_at: str
+    updated_at: str
+
+
+class ClusteringLabelsDTO(BaseModel):
+    clustering_id: str
+    space: str
+    algorithm: str
+    metric: str
+    n_clusters: int
+    noise: int
+    count: int
+    #: parallel arrays: labels[i] ∈ {-1 (noise), 0..n_clusters-1} of ids[i]
+    ids: list[str]
+    labels: list[int]
+
+
+class CreateGroupRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    fragment_ids: list[str] = Field(min_length=1)
+
+
+class FragmentGroupDTO(BaseModel):
+    id: str
+    name: str
+    count: int
+    #: member fragment ids (groups store ids, not screen coordinates, §8.2);
+    #: members deleted by a reindex cascade away — the count stays honest
+    fragment_ids: list[str]
+    created_at: str

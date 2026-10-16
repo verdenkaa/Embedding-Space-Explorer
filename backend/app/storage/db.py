@@ -6,7 +6,7 @@ Rules:
 - `meta.schema_version` is checked on open: newer than supported → clear
   error (project not broken globally); older → backup file, then migrate
   (migrations are additive: v1 corpus, v2 embedding_runs, v3 projection_runs,
-    v4 projection_presets;
+    v4 projection_presets, v5 relations/clustering/groups/slices;
     the pre-migration .bak copy guards against surprises).
 """
 
@@ -15,11 +15,12 @@ from __future__ import annotations
 import shutil
 import time
 from pathlib import Path
+from typing import Any
 
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-CURRENT_DB_SCHEMA = 4
+CURRENT_DB_SCHEMA = 5
 
 
 class Base(DeclarativeBase):
@@ -36,10 +37,21 @@ def _make_engine(db_path: Path) -> Engine:
         connect_args={"check_same_thread": False},
         future=True,
     )
-    with engine.begin() as conn:
-        conn.execute(text("PRAGMA journal_mode=WAL"))
-        conn.execute(text("PRAGMA foreign_keys=ON"))
-        conn.execute(text("PRAGMA synchronous=NORMAL"))
+
+    # foreign_keys/synchronous are PER-CONNECTION in SQLite: applying them
+    # once at engine creation would leave later pooled connections without
+    # FK enforcement (cascades silently stop working). The connect event
+    # configures every connection the pool creates.
+    @event.listens_for(engine, "connect")
+    def _configure_connection(dbapi_connection: Any, _record: Any) -> None:
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+        finally:
+            cursor.close()
+
     return engine
 
 
