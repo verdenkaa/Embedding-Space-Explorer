@@ -5,18 +5,35 @@ const STALENESS_POLL_MS = 30_000;
 import type { FragmentMeta } from "../../api/types";
 import { useProjectStore } from "../../state/projectStore";
 import { ChangesDialog } from "../ChangesDialog";
+import { ClustersTab } from "../analysis/ClustersTab";
+import { NeighborsTab } from "../analysis/NeighborsTab";
+import { RelationsTab } from "../analysis/RelationsTab";
 import { JobProgress } from "./JobProgress";
 import { FileTree } from "./FileTree";
 import { FragmentList } from "./FragmentList";
 import { SelectedFragmentCard } from "./SelectedFragmentCard";
 
-/** Left panel tabs. Only FRAGMENTS is implemented in stage 1 (honest UI). */
+/** Left panel tabs (UI-ТЗ §5). All four are live since stage 4. */
 const PANEL_TABS = [
-  { id: "fragments", label: "FRAGMENTS", stage: null as number | null },
-  { id: "neighbors", label: "NEIGHBORS", stage: 4 },
-  { id: "relations", label: "RELATIONS", stage: 4 },
-  { id: "clusters", label: "CLUSTERS", stage: 4 },
+  { id: "fragments", label: "FRAGMENTS", title: "Дерево файлов, фрагменты и поиск" },
+  {
+    id: "neighbors",
+    label: "NEIGHBORS",
+    title: "Ближайшие семантические соседи активного фрагмента (по исходным эмбеддингам)",
+  },
+  {
+    id: "relations",
+    label: "RELATIONS",
+    title: "Структурные связи активного фрагмента (извлечённые, импортированные, ручные)",
+  },
+  {
+    id: "clusters",
+    label: "CLUSTERS",
+    title: "Автокластеризация и ручные группы",
+  },
 ] as const;
+
+type PanelTab = (typeof PANEL_TABS)[number]["id"];
 
 export function CorpusPanel() {
   const current = useProjectStore((s) => s.current);
@@ -41,6 +58,7 @@ export function CorpusPanel() {
   const cancelActiveJob = useProjectStore((s) => s.cancelActiveJob);
 
   const [searchInput, setSearchInput] = useState("");
+  const [tab, setTab] = useState<PanelTab>("fragments");
 
   // Background staleness indicator: check on mount, every 30 s, and whenever
   // the window regains focus (user returns from the IDE right after editing).
@@ -138,40 +156,42 @@ export function CorpusPanel() {
       )}
 
       <div className="corpus-tabs" role="tablist" aria-label="Панели исследования">
-        {PANEL_TABS.map((tab) => (
+        {PANEL_TABS.map((item) => (
           <button
-            key={tab.id}
+            key={item.id}
             type="button"
             role="tab"
-            aria-selected={tab.id === "fragments"}
-            className={`corpus-tab${tab.id === "fragments" ? " corpus-tab--active" : ""}`}
-            disabled={tab.stage !== null}
-            title={
-              tab.stage !== null
-                ? `Появится на этапе ${tab.stage}`
-                : "Фрагменты выбранного файла и поиск"
-            }
+            aria-selected={item.id === tab}
+            className={`corpus-tab${item.id === tab ? " corpus-tab--active" : ""}`}
+            title={item.title}
+            onClick={() => setTab(item.id)}
           >
-            {tab.label}
-            {tab.stage !== null && <span className="corpus-tab__stage">{tab.stage}</span>}
+            {item.label}
           </button>
         ))}
       </div>
 
-      <div className="corpus-search">
-        <input
-          type="search"
-          className="corpus-search__input"
-          placeholder="Поиск фрагментов и файлов…"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          aria-label="Поиск по фрагментам"
-        />
-        {searching && searchResults && (
-          <span className="corpus-search__count mono">{searchResults.total}</span>
-        )}
-      </div>
+      {tab === "fragments" && (
+        <div className="corpus-search">
+          <input
+            type="search"
+            className="corpus-search__input"
+            placeholder="Поиск фрагментов и файлов…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            aria-label="Поиск по фрагментам"
+          />
+          {searching && searchResults && (
+            <span className="corpus-search__count mono">{searchResults.total}</span>
+          )}
+        </div>
+      )}
 
+      {tab === "neighbors" && <NeighborsTab />}
+      {tab === "relations" && <RelationsTab />}
+      {tab === "clusters" && <ClustersTab />}
+
+      {tab === "fragments" && (
       <div className="corpus-body">
         <div className="corpus-tree">
           <FileTree
@@ -208,6 +228,13 @@ export function CorpusPanel() {
         </div>
         <SelectedFragmentCard fragment={activeFragment} />
       </div>
+      )}
+
+      {tab !== "fragments" && tab !== "clusters" && (
+        <div className="corpus-analysis-card">
+          <SelectedFragmentCard fragment={activeFragment} />
+        </div>
+      )}
 
       {changes !== null && <ChangesDialog />}
     </section>

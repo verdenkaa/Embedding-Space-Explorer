@@ -6,11 +6,22 @@
 
 import type {
   ChangesReport,
+  ClusteringLabelsDTO,
+  ClusteringRunDTO,
+  ComputeClusteringRequest,
   ComputeEmbeddingsRequest,
   ComputeProjectionRequest,
+  ComputeSliceRequest,
+  CreateGroupRequest,
   CreateProjectRequest,
+  CreateRelationRequest,
+  CreateSliceRequest,
   EmbeddingRunDTO,
+  FragmentGroupDTO,
+  ImportRelationsResponse,
   ModelInfo,
+  NeighborMetric,
+  NeighborsResponse,
   PreparationPreviews,
   CreatePresetRequest,
   ProjectionMethodInfo,
@@ -28,6 +39,10 @@ import type {
   LocateResponse,
   ProjectInfo,
   ProjectSummary,
+  RelationDTO,
+  RelationsResponse,
+  SavedSliceDTO,
+  SliceComputeResponse,
   StalenessReport,
 } from "./types";
 
@@ -199,6 +214,85 @@ export const api = {
     request<{ deleted: string }>(`/api/projects/${pid}/projection-presets/${presetId}`, {
       method: "DELETE",
     }),
+
+  /* slices of the original space (stage 4) */
+  computeSlice: (pid: string, payload: ComputeSliceRequest): Promise<SliceComputeResponse> =>
+    request<SliceComputeResponse>(`/api/projects/${pid}/slices/compute`, jsonInit("POST", payload)),
+  listSlices: (pid: string): Promise<SavedSliceDTO[]> =>
+    request<SavedSliceDTO[]>(`/api/projects/${pid}/slices`),
+  saveSlice: (pid: string, payload: CreateSliceRequest): Promise<SavedSliceDTO> =>
+    request<SavedSliceDTO>(`/api/projects/${pid}/slices`, jsonInit("POST", payload)),
+  deleteSlice: (pid: string, sliceId: string): Promise<{ deleted: string }> =>
+    request<{ deleted: string }>(`/api/projects/${pid}/slices/${sliceId}`, { method: "DELETE" }),
+
+  /* semantic neighbors (stage 4) */
+  findNeighbors: (
+    pid: string,
+    fragmentId: string,
+    k: number,
+    metric: NeighborMetric,
+    embeddingRunId?: string | null,
+  ): Promise<NeighborsResponse> =>
+    request<NeighborsResponse>(
+      `/api/projects/${pid}/neighbors`,
+      jsonInit("POST", {
+        fragment_id: fragmentId,
+        k,
+        metric,
+        ...(embeddingRunId ? { embedding_run_id: embeddingRunId } : {}),
+      }),
+    ),
+
+  /* structural relations (stage 4) */
+  listRelations: (
+    pid: string,
+    params: {
+      fragment_id?: string;
+      file_id?: string;
+      kind?: string;
+      origin?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<RelationsResponse> => {
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null && value !== "") search.set(key, String(value));
+    }
+    const qs = search.toString();
+    return request<RelationsResponse>(`/api/projects/${pid}/relations${qs ? `?${qs}` : ""}`);
+  },
+  createRelation: (pid: string, payload: CreateRelationRequest): Promise<RelationDTO> =>
+    request<RelationDTO>(`/api/projects/${pid}/relations`, jsonInit("POST", payload)),
+  deleteRelation: (pid: string, relationId: string): Promise<{ deleted: string }> =>
+    request<{ deleted: string }>(`/api/projects/${pid}/relations/${relationId}`, {
+      method: "DELETE",
+    }),
+  importRelations: (pid: string, payload: unknown): Promise<ImportRelationsResponse> =>
+    request<ImportRelationsResponse>(
+      `/api/projects/${pid}/relations/import`,
+      jsonInit("POST", payload),
+    ),
+  extractRelations: (pid: string): Promise<JobInfo> =>
+    request<JobInfo>(`/api/projects/${pid}/relations/extract`, { method: "POST" }),
+
+  /* clustering + manual groups (stage 4) */
+  computeClustering: (pid: string, payload: ComputeClusteringRequest): Promise<JobInfo> =>
+    request<JobInfo>(`/api/projects/${pid}/clustering/compute`, jsonInit("POST", payload)),
+  listClustering: (pid: string): Promise<ClusteringRunDTO[]> =>
+    request<ClusteringRunDTO[]>(`/api/projects/${pid}/clustering`),
+  getClusteringLabels: (pid: string, clusteringId: string): Promise<ClusteringLabelsDTO> =>
+    request<ClusteringLabelsDTO>(`/api/projects/${pid}/clustering/${clusteringId}/labels`),
+  deleteClustering: (pid: string, clusteringId: string): Promise<{ deleted: string }> =>
+    request<{ deleted: string }>(`/api/projects/${pid}/clustering/${clusteringId}`, {
+      method: "DELETE",
+    }),
+  listGroups: (pid: string): Promise<FragmentGroupDTO[]> =>
+    request<FragmentGroupDTO[]>(`/api/projects/${pid}/groups`),
+  createGroup: (pid: string, payload: CreateGroupRequest): Promise<FragmentGroupDTO> =>
+    request<FragmentGroupDTO>(`/api/projects/${pid}/groups`, jsonInit("POST", payload)),
+  deleteGroup: (pid: string, groupId: string): Promise<{ deleted: string }> =>
+    request<{ deleted: string }>(`/api/projects/${pid}/groups/${groupId}`, { method: "DELETE" }),
 
   /* filesystem browser (root picker) */
   listDirs: (path?: string): Promise<FsListResponse> =>

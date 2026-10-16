@@ -209,16 +209,19 @@ export function canvasToData(cx: number, cy: number, g: PlotGeometry): { x: numb
 }
 
 /** Index of the nearest point within `radiusPx` of the target pixel, or null.
- * `pixelOf` maps a point index to canvas pixels (kept injectable for tests). */
+ * `pixelOf` maps a point index to canvas pixels (kept injectable for tests);
+ * `allowed` skips hidden points (slice "only" mode) so they stay unpickable. */
 export function hitTest2D(
   count: number,
   target: { cx: number; cy: number },
   radiusPx: number,
   pixelOf: (index: number) => { cx: number; cy: number },
+  allowed?: ((index: number) => boolean) | null,
 ): number | null {
   let best: number | null = null;
   let bestDist = radiusPx * radiusPx;
   for (let i = 0; i < count; i++) {
+    if (allowed && !allowed(i)) continue;
     const { cx, cy } = pixelOf(i);
     const dx = cx - target.cx;
     const dy = cy - target.cy;

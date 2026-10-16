@@ -382,3 +382,216 @@ export interface CreatePresetRequest {
   params: Record<string, ProjectionParamValue>;
   seed: number;
 }
+
+/* ------------------------------------------------------------------ */
+/* Stage 4: slices of the original space                               */
+/* ------------------------------------------------------------------ */
+
+export type SliceNormalKind = "axis" | "pca" | "vector";
+
+export interface SliceNormal {
+  kind: SliceNormalKind;
+  index?: number | null;
+  vector?: number[] | null;
+}
+
+export interface ComputeSliceRequest {
+  embedding_run_id: string;
+  normal: SliceNormal;
+  position: number;
+  thickness: number;
+}
+
+export interface SliceComputeResponse {
+  embedding_run_id: string;
+  normal_kind: SliceNormalKind;
+  normal_index: number | null;
+  dim: number;
+  position: number;
+  thickness: number;
+  total: number;
+  in_layer: number;
+  u_min: number;
+  u_max: number;
+  /** Parallel arrays: signed coordinate along the normal per fragment. */
+  ids: string[];
+  u: number[];
+  /** Honest interpretation note from the backend. */
+  note: string;
+}
+
+export interface CreateSliceRequest {
+  name: string;
+  embedding_run_id: string;
+  normal: SliceNormal;
+  position: number;
+  thickness: number;
+}
+
+export interface SavedSliceDTO {
+  id: string;
+  name: string;
+  embedding_run_id: string;
+  normal_kind: SliceNormalKind;
+  normal_index: number | null;
+  dim: number;
+  vector: number[];
+  position: number;
+  thickness: number;
+  created_at: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Stage 4: semantic neighbors                                          */
+/* ------------------------------------------------------------------ */
+
+export type NeighborMetric = "cosine" | "euclidean";
+
+export interface NeighborsRequest {
+  fragment_id: string;
+  k: number;
+  metric: NeighborMetric;
+  embedding_run_id?: string | null;
+}
+
+export interface NeighborDTO {
+  fragment_id: string;
+  file_id: string;
+  rel_path: string;
+  kind: string;
+  name: string | null;
+  symbol_path: string;
+  start_line: number;
+  end_line: number;
+  distance: number;
+  score: number;
+}
+
+export interface NeighborsResponse {
+  fragment_id: string;
+  embedding_run_id: string;
+  metric: NeighborMetric;
+  k: number;
+  total_vectors: number;
+  neighbors: NeighborDTO[];
+  note: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Stage 4: structural relations                                        */
+/* ------------------------------------------------------------------ */
+
+export type RelationOrigin = "extracted" | "imported" | "manual";
+
+export interface RelationEndpointDTO {
+  file_id: string | null;
+  fragment_id: string | null;
+  rel_path: string | null;
+  name: string | null;
+  symbol_path: string | null;
+  start_line: number | null;
+  end_line: number | null;
+}
+
+export interface RelationDTO {
+  id: string;
+  kind: string;
+  origin: RelationOrigin;
+  confidence: number | null;
+  detail: string | null;
+  created_at: string;
+  source: RelationEndpointDTO;
+  target: RelationEndpointDTO;
+}
+
+export interface RelationsResponse {
+  items: RelationDTO[];
+  total: number;
+  limit: number;
+  offset: number;
+  counts_by_kind: Record<string, number>;
+  counts_by_origin: Record<string, number>;
+}
+
+export interface CreateRelationRequest {
+  source_fragment_id: string;
+  target_fragment_id: string;
+  kind: string;
+  detail?: string | null;
+}
+
+export interface UnresolvedRelationDTO {
+  index: number;
+  kind: string;
+  reason: string;
+}
+
+export interface ImportRelationsResponse {
+  imported: number;
+  duplicates: number;
+  unresolved: UnresolvedRelationDTO[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Stage 4: clustering and manual groups                                */
+/* ------------------------------------------------------------------ */
+
+export type ClusteringSpace = "original" | "projection";
+export type ClusteringMetric = "cosine" | "euclidean";
+
+export interface ClusteringParamsDTO {
+  eps: number;
+  min_samples: number;
+}
+
+export interface ComputeClusteringRequest {
+  embedding_run_id: string;
+  space: ClusteringSpace;
+  projection_run_id?: string | null;
+  algorithm: "dbscan";
+  metric?: ClusteringMetric | null;
+  params?: ClusteringParamsDTO | null;
+}
+
+export interface ClusteringRunDTO {
+  id: string;
+  embedding_run_id: string;
+  space: ClusteringSpace;
+  projection_run_id: string | null;
+  algorithm: string;
+  metric: ClusteringMetric;
+  params: ClusteringParamsDTO;
+  count: number;
+  n_clusters: number;
+  noise: number;
+  stale: boolean;
+  cache_ok: boolean;
+  versions: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClusteringLabelsDTO {
+  clustering_id: string;
+  space: ClusteringSpace;
+  algorithm: string;
+  metric: string;
+  n_clusters: number;
+  noise: number;
+  count: number;
+  ids: string[];
+  labels: number[];
+}
+
+export interface CreateGroupRequest {
+  name: string;
+  fragment_ids: string[];
+}
+
+export interface FragmentGroupDTO {
+  id: string;
+  name: string;
+  count: number;
+  fragment_ids: string[];
+  created_at: string;
+}

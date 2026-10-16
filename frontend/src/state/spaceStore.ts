@@ -16,7 +16,12 @@
 import { create } from "zustand";
 
 import { ApiError, api } from "../api/client";
-import type { ProjectionPoint, ProjectionPoints, ProjectionRunDTO } from "../api/types";
+import type {
+  ProjectionPoint,
+  ProjectionPoints,
+  ProjectionRunDTO,
+  SliceNormalKind,
+} from "../api/types";
 import {
   applyFitStrided,
   computeFitStrided,
@@ -76,6 +81,32 @@ export interface Slice4D {
 
 export const DEFAULT_SLICE_4D: Slice4D = { tFrac: 0.5, wFrac: 0.15, playing: false };
 
+/**
+ * Slice of the ORIGINAL space laid over the views (stage 4, TZ §5.3/§5.4).
+ * The backend serves u(x) = dot(x - centroid, n) per fragment once per
+ * (run, normal); position/thickness sliders re-mask client-side (pure math
+ * in space/sliceMath.ts). `display`: off — no overlay; dim — points outside
+ * the layer are faded; only — points outside the layer are hidden.
+ */
+export interface SliceOverlay {
+  embeddingRunId: string;
+  normalKind: SliceNormalKind;
+  normalIndex: number | null;
+  position: number;
+  thickness: number;
+  uMin: number;
+  uMax: number;
+  total: number;
+  uById: Map<string, number>;
+  note: string;
+  /** Explicit normal vector when the overlay was applied from one (saved
+   *  slices); null for axis/pca specs re-resolved by the backend. */
+  vector: number[] | null;
+}
+
+export type SliceDisplayMode = "off" | "dim" | "only";
+export type ColorBy = "kind" | "cluster";
+
 /** What a finished projection job built — used to show the result at once. */
 export type PendingBuild =
   | {
@@ -103,6 +134,16 @@ interface SpaceState {
   pointSize: number;
   viewMode: ViewMode;
   slice4d: Slice4D;
+  /** Slice of the original space overlaid on the views (null = inactive). */
+  sliceOverlay: SliceOverlay | null;
+  sliceDisplay: SliceDisplayMode;
+  /** Point coloring: by fragment kind or by an applied clustering. */
+  colorBy: ColorBy;
+  clusterLabels: Map<string, number> | null;
+  /** Human label of the applied clustering («DBSCAN · исходное · eps 0.5»). */
+  clusterCaption: string | null;
+  /** Draw structural relations of the active fragment in the 3D scene. */
+  relationLines: boolean;
 
   setViewMode: (mode: ViewMode) => void;
   setActiveProjection: (
@@ -117,6 +158,12 @@ interface SpaceState {
   setPointSize: (size: number) => void;
   setSlice4d: (patch: Partial<Omit<Slice4D, "playing">>) => void;
   setSlicePlaying: (playing: boolean) => void;
+  setSliceOverlay: (overlay: SliceOverlay | null) => void;
+  patchSliceOverlay: (patch: Partial<Pick<SliceOverlay, "position" | "thickness">>) => void;
+  setSliceDisplay: (mode: SliceDisplayMode) => void;
+  setColorBy: (colorBy: ColorBy) => void;
+  setClusterLabels: (labels: Map<string, number> | null, caption: string | null) => void;
+  setRelationLines: (enabled: boolean) => void;
   /** Point the views at what a finished build produced (and show it). */
   applyBuiltProjections: (projections: ProjectionRunDTO[], pending: PendingBuild) => void;
   reset: () => void;
@@ -232,6 +279,12 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
   pointSize: 4,
   viewMode: "3d",
   slice4d: { ...DEFAULT_SLICE_4D },
+  sliceOverlay: null,
+  sliceDisplay: "dim",
+  colorBy: "kind",
+  clusterLabels: null,
+  clusterCaption: null,
+  relationLines: false,
 
   setViewMode: (mode) => set({ viewMode: mode }),
 
@@ -331,6 +384,18 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
   setSlice4d: (patch) => set({ slice4d: { ...get().slice4d, ...patch } }),
   setSlicePlaying: (playing) => set({ slice4d: { ...get().slice4d, playing } }),
 
+  setSliceOverlay: (overlay) => set({ sliceOverlay: overlay }),
+  patchSliceOverlay: (patch) => {
+    const current = get().sliceOverlay;
+    if (!current) return;
+    set({ sliceOverlay: { ...current, ...patch } });
+  },
+  setSliceDisplay: (mode) => set({ sliceDisplay: mode }),
+  setColorBy: (colorBy) => set({ colorBy }),
+  setClusterLabels: (labels, caption) =>
+    set({ clusterLabels: labels, clusterCaption: caption, colorBy: labels ? "cluster" : "kind" }),
+  setRelationLines: (enabled) => set({ relationLines: enabled }),
+
   applyBuiltProjections: (projections, pending) => {
     if (pending.mode === "multi2d") {
       const ids: string[] = [];
@@ -411,6 +476,12 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
       hoveredId: null,
       hoverScreen: null,
       slice4d: { ...DEFAULT_SLICE_4D },
+      sliceOverlay: null,
+      sliceDisplay: "dim",
+      colorBy: "kind",
+      clusterLabels: null,
+      clusterCaption: null,
+      relationLines: false,
     }),
 }));
 

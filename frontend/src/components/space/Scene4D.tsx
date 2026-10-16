@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef } from "react";
 
+import { makeClusterColorOf } from "../../space/clusterColor";
 import { layerMask4D } from "../../space/selectionMath";
+import { cloudSliceMask } from "../../space/sliceMath";
 import { useSpaceStore } from "../../state/spaceStore";
-import { PointScene } from "./PointScene";
+import { PointScene, type PointColorOf } from "./PointScene";
 
 /**
  * 4D view (user request, stage-3 polish): a projection with FOUR components
@@ -28,12 +30,59 @@ export function Scene4D() {
   const slice = useSpaceStore((s) => s.slice4d);
   const setSlice4d = useSpaceStore((s) => s.setSlice4d);
   const setSlicePlaying = useSpaceStore((s) => s.setSlicePlaying);
+  const sliceOverlay = useSpaceStore((s) => s.sliceOverlay);
+  const sliceDisplay = useSpaceStore((s) => s.sliceDisplay);
+  const colorBy = useSpaceStore((s) => s.colorBy);
+  const clusterLabels = useSpaceStore((s) => s.clusterLabels);
+  const clusterCaption = useSpaceStore((s) => s.clusterCaption);
+  const setColorBy = useSpaceStore((s) => s.setColorBy);
 
   const count = cloud?.points.count ?? 0;
   const layer = useMemo(() => {
     if (!cloud || cloud.stride < 4) return null;
     return layerMask4D(cloud.coords, count, cloud.stride, 3, slice.tFrac, slice.wFrac);
   }, [cloud, count, slice.tFrac, slice.wFrac]);
+
+  /* Composition of the two windows: the 4D "time" layer hides its outside
+     points entirely (user's choice); the ORIGINAL-space slice additionally
+     hides ("only") or dims ("dim") within the visible layer. */
+  const sliceMasks = useMemo(() => {
+    if (!cloud || !sliceOverlay || sliceDisplay === "off") return null;
+    if (sliceOverlay.embeddingRunId !== cloud.projection.embedding_run_id) return null;
+    const ids = cloud.metas.map((m) => m.fragmentId);
+    return cloudSliceMask(ids, sliceOverlay.uById, sliceOverlay);
+  }, [cloud, sliceOverlay, sliceDisplay]);
+
+  const { mask, dimMask, sliceInLayer } = useMemo(() => {
+    const base = layer?.mask ?? null;
+    if (!base) return { mask: null, dimMask: null, sliceInLayer: null as number | null };
+    if (!sliceMasks || sliceDisplay === "off") {
+      return { mask: base, dimMask: null, sliceInLayer: null };
+    }
+    const combined = new Uint8Array(base.length);
+    const dim = new Uint8Array(base.length);
+    let inLayerCount = 0;
+    for (let i = 0; i < base.length; i++) {
+      if (!base[i]) continue;
+      if (sliceMasks.mask[i]) {
+        combined[i] = 1;
+        inLayerCount += 1;
+      } else if (sliceDisplay === "dim") {
+        combined[i] = 1;
+        dim[i] = 1;
+      }
+    }
+    return {
+      mask: combined,
+      dimMask: sliceDisplay === "dim" ? dim : null,
+      sliceInLayer: inLayerCount,
+    };
+  }, [layer, sliceMasks, sliceDisplay]);
+
+  const colorOf = useMemo<PointColorOf | undefined>(
+    () => (colorBy === "cluster" && clusterLabels ? makeClusterColorOf(clusterLabels) : undefined),
+    [colorBy, clusterLabels],
+  );
 
   /* "Time" animation: ping-pong sweep of the window across the axis. */
   const dirRef = useRef(1);
@@ -95,13 +144,41 @@ export function Scene4D() {
       cloud={cloud}
       hoverKind="4d"
       ariaLabel="4D-вид: трёхмерная сцена и слайдер четвёртой оси"
-      mask={layer?.mask ?? null}
+      mask={mask}
+      dimMask={dimMask}
+      colorOf={colorOf}
+      className="point-scene--with-footer"
+      toolbarExtras={
+        <button
+          type="button"
+          className={`btn btn--small${colorBy === "cluster" ? " btn--primary" : ""}`}
+          onClick={() => setColorBy(colorBy === "kind" ? "cluster" : "kind")}
+          disabled={colorBy === "kind" && !clusterLabels}
+          aria-pressed={colorBy === "cluster"}
+          title={
+            clusterLabels
+              ? "Раскраска точек: по типу фрагмента / по кластеру"
+              : "Сначала запустите кластеризацию и нажмите «На сцену» во вкладке CLUSTERS"
+          }
+        >
+          цвет: {colorBy === "kind" ? "тип" : "кластер"}
+        </button>
+      }
       badge={
         <span title={`Запуск ${projection.id}`}>
           {projection.method_display_name} · 4D · {projection.axis_labels.join(" / ")} · в слое{" "}
           {inLayer} из {count}
           {projection.stale && <span className="badge badge--warn"> устарела</span>}
           {!projection.stale && <span className="badge"> свежая</span>}
+          {sliceInLayer !== null && (
+            <span className="badge" title="Дополнительный слой исходного пространства (панель «Срез»)">
+              {" "}
+              ∩ срез: {sliceInLayer}
+            </span>
+          )}
+          {colorBy === "cluster" && clusterCaption && (
+            <span className="badge"> {clusterCaption}</span>
+          )}
         </span>
       }
       footer={

@@ -11,12 +11,33 @@ import {
 } from "react";
 import * as THREE from "three";
 
-import { COLORS, buildLegend, hexToRgb, kindColor } from "../../space/palette";
+import { COLORS, buildLegendFrom, hexToRgb, kindColor } from "../../space/palette";
 import { toFragmentRef } from "../../space/fragmentRef";
 import { indicesInNdcRect, marqueeExceedsSlop, normalizeRect } from "../../space/selectionMath";
 import { useProjectStore } from "../../state/projectStore";
-import { useSpaceStore, type CloudKind, type PointCloud } from "../../state/spaceStore";
+import {
+  useSpaceStore,
+  type CloudKind,
+  type PointCloud,
+  type PointMeta,
+} from "../../state/spaceStore";
 import { kindBadge } from "../../monaco/helpers";
+
+/** Color + legend key of one point (kind-based by default; clustering
+ *  passes its own resolver — the legend always carries TEXT keys). */
+export interface ColorEntry {
+  key: string;
+  color: string;
+}
+
+export type PointColorOf = (meta: PointMeta) => ColorEntry;
+
+const kindColorOf: PointColorOf = (meta) => ({
+  key: meta.kind,
+  color: kindColor(meta.kind),
+});
+
+const DIM_COLOR = "#39424b";
 
 /**
  * Shared interactive point-cloud scene (TZ §4.3, UI-ТЗ §3) behind Scene3D
@@ -100,6 +121,10 @@ interface SceneContentsProps {
   orbitEnabled: boolean;
   /** Original point indices that are currently visible (mask applied). */
   visible: Int32Array;
+  /** Original indices drawn faded (context only: no hover/pick/marquee). */
+  dimmed: Int32Array;
+  colorOf: PointColorOf;
+  lines: { positions: Float32Array; colors: Float32Array } | null;
   onHover: (originalIndex: number | null, event?: ThreeEvent<PointerEvent>) => void;
   onPick: (originalIndex: number, additive: boolean) => void;
   onCameraReady: (camera: THREE.Camera) => void;
@@ -114,6 +139,9 @@ function SceneContents({
   hoveredId,
   orbitEnabled,
   visible,
+  dimmed,
+  colorOf,
+  lines,
   onHover,
   onPick,
   onCameraReady,
@@ -127,24 +155,45 @@ function SceneContents({
     onCameraReady(camera);
   }, [camera, onCameraReady]);
 
-  const geometry = useMemo(() => {
-    const positions = new Float32Array(visible.length * 3);
-    const colors = new Float32Array(visible.length * 3);
-    visible.forEach((orig, slot) => {
-      const [r, g, b] = hexToRgb(kindColor(cloud.metas[orig].kind));
-      positions[slot * 3] = cloud.display[orig * 3];
-      positions[slot * 3 + 1] = cloud.display[orig * 3 + 1];
-      positions[slot * 3 + 2] = cloud.display[orig * 3 + 2];
-      colors[slot * 3] = r;
-      colors[slot * 3 + 1] = g;
-      colors[slot * 3 + 2] = b;
-    });
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    return geo;
-  }, [cloud, visible]);
+  const buildPoints = useCallback(
+    (indices: Int32Array, uniformColor: string | null) => {
+      const positions = new Float32Array(indices.length * 3);
+      const colors = new Float32Array(indices.length * 3);
+      indices.forEach((orig, slot) => {
+        const color = uniformColor ?? colorOf(cloud.metas[orig]).color;
+        const [r, g, b] = hexToRgb(color);
+        positions[slot * 3] = cloud.display[orig * 3];
+        positions[slot * 3 + 1] = cloud.display[orig * 3 + 1];
+        positions[slot * 3 + 2] = cloud.display[orig * 3 + 2];
+        colors[slot * 3] = r;
+        colors[slot * 3 + 1] = g;
+        colors[slot * 3 + 2] = b;
+      });
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      return geo;
+    },
+    [cloud, colorOf],
+  );
+
+  const geometry = useMemo(() => buildPoints(visible, null), [buildPoints, visible]);
   useEffect(() => () => geometry.dispose(), [geometry]);
+
+  const dimmedGeometry = useMemo(
+    () => (dimmed.length > 0 ? buildPoints(dimmed, DIM_COLOR) : null),
+    [buildPoints, dimmed],
+  );
+  useEffect(() => () => dimmedGeometry?.dispose(), [dimmedGeometry]);
+
+  const linesGeometry = useMemo(() => {
+    if (!lines || lines.positions.length === 0) return null;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(lines.positions, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(lines.colors, 3));
+    return geo;
+  }, [lines]);
+  useEffect(() => () => linesGeometry?.dispose(), [linesGeometry]);
 
   const visibleSet = useMemo(() => new Set(visible), [visible]);
 
@@ -215,6 +264,25 @@ function SceneContents({
         <pointsMaterial vertexColors size={0.021 * pointSize} sizeAttenuation />
       </points>
 
+      {dimmedGeometry && (
+        <points geometry={dimmedGeometry} raycast={() => null}>
+          <pointsMaterial
+            vertexColors
+            size={0.016 * pointSize}
+            sizeAttenuation
+            transparent
+            opacity={0.38}
+            depthWrite={false}
+          />
+        </points>
+      )}
+
+      {linesGeometry && (
+        <lineSegments geometry={linesGeometry} raycast={() => null}>
+          <lineBasicMaterial vertexColors transparent opacity={0.55} />
+        </lineSegments>
+      )}
+
       {selectedIds.length > 0 && (
         <points geometry={selectedGeometry} raycast={() => null}>
           <pointsMaterial
@@ -257,10 +325,18 @@ export interface PointSceneProps {
   ariaLabel: string;
   /** Identity badge content (top-left; method/axes/freshness — honesty). */
   badge: ReactNode;
-  /** Bottom overlay (4D "time" panel). */
+  /** Bottom overlay (4D "time" panel, relation-line filters). */
   footer?: ReactNode;
+  /** Extra toolbar controls (relation-lines toggle, color-mode switch). */
+  toolbarExtras?: ReactNode;
   /** 1 = visible; null/undefined = every point is visible. */
   mask?: Uint8Array | null;
+  /** 1 = draw faded as context (not hoverable/pickable/selectable). */
+  dimMask?: Uint8Array | null;
+  /** Point color + legend key resolver (default: fragment kind). */
+  colorOf?: PointColorOf;
+  /** Structural relation lines (pre-built segment buffers). */
+  lines?: { positions: Float32Array; colors: Float32Array } | null;
   className?: string;
 }
 
@@ -270,7 +346,11 @@ export function PointScene({
   ariaLabel,
   badge,
   footer,
+  toolbarExtras,
   mask,
+  dimMask,
+  colorOf,
+  lines,
   className,
 }: PointSceneProps) {
   const pointSize = useSpaceStore((s) => s.pointSize);
@@ -332,6 +412,17 @@ export function PointScene({
     }
     return Int32Array.from(list);
   }, [cloud, mask]);
+
+  const dimmed = useMemo(() => {
+    if (!dimMask) return new Int32Array(0);
+    const list: number[] = [];
+    for (let i = 0; i < dimMask.length; i++) {
+      if (dimMask[i] && (!mask || mask[i])) list.push(i);
+    }
+    return Int32Array.from(list);
+  }, [dimMask, mask]);
+
+  const resolveColor = useMemo(() => colorOf ?? kindColorOf, [colorOf]);
 
   const onCameraReady = useCallback((camera: THREE.Camera) => {
     cameraRef.current = camera;
@@ -454,10 +545,22 @@ export function PointScene({
     dragStartRef.current = null;
   };
 
-  const legend = useMemo(
-    () => buildLegend(Array.from(visible, (orig) => cloud.metas[orig].kind)),
-    [cloud, visible],
-  );
+  const legend = useMemo(() => {
+    const entries = buildLegendFrom(
+      Array.from(visible, (orig) => resolveColor(cloud.metas[orig]).key),
+      (key) => {
+        // color of a key = color of its first occurrence (deterministic)
+        for (const orig of Array.from(visible)) {
+          const entry = resolveColor(cloud.metas[orig]);
+          if (entry.key === key) return entry.color;
+        }
+        return COLORS.gray;
+      },
+    );
+    // cluster keys sort numerically («кластер 2» before «кластер 10»);
+    // kind keys keep the palette order via first-seen ordering
+    return entries;
+  }, [cloud, visible, resolveColor]);
   const hoveredMeta = useMemo(() => {
     if (!hoveredId) return null;
     const i = cloud.indexById.get(hoveredId);
@@ -501,6 +604,9 @@ export function PointScene({
           hoveredId={hoveredId}
           orbitEnabled={!marqueeArmed && !marquee}
           visible={visible}
+          dimmed={dimmed}
+          colorOf={resolveColor}
+          lines={lines ?? null}
           onHover={onHover}
           onPick={onPick}
           onCameraReady={onCameraReady}
@@ -548,6 +654,7 @@ export function PointScene({
             aria-label="Размер точек"
           />
         </label>
+        {toolbarExtras}
       </div>
 
       {/* Legend: color + text badge (never color-only, TZ §4.1); collapsible
@@ -571,7 +678,9 @@ export function PointScene({
                   style={{ background: entry.color }}
                   aria-hidden="true"
                 />
-                <span className="legend-item__badge mono">{kindBadge(entry.kind)}</span>
+                {colorOf === undefined && (
+                  <span className="legend-item__badge mono">{kindBadge(entry.kind)}</span>
+                )}
                 <span className="mono">{entry.kind}</span>
                 <span className="legend-item__count mono">{entry.count}</span>
               </span>

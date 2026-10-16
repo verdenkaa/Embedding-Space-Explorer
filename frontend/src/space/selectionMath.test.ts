@@ -33,7 +33,7 @@ import {
   type PlotBounds,
   type PlotGeometry,
 } from "./selectionMath";
-import { buildLegend, hexToRgb, kindColor } from "./palette";
+import { buildLegend, buildLegendFrom, clusterColor, hexToRgb, kindColor } from "./palette";
 
 const PAD: Padding = { left: 50, right: 10, top: 10, bottom: 30 };
 
@@ -334,5 +334,33 @@ describe("2D zoom & pan (bounds-space camera)", () => {
     const back = canvasToData(px.cx, px.cy, g);
     expect(back.x).toBeCloseTo(data.x, 5);
     expect(back.y).toBeCloseTo(data.y, 5);
+  });
+});
+
+
+describe("cluster palette (stage 4)", () => {
+  it("labels get deterministic, distinct colors; noise is the neutral gray", () => {
+    expect(clusterColor(0)).toBe(clusterColor(0));
+    expect(clusterColor(1)).not.toBe(clusterColor(2));
+    expect(clusterColor(-1)).toBe("#8fa0ae");
+    // colors stay in the readable band (not near-black on the dark bg)
+    for (const label of [0, 1, 2, 3, 5, 8, 13, 21]) {
+      const hex = clusterColor(label);
+      expect(hex).toMatch(/^#[0-9a-f]{6}$/);
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      expect(Math.max(r, g, b)).toBeGreaterThan(90);
+    }
+  });
+
+  it("buildLegendFrom counts arbitrary keys with their colors", () => {
+    const legend = buildLegendFrom(["кластер 0", "шум", "кластер 0"], (key) =>
+      key === "шум" ? "#8fa0ae" : "#123456",
+    );
+    expect(legend).toEqual([
+      { kind: "кластер 0", color: "#123456", count: 2 },
+      { kind: "шум", color: "#8fa0ae", count: 1 },
+    ]);
   });
 });

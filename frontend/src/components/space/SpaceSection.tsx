@@ -2,6 +2,7 @@ import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { useEffect } from "react";
 
+import { useAnalysisStore } from "../../state/analysisStore";
 import { useExperimentStore } from "../../state/experimentStore";
 import { useProjectStore } from "../../state/projectStore";
 import { useSpaceStore, pickActiveProjections } from "../../state/spaceStore";
@@ -9,10 +10,12 @@ import { useUiStore } from "../../state/uiStore";
 import { CorpusPanel } from "../corpus/CorpusPanel";
 import { JobPoller } from "../corpus/JobProgress";
 import { SourceInspector } from "../inspector/SourceInspector";
+import { AnalysisJobPoller } from "../analysis/NeighborsTab";
 import { Projection2D } from "./Projection2D";
 import { ExperimentJobPoller, ProjectionControls } from "./ProjectionControls";
 import { Scene3D } from "./Scene3D";
 import { Scene4D } from "./Scene4D";
+import { SliceControls } from "./SliceControls";
 import { ViewBar } from "./ViewBar";
 
 /**
@@ -37,16 +40,18 @@ export function SpaceSection() {
   const viewMode = useSpaceStore((s) => s.viewMode);
   const setActiveProjection = useSpaceStore((s) => s.setActiveProjection);
   const reset = useSpaceStore((s) => s.reset);
+  const resetAnalysis = useAnalysisStore((s) => s.reset);
 
   /* Project switch: drop loaded clouds (they belong to another project)
      and (re)load the data the auto-pick below depends on. */
   useEffect(() => {
     reset();
+    resetAnalysis();
     if (!projectId) return;
     void loadRuns();
     void loadProjections();
     void loadPresets();
-  }, [projectId, reset, loadRuns, loadProjections, loadPresets]);
+  }, [projectId, reset, resetAnalysis, loadRuns, loadProjections, loadPresets]);
 
   /* Auto-select which cached projections the views show — but ONLY while a
      view is empty or its projection disappeared (deleted / project switch):
@@ -77,6 +82,7 @@ export function SpaceSection() {
     <div className="space-section">
       <JobPoller />
       <ExperimentJobPoller />
+      <AnalysisJobPoller />
       {error && (
         <div className="workspace-error" role="alert">
           <span>{error.message}</span>
@@ -107,6 +113,7 @@ export function SpaceSection() {
                 </Allotment.Pane>
               )}
             </Allotment>
+            <SliceControls />
             <ProjectionControls />
           </div>
         </Allotment.Pane>

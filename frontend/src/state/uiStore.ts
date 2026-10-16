@@ -17,7 +17,7 @@ import type { HealthResponse } from "../api/types";
 export type ConnectionStatus = "idle" | "loading" | "online" | "offline";
 /** CORPUS was removed as a separate tab (user feedback): everything it
  *  showed lives in the SPACE section (corpus panel left, inspector right). */
-export type ActiveSection = "space" | "diagnostics" | "experiments";
+export type ActiveSection = "space" | "relations" | "diagnostics" | "experiments";
 
 export interface UiError {
   code: string;

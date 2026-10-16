@@ -52,6 +52,48 @@ export interface LegendEntry {
   count: number;
 }
 
+/**
+ * Deterministic cluster palette (golden-angle hues): the same label always
+ * gets the same color within a session; noise (-1) is the neutral gray and
+ * the legend ALWAYS carries text labels («кластер N» / «шум») — color is
+ * never the only identifier (TZ §4.1).
+ */
+export function clusterColor(label: number): string {
+  if (label < 0) return COLORS.gray;
+  const hue = (label * 137.508) % 360;
+  return hslToHex(hue, 0.62, 0.58);
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const [r, g, b] =
+    h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] :
+    h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  const to = (v: number): string =>
+    Math.round((v + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+/** Legend over arbitrary color keys (kinds OR cluster names), first-seen order. */
+export function buildLegendFrom(
+  keys: Iterable<string>,
+  colorOf: (key: string) => string,
+): LegendEntry[] {
+  const counts = new Map<string, number>();
+  for (const key of keys) {
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([key, count]) => ({
+    kind: key,
+    color: colorOf(key),
+    count,
+  }));
+}
+
 export function buildLegend(kinds: Iterable<string>): LegendEntry[] {
   const counts = new Map<string, number>();
   for (const kind of kinds) {

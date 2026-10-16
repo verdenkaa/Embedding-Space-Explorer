@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { COLORS, kindColor } from "../../space/palette";
+import { COLORS, clusterColor, kindColor } from "../../space/palette";
+import { cloudSliceMask, type CloudSliceMask } from "../../space/sliceMath";
 import {
   DEFAULT_PADDING,
   canvasToData,
@@ -138,6 +139,10 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
   const pointSize = useSpaceStore((s) => s.pointSize);
   const hoveredId = useSpaceStore((s) => s.hoveredId);
   const setHover = useSpaceStore((s) => s.setHover);
+  const sliceOverlay = useSpaceStore((s) => s.sliceOverlay);
+  const sliceDisplay = useSpaceStore((s) => s.sliceDisplay);
+  const colorBy = useSpaceStore((s) => s.colorBy);
+  const clusterLabels = useSpaceStore((s) => s.clusterLabels);
 
   const activeFragmentId = useProjectStore((s) => s.activeFragmentId);
   const selectedIds = useProjectStore((s) => s.selectedFragmentIds);
@@ -223,6 +228,32 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
     [pixels],
   );
 
+  /* Slice of the ORIGINAL space over this plot (only when the projection's
+     embedding run matches; "dim" fades out-of-layer points, "only" hides
+     them — hidden points are not hoverable/pickable/marquee-selectable). */
+  const sliceMasks: CloudSliceMask | null = useMemo(() => {
+    if (!sliceOverlay || sliceDisplay === "off") return null;
+    if (sliceOverlay.embeddingRunId !== cloud.projection.embedding_run_id) return null;
+    const ids = cloud.metas.map((m) => m.fragmentId);
+    return cloudSliceMask(ids, sliceOverlay.uById, sliceOverlay);
+  }, [cloud, sliceOverlay, sliceDisplay]);
+
+  const isVisible = useMemo(() => {
+    if (!sliceMasks || sliceDisplay !== "only") return null; // null = every point
+    const mask = sliceMasks.mask;
+    return (i: number) => mask[i] === 1;
+  }, [sliceMasks, sliceDisplay]);
+
+  const colorAt = useMemo(() => {
+    if (colorBy !== "cluster" || !clusterLabels) return null;
+    const labels = clusterLabels;
+    return (i: number): string => {
+      const label = labels.get(cloud.metas[i].fragmentId);
+      if (label === undefined) return COLORS.gray;
+      return label < 0 ? clusterColor(-1) : clusterColor(label);
+    };
+  }, [colorBy, clusterLabels, cloud]);
+
   /* Wheel zoom towards the cursor (native listener: React's is passive). */
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -302,19 +333,33 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
 
     /* points: small squares (distinct from selection rings — not color-only) */
     const r = Math.max(1, pointSize * 0.7);
+    // out-of-layer context pass (slice display = "dim")
+    if (sliceMasks && sliceDisplay === "dim") {
+      ctx.fillStyle = "#2c343c";
+      for (let i = 0; i < count; i++) {
+        if (sliceMasks.mask[i]) continue;
+        const cx = pixels[i * 2];
+        const cy = pixels[i * 2 + 1];
+        if (cx < plotL - r || cx > plotR + r || cy < plotT - r || cy > plotB + r) continue;
+        ctx.fillRect(cx - r / 2, cy - r / 2, r, r);
+      }
+    }
     for (let i = 0; i < count; i++) {
+      if (isVisible && !isVisible(i)) continue;
       const cx = pixels[i * 2];
       const cy = pixels[i * 2 + 1];
       if (cx < plotL - r || cx > plotR + r || cy < plotT - r || cy > plotB + r) continue;
-      ctx.fillStyle = kindColor(cloud.metas[i].kind);
+      ctx.fillStyle = colorAt ? colorAt(i) : kindColor(cloud.metas[i].kind);
       ctx.fillRect(cx - r / 2, cy - r / 2, r, r);
     }
 
-    /* multi-selection: amber rings */
+    /* multi-selection: amber rings (out-of-layer points keep the selection
+       in the store but show no ring — they are context, not the layer) */
     ctx.lineWidth = 1.4;
     for (const id of selectedIds) {
       const i = cloud.indexById.get(id);
       if (i === undefined) continue;
+      if (isVisible && !isVisible(i)) continue;
       ctx.strokeStyle = COLORS.selected;
       ctx.beginPath();
       ctx.arc(pixels[i * 2], pixels[i * 2 + 1], r + 2.5, 0, Math.PI * 2);
@@ -395,6 +440,10 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
     activeFragmentId,
     hoveredId,
     marquee,
+    sliceMasks,
+    sliceDisplay,
+    isVisible,
+    colorAt,
   ]);
 
   /* --------------------------- interaction -------------------------- */
@@ -439,7 +488,7 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
       }
       return;
     }
-    const hit = hitTest2D(count, { cx: x, cy: y }, HIT_RADIUS_PX, pixelOf);
+    const hit = hitTest2D(count, { cx: x, cy: y }, HIT_RADIUS_PX, pixelOf, isVisible);
     if (hit === null) {
       setLocalTooltip(null);
       setHover(null);
@@ -468,7 +517,7 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
           maxX: b.x,
           minY: d.y, // canvas y grows down → data y grows up
           maxY: c.y,
-        });
+        }).filter((i) => !isVisible || isVisible(i));
         const picked = indices.map((i) => cloud.metas[i].fragmentId);
         if (e.ctrlKey || e.metaKey) {
           // Ctrl+marquee ADDS the area to the current selection (like ctrl-click)
@@ -485,7 +534,7 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
     if (drag?.moved) {
       return; // a pan, not a click
     }
-    const hit = hitTest2D(count, { cx: x, cy: y }, HIT_RADIUS_PX, pixelOf);
+    const hit = hitTest2D(count, { cx: x, cy: y }, HIT_RADIUS_PX, pixelOf, isVisible);
     if (hit === null) {
       clearSelection();
       return;
@@ -536,6 +585,14 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
             {axisInfo && axisInfo.length >= 2
               ? ` (${Math.round(axisInfo[0] * 100)}% / ${Math.round(axisInfo[1] * 100)}% дисперсии)`
               : ""}
+          </span>
+        )}
+        {sliceMasks && (
+          <span
+            className="badge"
+            title="Слой выбран в ИСХОДНОМ пространстве; график показывает его через эту проекцию"
+          >
+            слой: {sliceMasks.inLayer} из {sliceMasks.mask.length}
           </span>
         )}
         {projection.stale && (
