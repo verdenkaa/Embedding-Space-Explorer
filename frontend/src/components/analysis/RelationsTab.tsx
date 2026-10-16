@@ -60,8 +60,16 @@ function RelationRow({ rel, outgoing }: { rel: RelationDTO; outgoing: boolean })
           {outgoing ? "→" : "←"}
         </span>
         <span className="relation-row__label">{endpointLabel(other)}</span>
-        {rel.confidence !== null && (
-          <span className="relation-row__conf mono" title="Уверенность источника">
+        {rel.detail && (
+          <span
+            className="relation-row__detail mono"
+            title="Свидетельство из исходника (для imports — модуль import-оператора)"
+          >
+            {rel.detail}
+          </span>
+        )}
+        {rel.origin !== "extracted" && rel.confidence !== null && (
+          <span className="relation-row__conf mono" title="Уверенность источника связи">
             {Math.round(rel.confidence * 100)}%
           </span>
         )}
@@ -148,8 +156,10 @@ export function RelationsTab() {
       {current && items.length > 0 && (
         <>
           <p className="analysis-pane__note">
-            Структурные связи — НЕ семантическая близость: источник каждой
-            подписан (извлечено / импорт / вручную).
+            Структурные связи — НЕ семантическая близость (она во вкладке
+            NEIGHBORS): «извлечено» — это факты исходников (import-операторы,
+            принадлежность символу), у них нет процента сходства; % уверенности
+            показывается только у импортированных связей.
           </p>
           {outgoing.length > 0 && (
             <>

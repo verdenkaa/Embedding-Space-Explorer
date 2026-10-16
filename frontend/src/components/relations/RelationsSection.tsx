@@ -358,6 +358,14 @@ export function RelationsSection() {
                     </span>{" "}
                     <span className="legend-item__badge mono">{relationBadge(rel.kind)}</span>{" "}
                     <span className="mono relations-table__kind">{rel.kind}</span>
+                    {rel.detail && (
+                      <span
+                        className="mono relations-table__detail"
+                        title="Свидетельство из исходника (для imports — модуль import-оператора)"
+                      >
+                        {rel.detail}
+                      </span>
+                    )}
                   </td>
                   <td className="mono relations-table__endpoint" title={rel.source.rel_path ?? ""}>
                     {rel.source.symbol_path ?? rel.source.name ?? rel.source.rel_path}
@@ -374,7 +382,15 @@ export function RelationsSection() {
                     <span className="badge">{ORIGIN_LABELS[rel.origin] ?? rel.origin}</span>
                   </td>
                   <td className="mono">
-                    {rel.confidence !== null ? `${Math.round(rel.confidence * 100)}%` : "—"}
+                    {rel.origin === "extracted" ? (
+                      <span title="Извлечено парсером из исходника — это факт, а не оценка сходства">
+                        факт
+                      </span>
+                    ) : rel.confidence !== null ? (
+                      `${Math.round(rel.confidence * 100)}%`
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td>
                     <button

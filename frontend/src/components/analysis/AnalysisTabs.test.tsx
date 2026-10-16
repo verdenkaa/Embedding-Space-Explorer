@@ -208,8 +208,12 @@ describe("RelationsTab", () => {
     expect(screen.getByText("извлечено")).toBeTruthy();
     expect(screen.getByText("импорт")).toBeTruthy();
     expect(screen.getByText("75%")).toBeTruthy(); // imported confidence
+    // extracted relations show the EVIDENCE, not a pseudo-similarity score
+    expect(screen.getByText("pkg.b")).toBeTruthy(); // module specifier detail
+    expect(screen.queryByText("100%")).toBeNull(); // confidence 1.0 is a fact, not a %
     // the note keeps structural ≠ semantic
     expect(screen.getByText(/НЕ семантическая близость/)).toBeTruthy();
+    expect(screen.getByText(/NEIGHBORS/)).toBeTruthy();
   });
 
   it("file-level endpoint navigates to the file (honest, no fake fragment)", async () => {

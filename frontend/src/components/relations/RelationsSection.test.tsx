@@ -122,6 +122,10 @@ describe("RelationsSection", () => {
     expect(screen.getAllByText("извлечено").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("вручную").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("pkg/a.py")).toBeTruthy();
+    // extracted = «факт» (no pseudo-similarity %), evidence detail is shown
+    expect(screen.getByText("факт")).toBeTruthy();
+    expect(screen.getByText("pkg.b")).toBeTruthy();
+    expect(screen.queryByText("100%")).toBeNull();
     // kind filter lists the inventory counts
     const kindSelect = screen.getByLabelText("Фильтр по типу связи") as HTMLSelectElement;
     const options = Array.from(kindSelect.options).map((o) => o.textContent);

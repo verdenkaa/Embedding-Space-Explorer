@@ -2891,3 +2891,23 @@ code,
   color: var(--color-text-dim);
   font-size: var(--text-xs);
 }
+
+/* relation evidence (module specifier of an import, note of a manual link) */
+.relation-row__detail {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--color-text-faint);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0 4px;
+}
+
+.relations-table__detail {
+  margin-left: 6px;
+  color: var(--color-text-faint);
+  font-size: 10px;
+}
