@@ -400,6 +400,8 @@ def test_db_migration_from_v1_is_additive(settings: Settings) -> None:
     # projection_runs through foreign keys.
     with ctx.engine.begin() as conn:
         for table in (
+            "experiments",
+            "metric_runs",
             "fragment_group_members",
             "fragment_groups",
             "relations",
@@ -440,6 +442,9 @@ def test_db_migration_from_v1_is_additive(settings: Settings) -> None:
     assert "fragment_groups" in tables
     assert "fragment_group_members" in tables
     assert "saved_slices" in tables
+    # stage-5 tables are recreated by the same additive migration (db v6)
+    assert "metric_runs" in tables
+    assert "experiments" in tables
     assert "files" in tables
     backups = list(ctx.project_dir.glob("project.db.bak-*"))
     assert len(backups) == 1
