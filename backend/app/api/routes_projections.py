@@ -230,7 +230,7 @@ def compute_projection(
         return job_info_from_row(row)
 
 
-def _current_signature(ctx: ProjectContext, embedding_run_id: str) -> str | None:
+def current_embedding_signature(ctx: ProjectContext, embedding_run_id: str) -> str | None:
     """Live signature of an embedding run's vectors (None when unusable)."""
     with ctx.session_factory() as session:
         emb = session.get(EmbeddingRunRow, embedding_run_id)
@@ -256,7 +256,9 @@ def list_projections(
     result: list[ProjectionRunDTO] = []
     for row in rows:
         if row.embedding_run_id not in signature_cache:
-            signature_cache[row.embedding_run_id] = _current_signature(ctx, row.embedding_run_id)
+            signature_cache[row.embedding_run_id] = current_embedding_signature(
+                ctx, row.embedding_run_id
+            )
         current = signature_cache[row.embedding_run_id]
         cache_ok = ProjectionCache.load(ctx.project_dir / row.npz_relpath) is not None
         stale = current is None or current != row.source_signature
@@ -312,7 +314,7 @@ def get_projection_points(
             "Recompute the projection; the original vectors are not affected.",
         )
 
-    current = _current_signature(ctx, row.embedding_run_id)
+    current = current_embedding_signature(ctx, row.embedding_run_id)
     stale = current is None or current != row.source_signature
 
     meta: dict[str, tuple[FragmentRow, str]] = {}

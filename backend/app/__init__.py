@@ -2,7 +2,7 @@
 
 # Single source of truth for versions reported by /api/health and stored in
 # experiments / project manifests.
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 # Data schema version. Bump on breaking changes to the project database layout
 # or on-disk formats; migrations live in the storage module.
@@ -12,4 +12,5 @@ __version__ = "0.7.0"
 # v5: stage 3 rework — raw-axes method + projection presets (db schema v4).
 # v6: stage 4 — relations, clustering runs, manual groups, saved slices
 #     (db schema v5, additive).
-SCHEMA_VERSION = 6
+# v7: stage 5 — metric runs and saved experiments (db schema v6, additive).
+SCHEMA_VERSION = 7

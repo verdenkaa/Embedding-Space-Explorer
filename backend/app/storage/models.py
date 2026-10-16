@@ -1,4 +1,4 @@
-"""SQLAlchemy models for a project database (db schema v5).
+"""SQLAlchemy models for a project database (db schema v6).
 
 Entities and ID rules are documented in docs/data-model.md.
 """
@@ -296,4 +296,58 @@ class SavedSliceRow(Base):
     #: signed offset of the plane point from the run centroid along n
     position: Mapped[float] = mapped_column(default=0.0)
     thickness: Mapped[float] = mapped_column(default=0.0)
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
+class MetricRunRow(Base):
+    """One metric run (TZ §5.6): quality numbers of a projection and/or the
+    agreement of original-space neighbors with KNOWN structural relations.
+
+    Identity = fingerprint(embedding_run, projection_run, k, sample, seed,
+    relation filter); results live in `result_json` (values + per-metric
+    explanations + counts). `source_signature` marks the run stale when the
+    vectors change — outdated numbers must never be shown as fresh.
+    """
+
+    __tablename__ = "metric_runs"
+    __table_args__ = (Index("ix_metric_runs_emb", "embedding_run_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    embedding_run_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("embedding_runs.id", ondelete="CASCADE")
+    )
+    projection_run_id: Mapped[str | None] = mapped_column(
+        String(32), ForeignKey("projection_runs.id", ondelete="CASCADE"), nullable=True
+    )
+    k: Mapped[int] = mapped_column(Integer, default=10)
+    sample_size: Mapped[int] = mapped_column(Integer, default=500)
+    seed: Mapped[int] = mapped_column(Integer, default=42)
+    params_json: Mapped[str] = mapped_column(String(4096))
+    result_json: Mapped[str] = mapped_column(String(262144))
+    n_vectors: Mapped[int] = mapped_column(Integer, default=0)
+    source_signature: Mapped[str] = mapped_column(String(64))
+    versions_json: Mapped[str] = mapped_column(String(512))
+    created_at: Mapped[str] = mapped_column(String(40))
+    updated_at: Mapped[str] = mapped_column(String(40))
+
+
+class ExperimentRow(Base):
+    """A saved, reopenable experiment (TZ §9.2).
+
+    `config_json` references the concrete runs (embeddings/projections/
+    slice/clustering/groups/selection/metrics) captured from the UI;
+    `snapshot_json` records the interpretation context AT SAVE TIME: corpus
+    counts, embedding signature, app/schema versions, staleness of every
+    reference and the metric values. Opening an experiment reports missing
+    or stale references honestly instead of silently showing something else.
+    """
+
+    __tablename__ = "experiments"
+    __table_args__ = (UniqueConstraint("name", name="uq_experiment_name"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    description: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    config_json: Mapped[str] = mapped_column(String(524288))
+    snapshot_json: Mapped[str] = mapped_column(String(524288))
     created_at: Mapped[str] = mapped_column(String(40))

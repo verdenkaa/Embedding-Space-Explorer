@@ -6,7 +6,8 @@ Rules:
 - `meta.schema_version` is checked on open: newer than supported → clear
   error (project not broken globally); older → backup file, then migrate
   (migrations are additive: v1 corpus, v2 embedding_runs, v3 projection_runs,
-    v4 projection_presets, v5 relations/clustering/groups/slices;
+    v4 projection_presets, v5 relations/clustering/groups/slices,
+    v6 metric_runs/experiments;
     the pre-migration .bak copy guards against surprises).
 """
 
@@ -20,7 +21,7 @@ from typing import Any
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-CURRENT_DB_SCHEMA = 5
+CURRENT_DB_SCHEMA = 6
 
 
 class Base(DeclarativeBase):

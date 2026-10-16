@@ -16,11 +16,14 @@ from app import __version__
 from app.api.errors import install_error_handlers
 from app.api.routes_clusters import router as clusters_router
 from app.api.routes_embeddings import embeddings_router, models_router, preparation_router
+from app.api.routes_experiments import router as experiments_router
+from app.api.routes_exports import router as exports_router
 from app.api.routes_files import router as files_router
 from app.api.routes_fragments import router as fragments_router
 from app.api.routes_fs import router as fs_router
 from app.api.routes_health import router as health_router
 from app.api.routes_jobs import router as jobs_router
+from app.api.routes_metrics import router as metrics_router
 from app.api.routes_neighbors import router as neighbors_router
 from app.api.routes_projections import methods_router as projection_methods_router
 from app.api.routes_projections import projections_router
@@ -104,6 +107,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(neighbors_router)
     app.include_router(relations_router)
     app.include_router(clusters_router)
+    app.include_router(metrics_router)
+    app.include_router(experiments_router)
+    app.include_router(exports_router)
     return app
 
 

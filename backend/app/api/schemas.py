@@ -485,11 +485,14 @@ class CreatePresetRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+SliceNormalKind = Literal["axis", "pca", "vector"]
+
+
 class SliceNormalDTO(BaseModel):
     """How the hyperplane normal is specified (MVP: axis / PCA direction /
     explicit vector; the resolved unit vector is returned/stored)."""
 
-    kind: Literal["axis", "pca", "vector"]
+    kind: SliceNormalKind
     index: int | None = Field(default=None, ge=0)
     vector: list[float] | None = None
 
@@ -710,3 +713,133 @@ class FragmentGroupDTO(BaseModel):
     #: members deleted by a reindex cascade away — the count stays honest
     fragment_ids: list[str]
     created_at: str
+
+
+# ---------------------------------------------------------------------------
+# Stage 5: metrics (TZ §5.6)
+# ---------------------------------------------------------------------------
+
+
+class ComputeMetricsRequest(BaseModel):
+    embedding_run_id: str = Field(min_length=1, max_length=32)
+    #: None → only the relation metrics (over the ORIGINAL space) are computed
+    projection_run_id: str | None = Field(default=None, max_length=32)
+    k: int = Field(10, ge=1, le=100)
+    #: deterministic sample of points the projection metrics run over
+    sample: int = Field(500, ge=3, le=100_000)
+    seed: int = Field(default=42, ge=0, le=2_147_483_647)
+    #: None = every relation kind counts as "known"
+    relation_kinds: list[str] | None = None
+
+
+class MetricValueDTO(BaseModel):
+    """One metric: value + everything needed to interpret it (never a bare
+    number — TZ §5.6/§12)."""
+
+    value: float | None = None
+    k: int | None = None
+    n_sampled: int | None = None
+    n_sampled_with_relations: int | None = None
+    n_known_pairs_embedded: int | None = None
+    n_pairs_considered: int | None = None
+    explanation: str
+
+
+class MetricRunDTO(BaseModel):
+    id: str
+    embedding_run_id: str
+    projection_run_id: str | None = None
+    k: int
+    sample_size: int
+    seed: int
+    relation_kinds: list[str] | None = None
+    n_vectors: int
+    metrics: dict[str, MetricValueDTO]
+    warnings: list[str]
+    stale: bool
+    versions: dict[str, str]
+    created_at: str
+    updated_at: str
+
+
+# ---------------------------------------------------------------------------
+# Stage 5: experiments (TZ §9.2)
+# ---------------------------------------------------------------------------
+
+
+class ExperimentSliceDTO(BaseModel):
+    #: a saved slice (restored by its RESOLVED normal vector) …
+    saved_slice_id: str | None = None
+    #: … or an inline definition re-resolved at open time
+    embedding_run_id: str | None = None
+    normal_kind: SliceNormalKind | None = None
+    normal_index: int | None = None
+    normal_vector: list[float] | None = None
+    position: float | None = None
+    thickness: float | None = None
+
+
+class ExperimentProjectionsDTO(BaseModel):
+    three: str | None = None
+    two: list[str] = Field(default_factory=list)
+    four: str | None = None
+
+
+class ExperimentConfigDTO(BaseModel):
+    """The captured SPACE state (frontend-owned shape, backend-validated
+    references). Extra keys are rejected — a typo must not silently vanish."""
+
+    model_config = {"extra": "forbid"}
+
+    view_mode: Literal["3d", "2d", "4d", "split"] = "3d"
+    embedding_run_id: str | None = None
+    projections: ExperimentProjectionsDTO = Field(default_factory=ExperimentProjectionsDTO)
+    slice: ExperimentSliceDTO | None = None
+    slice_display: Literal["off", "dim", "only"] = "dim"
+    clustering_run_id: str | None = None
+    color_by: Literal["kind", "cluster"] = "kind"
+    group_ids: list[str] = Field(default_factory=list)
+    selection: list[str] = Field(default_factory=list)
+    #: true when the selection was truncated at save time (cap 5000)
+    selection_truncated: bool = False
+    metric_run_ids: list[str] = Field(default_factory=list)
+
+
+class CreateExperimentRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    description: str | None = Field(default=None, max_length=2048)
+    config: ExperimentConfigDTO
+
+
+class ExperimentSummaryDTO(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    created_at: str
+    #: short human-facing content summary built at save time
+    summary: dict[str, object]
+
+
+class ExperimentLiveStatusDTO(BaseModel):
+    #: references that no longer exist, by config field
+    missing: dict[str, list[str]]
+    #: references that exist but are marked stale (vectors changed since)
+    stale: dict[str, list[str]]
+
+
+class ExperimentDTO(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    config: ExperimentConfigDTO
+    #: interpretation context captured AT SAVE TIME (corpus, versions,
+    #: staleness, metric values) — reopening never relies on live state alone
+    snapshot: dict[str, object]
+    live_status: ExperimentLiveStatusDTO | None = None
+    created_at: str
+
+
+class ExportFragmentsRequest(BaseModel):
+    """Explicit selection to export (TZ §11: only data the user chose)."""
+
+    fragment_ids: list[str] = Field(min_length=1, max_length=20_000)
