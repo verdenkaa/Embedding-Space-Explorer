@@ -405,9 +405,15 @@ export const useExperimentStore = create<ExperimentState>()((set, get) => ({
           get().loadProjections(),
         ]);
         const pending = get().pendingBuild;
-        if (job.state === "done" && job.kind === "projection" && pending && projections) {
-          // show what the build produced (single/multi/4D) right away
-          useSpaceStore.getState().applyBuiltProjections(projections, pending);
+        if (job.state === "done") {
+          if (job.kind === "projection" && pending && projections) {
+            // show what the build produced (single/multi/4D) right away
+            useSpaceStore.getState().applyBuiltProjections(projections, pending);
+          } else if (job.kind === "projection" || job.kind === "embed") {
+            // no pending descriptor (job from before a reload): refresh what
+            // is on screen so staleness badges/points stay honest
+            void useSpaceStore.getState().reloadActive();
+          }
         }
         set({ pendingBuild: null });
       }

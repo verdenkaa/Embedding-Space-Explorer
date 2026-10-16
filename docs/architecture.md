@@ -1,7 +1,7 @@
 # Архитектура Embedding Space Explorer
 
 > Документ фиксирует архитектурные решения. Он обновляется на каждом этапе разработки.
-> Текущий статус: **Этап 3.1 (пространство и проекции + сырые оси и пресеты)**. Решения будущих этапов помечены
+> Текущий статус: **Этап 3.2 (пространство и проекции: 4D-вид, мульти-2D, Shift-рамка, панель видов)**. Решения будущих этапов помечены
 > как «план» и могут уточняться; уже реализованные — как «реализовано».
 
 ## 1. Обзор
@@ -137,28 +137,33 @@ FastAPI; хранение изолировано за интерфейсами. 
 ```
 frontend/src/
   main.tsx              # точка входа (+ monaco/setup — офлайн, slim)
-  App.tsx               # app-shell: TopBar / (Corpus | Space | Experiments | Diagnostics | Start) / StatusBar
+  App.tsx               # app-shell: TopBar / (Space | Experiments | Diagnostics | Start) / StatusBar
   api/                  # types.ts (зеркало DTO backend), client.ts (ApiError code/hint)
   state/
     uiStore.ts          # подключение, диагностика, активная секция
     projectStore.ts     # проект, файлы, выделение (activeFragmentId + selectedFragmentIds), changes, задачи
     experimentStore.ts  # модель/режим/запуски эмбеддингов + каталог/форма/инвентарь проекций
-    spaceStore.ts       # облака точек (raw+display буферы), hover, режим взаимодействия
+    spaceStore.ts       # облака точек (raw+display буферы), список 2D-графиков, hover, режим вида, срез 4D
   monaco/
     setup.ts            # loader.config(monaco) — без CDN; editor.api + 4 языка; тема ese-dark
     helpers.ts          # чистые функции: язык, декорации, бейджи kind (тестируются без monaco)
   space/
-    selectionMath.ts    # чистая математика: fit/NDC-рамка/хит-тест/тики/canvas-маппинг (без three.js)
+    selectionMath.ts    # чистая математика: fit (в т.ч. strided 4D→3D)/NDC-рамка/хит-тест/тики/
+                        # canvas-маппинг/окно 4D-слоя/зум-панорама 2D (без three.js)
+    axisSpec.ts         # парсер поля осей raw_axes: «12, 57» и мульти-форма «0,1;0,2» (≤6 пар)
     palette.ts          # kind→цвет (зеркало токенов и бейджей корпуса), легенда
     fragmentRef.ts      # PointMeta → FragmentMeta (id/file_id; остальное догружает корпус)
     projectionLabels.ts # честные подписи запусков проекций (устарела/кэш повреждён)
   components/
     corpus/             # CorpusPanel, FileTree, FragmentList, SelectedFragmentCard, JobProgress
     inspector/          # SourceInspector (Monaco read-only + locator-бар)
-    space/              # SpaceSection (Allotment-компоновка), Scene3D (R3F), Projection2D (canvas),
+    space/              # SpaceSection (Allotment-компоновка), ViewBar (переключатель 3D/2D/4D/3D+2D,
+                        # селекторы проекций активного режима, удаление), PointScene (общая R3F-сцена:
+                        # Shift-рамка, Ctrl-точка, легенда, тултип), Scene3D / Scene4D (слайдер «времени»),
+                        # Projection2D (canvas: несколько графиков рядом, зум/панорама),
                         # ProjectionControls (+ ExperimentJobPoller)
     TopBar / SectionTabs / StatusBar / DiagnosticsPanel / ConnectionIndicator
-    StartScreen / FolderPickerDialog / ChangesDialog / WorkspaceLayout (Allotment)
+    StartScreen / FolderPickerDialog / ChangesDialog
     ExperimentsPanel    # модель, режим подготовки, расчёт, запуски эмбеддингов
   theme/tokens.css      # дизайн-токены (цвета/шрифты/отступы из UI-ТЗ)
   styles/global.css     # базовые стили + корпус/инспектор/модалки/декорации Monaco/пространство
@@ -175,12 +180,16 @@ frontend/src/
   changes/staleness, активная задача;
 - `experimentStore` ✅ (этапы 2–3) — каталог моделей, режим подготовки, форма расчёта,
   задача эмбеддингов, инвентарь запусков; каталог методов проекции, форма (метод/
-  параметры из серверных спецификаций/seed), инвентарь проекций, задача проекции,
-  пресеты (save/apply/delete) (этапы 4–5 добавят срезы/кластеры/метрики);
+  параметры из серверных спецификаций/seed/поле осей с мульти-синтаксисом «0,1;0,2»),
+  инвентарь проекций, задача проекции (+ pendingBuild — что показал после финиша),
+  удаление проекций (одной/всех), пресеты (save/apply/delete)
+  (этапы 4–5 добавят срезы/кластеры/метрики);
 - `spaceStore` ✅ (этап 3) — интерфейсное состояние SPACE: загруженные облака точек
-  (raw-координаты + view-only display-буфер), активные проекции 3D/2D, hover, размер
-  точек, режим взаимодействия (орбита/рамка), режим вида (3d/2d/split).
-  Координаты — только с сервера.
+  (raw-координаты + view-only display-буфер; для 4D-облака display строится по первым
+  трём осям), активные проекции 3D/2D (2D — СПИСОК облаков для графиков рядом)/4D,
+  hover, размер точек, режим вида (3d/2d/4d/split), состояние окна 4D («время»:
+  позиция/толщина/анимация). Режимов взаимодействия нет: рамка включается удержанием
+  Shift в самой сцене. Координаты — только с сервера.
 
 `activeFragmentId`/`selectedFragmentIds` ✅ — точка синхронизации 3D-сцены, 2D-проекции,
 списка фрагментов и Monaco по **id фрагмента** (работает с этапа 3).
@@ -190,11 +199,13 @@ frontend/src/
 `app-shell` ✅(0) → `fragment-explorer` + `source-inspector` ✅(1, Monaco read-only,
 обратная трассировка выделения) → `task-status` ✅(1, JobProgress + polling) →
 `space-view` ✅(3, R3F: один объект точек с буферными атрибутами, без компонента на точку;
-hover/клик/Ctrl-клик/рамка выделения, легенда, состояния) → `projection-view` ✅(3,
-canvas 2D с осями/тиками, тот же selection state) → `relations-panel` (4) →
+hover/клик/Ctrl-клик/Shift-рамка, легенда, состояния; общий PointScene для 3D и 4D,
+маска видимости для окна 4D) → `projection-view` ✅(3, canvas 2D с осями/тиками,
+зум/панорама, несколько графиков рядом, тот же selection state) → `relations-panel` (4) →
 `experiment-controls` ✅(2–3: эмбеддинги и проекции; метрики — 5) → `export-panel` (5).
 Панели размещаются через Allotment ✅(1); SPACE использует полную компоновку ТЗ §4.2
-(корпус | 3D / управление / 2D | инспектор).
+(корпус | панель видов + сцены + панель построения | инспектор); отдельной секции
+CORPUS нет — её панели живут внутри SPACE.
 
 ### 4.4. Честность интерфейса (ТЗ §17.2)
 
@@ -207,7 +218,7 @@ canvas 2D с осями/тиками, тот же selection state) → `relation
 | Компонент | Версия | Комментарий |
 |---|---|---|
 | Python | 3.11–3.13 (целевая у пользователя — 3.12) | проверяется скриптом запуска |
-| Node.js | ≥ 20 (у пользователя 24) | проверяется скриптом запуска |
+| Node.js | ≥ 22.12 (у пользователя 24) | проверяется скриптом запуска (vitest 5 / vite 8) |
 | fastapi / pydantic / uvicorn | 0.143.1 / 2.14.1 / 0.54.0 | точные пины в requirements.txt |
 | sqlalchemy / tree-sitter | 2.1.4 / 0.26.0 (+ языки: python 0.25.0, javascript 0.25.0, typescript 0.23.2) | Windows-колёса cp312/abi3 проверены по PyPI |
 | react / vite / typescript | 19.3.1 / 8.3.4 / 5.9.3 | package-lock.json; TS7 пока не поддерживается typescript-eslint (<6.1.0), поэтому 5.9 |

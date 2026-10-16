@@ -461,8 +461,11 @@ export function PointScene({
   const hoveredMeta = useMemo(() => {
     if (!hoveredId) return null;
     const i = cloud.indexById.get(hoveredId);
-    return i === undefined ? null : cloud.metas[i];
-  }, [cloud, hoveredId]);
+    if (i === undefined) return null;
+    // a point hidden by the 4D window must not keep a floating tooltip
+    if (mask && !mask[i]) return null;
+    return cloud.metas[i];
+  }, [cloud, hoveredId, mask]);
 
   return (
     <div

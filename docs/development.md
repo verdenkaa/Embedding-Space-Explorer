@@ -29,8 +29,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev.ps1
 ставит npm-пакеты (`npm ci`) → запускает backend и frontend (на Windows — в двух
 отдельных окнах) → открывает `http://localhost:5173`.
 
+Установка зависимостей выполняется ТОЛЬКО когда она нужна (повторные запуски стартуют
+быстро и не нагружают диск):
+
+- pip пропускается, если stamp-файл `backend/.venv/.ese-deps.stamp` новее обоих
+  `requirements*.txt`, а контрольный импорт (fastapi, uvicorn, sqlalchemy, numpy,
+  sklearn) проходит;
+- `npm ci` выполняется только если `node_modules` отсутствует или `package-lock.json`
+  новее маркера `node_modules/.package-lock.json` (раньше `npm ci` запускался каждый
+  раз и полностью переустанавливал пакеты — отсюда долгие старты).
+
 Полезные флаги `dev.ps1`: `-BackendPort 8001`, `-FrontendPort 5174`, `-SkipInstall`,
-`-NoBrowser`. Остановка: закрыть окна / Ctrl+C.
+`-ForceInstall` (принудительная переустановка зависимостей), `-NoBrowser`.
+В `dev.sh` то же через переменные: `SKIP_INSTALL=1`, `FORCE_INSTALL=1`.
+Остановка: закрыть окна / Ctrl+C.
 
 Ручной запуск (если скрипт не используется):
 
@@ -65,7 +77,7 @@ scripts\checks.bat            # Windows (или scripts/checks.ps1 из PowerShe
 проекта может не быть:
 
 ```powershell
-.venv\Scripts\python -m pytest          # юнит-тесты (138)
+.venv\Scripts\python -m pytest          # юнит-тесты (145)
 .venv\Scripts\python -m ruff check .    # линтер
 .venv\Scripts\python -m ruff format --check .   # форматирование
 .venv\Scripts\python -m mypy .          # строгая типизация
@@ -93,7 +105,7 @@ UMAP-тестов медленнее: numba компилирует kernel'ы (~1
 Из каталога `frontend/` (в корне репозитория нет `package.json`):
 
 ```powershell
-npm run test        # vitest (jsdom, 133 теста)
+npm run test        # vitest (jsdom, 187 тестов)
 npm run lint        # eslint (flat config, typescript-eslint)
 npm run typecheck   # tsc --noEmit, strict
 npm run build       # production-сборка

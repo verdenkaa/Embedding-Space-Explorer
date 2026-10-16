@@ -31,13 +31,11 @@ export function SpaceSection() {
   const runs = useExperimentStore((s) => s.runs);
   const projections = useExperimentStore((s) => s.projections);
   const projRunId = useExperimentStore((s) => s.projRunId);
-  const activeJob = useExperimentStore((s) => s.activeJob);
   const loadRuns = useExperimentStore((s) => s.loadRuns);
   const loadProjections = useExperimentStore((s) => s.loadProjections);
   const loadPresets = useExperimentStore((s) => s.loadPresets);
   const viewMode = useSpaceStore((s) => s.viewMode);
   const setActiveProjection = useSpaceStore((s) => s.setActiveProjection);
-  const reloadActive = useSpaceStore((s) => s.reloadActive);
   const reset = useSpaceStore((s) => s.reset);
 
   /* Project switch: drop loaded clouds (they belong to another project)
@@ -74,15 +72,6 @@ export function SpaceSection() {
       void setActiveProjection("4d", picked.four?.id ?? null);
     }
   }, [projections, runs, projRunId, setActiveProjection]);
-
-  /* A finished projection/embedding job may have refreshed caches. */
-  const jobState = activeJob?.state;
-  const jobKind = activeJob?.kind;
-  useEffect(() => {
-    if (jobState === "done" && (jobKind === "projection" || jobKind === "embed")) {
-      void reloadActive();
-    }
-  }, [jobState, jobKind, reloadActive]);
 
   return (
     <div className="space-section">

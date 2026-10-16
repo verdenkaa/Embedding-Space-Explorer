@@ -128,7 +128,7 @@ code,
   flex: 1;
 }
 
-/* Section tabs (SPACE / CORPUS / RELATIONS / EXPERIMENTS) */
+/* Section tabs (SPACE / RELATIONS / EXPERIMENTS) */
 
 .section-tabs {
   display: flex;

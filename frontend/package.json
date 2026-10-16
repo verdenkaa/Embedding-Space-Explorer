@@ -1,7 +1,7 @@
 {
   "name": "ese-frontend",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "description": "Frontend for Embedding Space Explorer (local research tool for embedding spaces of source code)",
   "engines": {
