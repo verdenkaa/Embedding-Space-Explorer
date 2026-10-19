@@ -60,9 +60,11 @@ describe("kind presentation", () => {
   });
 
   it("color classes group kinds", () => {
-    expect(kindColorClass("method")).toBe("kind--teal");
-    expect(kindColorClass("interface")).toBe("kind--blue");
-    expect(kindColorClass("section")).toBe("kind--amber");
+    expect(kindColorClass("function")).toBe("kind--fn");
+    expect(kindColorClass("method")).toBe("kind--mth");
+    expect(kindColorClass("class")).toBe("kind--cls");
+    expect(kindColorClass("interface")).toBe("kind--cls");
+    expect(kindColorClass("section")).toBe("kind--sec");
     expect(kindColorClass("chunk")).toBe("kind--gray");
   });
 });

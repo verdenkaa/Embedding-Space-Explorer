@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import App from "./App";
 import "./monaco/setup";
+import "./theme/fonts.css";
 import "./theme/tokens.css";
 import "./styles/global.css";
 

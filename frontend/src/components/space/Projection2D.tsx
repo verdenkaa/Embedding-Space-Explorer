@@ -300,7 +300,7 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
     const plotB = size.h - PADDING.bottom;
 
     /* frame + ticks (of the CURRENT view bounds — zoom changes the grid) */
-    ctx.strokeStyle = "#232a31";
+    ctx.strokeStyle = COLORS.frame;
     ctx.lineWidth = 1;
     ctx.strokeRect(plotL + 0.5, plotT + 0.5, plotR - plotL, plotB - plotT);
 
@@ -308,7 +308,7 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
     const yTicks = makeTicks(bounds.minY, bounds.maxY);
     const xStep = xTicks.length > 1 ? xTicks[1] - xTicks[0] : 1;
     const yStep = yTicks.length > 1 ? yTicks[1] - yTicks[0] : 1;
-    ctx.font = "9px 'Cascadia Code', Consolas, monospace";
+    ctx.font = "9px 'JetBrains Mono', Consolas, monospace";
     ctx.fillStyle = COLORS.textDim;
     ctx.strokeStyle = COLORS.grid;
     // points outside the zoom window are clipped to the plot frame
@@ -335,7 +335,7 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
     const r = Math.max(1, pointSize * 0.7);
     // out-of-layer context pass (slice display = "dim")
     if (sliceMasks && sliceDisplay === "dim") {
-      ctx.fillStyle = "#2c343c";
+      ctx.fillStyle = COLORS.dim;
       for (let i = 0; i < count; i++) {
         if (sliceMasks.mask[i]) continue;
         const cx = pixels[i * 2];
@@ -400,8 +400,8 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
     ctx.restore();
 
     /* tick labels (outside the clip, along the frame) */
-    ctx.fillStyle = COLORS.textDim;
-    ctx.strokeStyle = "#232a31";
+    ctx.fillStyle = COLORS.textFaint;
+    ctx.strokeStyle = COLORS.frame;
     for (const v of xTicks) {
       const { cx } = dataToCanvas(v, bounds.minY, geom);
       if (cx < plotL - 1 || cx > plotR + 1) continue;
@@ -421,9 +421,9 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
       const y = Math.min(marquee.y0, marquee.y1);
       const w = Math.abs(marquee.x1 - marquee.x0);
       const h = Math.abs(marquee.y1 - marquee.y0);
-      ctx.fillStyle = "rgba(69, 214, 197, 0.07)";
+      ctx.fillStyle = "rgba(53, 116, 240, 0.10)";
       ctx.fillRect(x, y, w, h);
-      ctx.strokeStyle = COLORS.teal;
+      ctx.strokeStyle = COLORS.accent;
       ctx.setLineDash([4, 3]);
       ctx.strokeRect(x + 0.5, y + 0.5, w, h);
       ctx.setLineDash([]);

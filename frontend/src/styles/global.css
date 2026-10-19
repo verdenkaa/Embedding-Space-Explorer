@@ -22,7 +22,7 @@ body {
   overflow: hidden;
 }
 
-/* Visible focus for keyboard navigation (UI-ТЗ §8, TZ §17.7) */
+/* Visible focus for keyboard navigation */
 :focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -81,11 +81,7 @@ code,
   flex: 1;
   min-height: 0;
   overflow: auto;
-  /* тонкая техническая сетка (UI-ТЗ §2) */
-  background-image:
-    linear-gradient(rgba(69, 214, 197, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(69, 214, 197, 0.025) 1px, transparent 1px);
-  background-size: 32px 32px;
+  background: var(--color-bg);
 }
 
 /* ---------- Top bar ---------- */
@@ -96,7 +92,7 @@ code,
   gap: var(--space-4);
   height: var(--topbar-height);
   padding: 0 var(--space-3);
-  background: var(--color-surface);
+  background: var(--color-surface-2);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
@@ -109,10 +105,18 @@ code,
 }
 
 .topbar__title {
+  color: var(--color-text);
   font-size: var(--text-md);
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: -0.15px;
   white-space: nowrap;
+}
+
+.topbar__divider {
+  width: 1px;
+  height: 18px;
+  background: var(--color-border-strong);
+  flex-shrink: 0;
 }
 
 .topbar__project {
@@ -128,47 +132,36 @@ code,
   flex: 1;
 }
 
-/* Section tabs (SPACE / RELATIONS / EXPERIMENTS) */
+/* Section tabs (SPACE / RELATIONS / EXPERIMENTS) — JetBrains top-nav style */
 
 .section-tabs {
   display: flex;
-  gap: var(--space-1);
+  align-self: stretch;
+  gap: 3px;
 }
 
 .section-tab {
+  position: relative;
   display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 5px 10px;
+  align-items: center;
+  padding: 0 13px;
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border: 0;
   color: var(--color-text-dim);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
   cursor: pointer;
 }
 
 .section-tab:hover:not(:disabled) {
   color: var(--color-text);
-  background: var(--color-surface-2);
+  background: var(--color-hover);
 }
 
 .section-tab:disabled {
   cursor: not-allowed;
   opacity: 0.55;
-}
-
-.section-tab__stage {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: 400;
-  color: var(--color-text-faint);
-  border: 1px solid var(--color-border);
-  border-radius: 3px;
-  padding: 0 4px;
-  letter-spacing: 0;
 }
 
 /* Connection indicator */
@@ -192,7 +185,6 @@ code,
 
 .connection-indicator--online .connection-indicator__dot {
   background: var(--color-ok);
-  box-shadow: 0 0 5px rgba(79, 191, 103, 0.6); /* минимальное свечение только для активного */
 }
 
 .connection-indicator--offline .connection-indicator__dot {
@@ -223,7 +215,7 @@ code,
   gap: var(--space-4);
   height: var(--statusbar-height);
   padding: 0 var(--space-3);
-  background: var(--color-surface);
+  background: var(--color-surface-2);
   border-top: 1px solid var(--color-border);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -301,7 +293,7 @@ code,
   word-break: break-all;
 }
 
-/* Checks list — статус не только цветом, но и маркером (TZ §4.1) */
+/* Checks list — статус не только цветом, но и маркером */
 
 .check-list {
   list-style: none;
@@ -386,7 +378,7 @@ code,
 
 .badge--installed {
   color: var(--color-ok);
-  border-color: rgba(79, 191, 103, 0.4);
+  border-color: rgba(129, 201, 149, 0.4);
 }
 
 .badge--missing {
@@ -407,7 +399,7 @@ code,
 }
 
 .state-block--error {
-  border-color: rgba(229, 83, 75, 0.45);
+  border-color: rgba(229, 139, 139, 0.45);
 }
 
 .state-block__title {
@@ -443,24 +435,34 @@ code,
 }
 
 .btn {
-  padding: 6px 14px;
+  padding: 4px 10px;
+  min-height: 26px;
   background: var(--color-surface-2);
-  color: var(--color-text);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
+  color: var(--color-text-dim);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
 .btn:hover {
-  background: var(--color-surface-3);
-  border-color: var(--color-accent);
+  background: var(--color-hover);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
 }
 
 .btn--primary {
-  border-color: rgba(69, 214, 197, 0.5);
-  color: var(--color-accent);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn--primary:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+  color: #fff;
 }
 
 .spinner {
@@ -479,7 +481,7 @@ code,
 }
 
 /* ============================================================
-   Stage 1: workspace, corpus panel, inspector, dialogs
+   Workspace, corpus panel, inspector, dialogs
    ============================================================ */
 
 /* ---------- Buttons (variants) ---------- */
@@ -496,7 +498,7 @@ code,
 
 .btn--danger {
   color: var(--color-error);
-  border-color: rgba(229, 83, 75, 0.4);
+  border-color: rgba(229, 139, 139, 0.4);
 }
 
 .btn--danger:hover {
@@ -560,8 +562,8 @@ code,
   gap: var(--space-3);
   align-items: baseline;
   padding: var(--space-2) var(--space-3);
-  background: rgba(229, 83, 75, 0.08);
-  border-bottom: 1px solid rgba(229, 83, 75, 0.35);
+  background: rgba(229, 139, 139, 0.08);
+  border-bottom: 1px solid rgba(229, 139, 139, 0.35);
   color: var(--color-error);
   font-size: var(--text-sm);
 }
@@ -611,19 +613,22 @@ code,
 }
 
 .corpus-tab {
+  position: relative;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  padding: 6px 9px;
   background: transparent;
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border: 0;
   color: var(--color-text-faint);
   font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.06em;
   cursor: pointer;
+}
+
+.corpus-tab:hover:not(:disabled) {
+  color: var(--color-text-dim);
 }
 
 .corpus-tab:disabled {
@@ -632,19 +637,17 @@ code,
 }
 
 .corpus-tab--active {
-  color: var(--color-accent);
-  background: var(--color-surface-2);
-  border-color: var(--color-border);
-  margin-bottom: -1px;
-  padding-bottom: 5px;
+  color: var(--color-text);
 }
 
-.corpus-tab__stage {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  border: 1px solid var(--color-border);
-  border-radius: 3px;
-  padding: 0 3px;
+.corpus-tab--active::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--color-accent);
 }
 
 .corpus-search {
@@ -722,11 +725,11 @@ code,
 }
 
 .tree-row:hover {
-  background: var(--color-surface-2);
+  background: var(--color-hover);
 }
 
 .tree-row--selected {
-  background: var(--color-surface-3);
+  background: var(--color-selection);
   border-left-color: var(--color-accent);
 }
 
@@ -755,10 +758,15 @@ code,
   flex-shrink: 0;
 }
 
-.tree-row__badge.lang-python { color: #63a9ff; border-color: rgba(99, 169, 255, 0.4); }
-.tree-row__badge.lang-javascript { color: #e8b45a; border-color: rgba(232, 180, 90, 0.4); }
-.tree-row__badge.lang-typescript, .tree-row__badge.lang-tsx { color: #45d6c5; border-color: rgba(69, 214, 197, 0.4); }
-.tree-row__badge.lang-markdown { color: #8a97a3; }
+.tree-row__badge.lang-python { color: var(--color-file-python); border-color: color-mix(in srgb, var(--color-file-python) 40%, transparent); }
+.tree-row__badge.lang-javascript { color: var(--color-file-javascript); border-color: color-mix(in srgb, var(--color-file-javascript) 40%, transparent); }
+.tree-row__badge.lang-typescript,
+.tree-row__badge.lang-tsx { color: var(--color-file-typescript); border-color: color-mix(in srgb, var(--color-file-typescript) 40%, transparent); }
+.tree-row__badge.lang-markdown { color: var(--color-file-markdown); border-color: color-mix(in srgb, var(--color-file-markdown) 40%, transparent); }
+.tree-row__badge.lang-json { color: var(--color-file-json); border-color: color-mix(in srgb, var(--color-file-json) 40%, transparent); }
+.tree-row__badge.lang-yaml,
+.tree-row__badge.lang-toml,
+.tree-row__badge.lang-ini { color: var(--color-file-config); border-color: color-mix(in srgb, var(--color-file-config) 40%, transparent); }
 
 .tree-row__name {
   white-space: nowrap;
@@ -797,11 +805,11 @@ code,
 }
 
 .fragment-row:hover {
-  background: var(--color-surface-2);
+  background: var(--color-hover);
 }
 
 .fragment-row--active {
-  background: var(--color-surface-3);
+  background: var(--color-selection);
   border-left-color: var(--color-accent);
 }
 
@@ -817,10 +825,11 @@ code,
   text-align: center;
 }
 
-.kind--teal { color: var(--color-accent); }
-.kind--blue { color: var(--color-accent-blue); }
-.kind--amber { color: var(--color-accent-amber); }
-.kind--gray { color: var(--color-text-faint); }
+.kind--fn { color: var(--color-fragment-fn); }
+.kind--mth { color: var(--color-fragment-mth); }
+.kind--cls { color: var(--color-fragment-cls); }
+.kind--sec { color: var(--color-fragment-section); }
+.kind--gray { color: var(--color-fragment-other); }
 
 .fragment-row__body {
   display: flex;
@@ -1002,19 +1011,19 @@ code,
 }
 
 /* Monaco decorations: active fragment vs. other fragments —
-   distinguished by BOTH color and left-ruler weight (TZ §4.1). */
+   distinguished by BOTH color and left-ruler weight. */
 
 .ese-fragment-marker {
   border-left: 1px solid var(--color-border-strong);
 }
 
 .ese-fragment-active {
-  background: rgba(69, 214, 197, 0.07);
+  background: rgba(53, 116, 240, 0.07);
   border-left: 2px solid var(--color-accent);
 }
 
 .ese-fragment-active-glyph {
-  background: rgba(69, 214, 197, 0.25);
+  background: rgba(53, 116, 240, 0.25);
   clip-path: polygon(50% 15%, 85% 50%, 50% 85%, 15% 50%);
 }
 
@@ -1070,7 +1079,7 @@ code,
 
 .locator-chip--active {
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 1px rgba(69, 214, 197, 0.3);
+  box-shadow: 0 0 0 1px rgba(53, 116, 240, 0.3);
 }
 
 .locator-chip__kind {
@@ -1417,10 +1426,17 @@ code,
 /* ---------- Top bar: diagnostics toggle & active tab ---------- */
 
 .section-tab--active {
-  color: var(--color-accent);
-  border-color: var(--color-border);
-  background: var(--color-surface-2);
-  box-shadow: inset 0 -2px 0 var(--color-accent);
+  color: var(--color-text);
+}
+
+.section-tab--active::after {
+  content: "";
+  position: absolute;
+  height: 2px;
+  bottom: 0;
+  left: 10px;
+  right: 10px;
+  background: var(--color-accent);
 }
 
 .topbar__diag-btn {
@@ -1440,7 +1456,7 @@ code,
 
 .topbar__diag-btn--active {
   color: var(--color-accent);
-  border-color: rgba(69, 214, 197, 0.5);
+  border-color: rgba(53, 116, 240, 0.5);
 }
 
 .statusbar__segment--job-failed { color: var(--color-error); }
@@ -1451,8 +1467,8 @@ code,
 
 .btn--alert {
   color: var(--color-error);
-  border-color: rgba(229, 83, 75, 0.55);
-  background: rgba(229, 83, 75, 0.07);
+  border-color: rgba(229, 139, 139, 0.55);
+  background: rgba(229, 139, 139, 0.07);
 }
 
 .btn--alert:hover {
@@ -1466,7 +1482,7 @@ code,
   padding: 0 3px;
   border-radius: 8px;
   background: var(--color-error);
-  color: #101316;
+  color: var(--color-bg);
   font-family: var(--font-mono);
   font-size: 9.5px;
   font-weight: 700;
@@ -1475,7 +1491,7 @@ code,
 }
 
 /* ============================================================
-   Stage 2: experiments (embeddings)
+   Experiments (embeddings)
    ============================================================ */
 
 .experiments {
@@ -1505,8 +1521,8 @@ code,
 }
 
 .model-card--selected {
-  border-color: rgba(69, 214, 197, 0.55);
-  box-shadow: inset 0 0 0 1px rgba(69, 214, 197, 0.25);
+  border-color: rgba(53, 116, 240, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(53, 116, 240, 0.25);
 }
 
 .model-card input[type="radio"] {
@@ -1621,7 +1637,7 @@ code,
 }
 
 /* ============================================================
-   Stage 3: SPACE section — 3D scene, 2D projection, controls
+   SPACE section — 3D scene, 2D projection, controls
    ============================================================ */
 
 .space-section {
@@ -1800,7 +1816,7 @@ code,
 .marquee-rect {
   position: absolute;
   border: 1px dashed var(--color-accent);
-  background: rgba(69, 214, 197, 0.07);
+  background: rgba(53, 116, 240, 0.07);
   pointer-events: none;
   z-index: 4;
 }
@@ -1947,14 +1963,14 @@ code,
   border-radius: var(--radius-md);
 }
 
-/* Multi-selection marker in fragment lists (shape+color, TZ §4.1) */
+/* Multi-selection marker in fragment lists (amber, distinct from the blue active row) */
 .fragment-row--selected {
   box-shadow: inset 2px 0 0 var(--color-accent-amber);
-  background: color-mix(in srgb, var(--color-accent-amber) 6%, transparent);
+  background: color-mix(in srgb, var(--color-accent-amber) 8%, transparent);
 }
 
 
-/* ---------- stage-3 rework: center column, view modes, legend, inspector --- */
+/* ---------- center column, view modes, legend, inspector ---------- */
 
 .space-center {
   display: flex;
@@ -2129,7 +2145,7 @@ code,
   margin: 0 2px;
 }
 
-/* ---------- stage-3 polish: view bar (selectors + cleanup) ---------- */
+/* ---------- view bar (selectors + cleanup) ---------- */
 
 .view-bar__separator {
   width: 1px;
@@ -2166,8 +2182,8 @@ code,
 }
 
 .view-bar__delete-all:hover {
-  color: var(--color-danger, #e5484d);
-  border-color: color-mix(in srgb, var(--color-danger, #e5484d) 45%, transparent);
+  color: var(--color-error);
+  border-color: color-mix(in srgb, var(--color-error) 45%, transparent);
 }
 
 .view-bar__confirm {
@@ -2342,7 +2358,7 @@ code,
   cursor: crosshair;
 }
 
-/* ---------- stage 4: analysis panes (left panel tabs) ---------- */
+/* ---------- analysis panes (left panel tabs) ---------- */
 
 .analysis-pane {
   flex: 1;
@@ -2589,7 +2605,7 @@ code,
   border-top: 1px solid var(--color-border);
 }
 
-/* ---------- stage 4: slice panel ---------- */
+/* ---------- slice panel ---------- */
 
 .slice-panel {
   flex: 0 0 auto;
@@ -2674,7 +2690,7 @@ code,
   color: var(--color-warn);
 }
 
-/* ---------- stage 4: relation lines panel in the 3D scene ---------- */
+/* ---------- relation lines panel in the 3D scene ---------- */
 
 .point-scene--with-footer .point-scene__legend {
   bottom: 58px;
@@ -2718,7 +2734,7 @@ code,
   font-style: italic;
 }
 
-/* ---------- stage 4: RELATIONS section ---------- */
+/* ---------- RELATIONS section ---------- */
 
 .relations-section {
   height: 100%;
@@ -2913,7 +2929,7 @@ code,
 }
 
 /* ---------------------------------------------------------------------------
-   Stage 5: metrics panel, export menu, saved experiments
+   Metrics panel, export menu, saved experiments
    ------------------------------------------------------------------------- */
 
 .metrics-panel {
@@ -3014,7 +3030,7 @@ code,
   margin: 0;
   padding-left: 18px;
   font-size: var(--text-xs);
-  color: var(--color-warn, #d9a441);
+  color: var(--color-warn);
 }
 
 .metrics-panel__actions {
@@ -3104,7 +3120,7 @@ code,
 }
 
 .saved-exp__report-skipped {
-  color: var(--color-warn, #d9a441);
+  color: var(--color-warn);
 }
 
 .saved-exp__name-cell {

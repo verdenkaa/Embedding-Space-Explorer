@@ -1,46 +1,78 @@
 /* ============================================================
-   Design tokens — «тёмная исследовательская IDE» (UI-ТЗ §2)
+   Design tokens — JetBrains-style dark engineering IDE.
+   Single source of truth for surface/border/text/interaction colors.
+   Data colors (file types, fragment types, grid) live here too; the
+   canvas/WebGL palette (space/palette.ts) mirrors these hex values and
+   a unit test enforces they never drift apart.
    ============================================================ */
 
 :root {
-  /* Surfaces */
-  --color-bg: #101316;
-  --color-surface: #151a1f;
-  --color-surface-2: #191e23;
-  --color-surface-3: #1e242a;
+  color-scheme: dark;
 
-  /* Borders & separators */
-  --color-border: #232a31;
-  --color-border-strong: #2e3841;
+  /* ---- Surfaces (graphite hierarchy) ---- */
+  --color-bg: #1e1f22; /* app / editor background (darkest) */
+  --color-plot: #202124; /* plot / scene area background */
+  --color-surface: #252629; /* ordinary panel */
+  --color-surface-2: #2b2d30; /* chrome: top bar, status bar, raised panel */
+  --color-surface-3: #323438; /* hovered element */
+  --color-editor: #1e1f22; /* code editor background */
 
-  /* Text */
-  --color-text: #d7dee5;
-  --color-text-dim: #8a97a3;
-  --color-text-faint: #5c6873;
+  /* ---- Borders & separators ---- */
+  --color-border: #393b40;
+  --color-border-strong: #45474d;
 
-  /* Accents */
-  --color-accent: #45d6c5; /* teal: selection, interactive accents */
-  --color-accent-blue: #63a9ff; /* third data group */
-  --color-accent-amber: #e8b45a; /* warnings / second data group */
+  /* ---- Text ---- */
+  --color-text: #dfe1e5; /* primary */
+  --color-text-dim: #a4a7ad; /* secondary */
+  --color-text-faint: #777b83; /* muted / line numbers / captions */
 
-  /* Statuses */
-  --color-ok: #4fbf67;
-  --color-warn: #e8b45a;
-  --color-error: #e5534b;
+  /* ---- Interaction ---- */
+  --color-accent: #3574f0; /* primary accent (active controls, focus) */
+  --color-accent-hover: #467ff2;
+  --color-focus: #548af7; /* focus outline */
+  --color-selection: #354966; /* selected row / object background */
+  --color-selection-border: #465a75;
+  --color-hover: #323438; /* hovered background */
 
-  /* Typography */
-  --font-ui:
-    "Segoe UI", system-ui, -apple-system, "Roboto", "Helvetica Neue", Arial, sans-serif;
-  --font-mono:
-    "Cascadia Code", "Cascadia Mono", "Consolas", "JetBrains Mono", "Fira Code", ui-monospace,
-    "SF Mono", Menlo, monospace;
+  /* ---- Semantic status ---- */
+  --color-ok: #81c995; /* success */
+  --color-warn: #e8c56d; /* warning */
+  --color-error: #e58b8b; /* danger */
+
+  /* ---- Data: file types (tree badge = point = legend, one color each) ---- */
+  --color-file-python: #6c9ef8;
+  --color-file-javascript: #e8c56d;
+  --color-file-typescript: #58b6d8;
+  --color-file-markdown: #b39ddb;
+  --color-file-json: #d8a16b;
+  --color-file-config: #8abf91;
+  --color-file-other: #8d9199;
+
+  /* ---- Data: fragment types (MTH / FN / CLS + doc/other) ---- */
+  --color-fragment-fn: #6c9ef8; /* function */
+  --color-fragment-mth: #b39ddb; /* method */
+  --color-fragment-cls: #e8a36b; /* class / interface / type / enum / object */
+  --color-fragment-section: #8abf91; /* document section */
+  --color-fragment-other: #8d9199; /* chunk / fallback */
+
+  /* ---- Data: coordinate grid (plot) ---- */
+  --color-grid-line: #303237; /* minor grid lines */
+  --color-axis: #656a73; /* principal axes */
+
+  /* ---- Legacy aliases (kept so existing rules resolve) ---- */
+  --color-accent-blue: var(--color-file-typescript);
+  --color-accent-amber: var(--color-warn);
+
+  /* ---- Typography ---- */
+  --font-ui: Inter, "Segoe UI", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, "Cascadia Code", monospace;
 
   --text-xs: 10px;
-  --text-sm: 11.5px;
-  --text-md: 13px;
-  --text-lg: 15px;
+  --text-sm: 11px;
+  --text-md: 12px;
+  --text-lg: 14px;
 
-  /* Spacing scale */
+  /* ---- Spacing scale ---- */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -48,15 +80,15 @@
   --space-5: 24px;
   --space-6: 32px;
 
-  /* Shape */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
+  /* ---- Shape ---- */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 5px;
 
-  /* Layout */
-  --topbar-height: 44px;
-  --statusbar-height: 26px;
+  /* ---- Layout ---- */
+  --topbar-height: 40px;
+  --statusbar-height: 24px;
 
-  /* Focus */
-  --focus-ring: 0 0 0 1.5px var(--color-accent);
+  /* ---- Focus ---- */
+  --focus-ring: 0 0 0 1px var(--color-focus);
 }

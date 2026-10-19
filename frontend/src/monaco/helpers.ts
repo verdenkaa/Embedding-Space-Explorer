@@ -90,20 +90,22 @@ export function kindBadge(kind: string): string {
   }
 }
 
-/** Kind → color group class (teal / blue / amber / gray). */
+/** Kind → color group class (fn / mth / cls / section / gray). Mirrors the
+ *  fragment palette in space/palette.ts and --color-fragment-* tokens. */
 export function kindColorClass(kind: string): string {
   switch (kind) {
     case "function":
+      return "kind--fn";
     case "method":
-      return "kind--teal";
+      return "kind--mth";
     case "class":
     case "interface":
     case "type_alias":
     case "enum":
     case "object":
-      return "kind--blue";
+      return "kind--cls";
     case "section":
-      return "kind--amber";
+      return "kind--sec";
     default:
       return "kind--gray";
   }

@@ -37,7 +37,7 @@ const kindColorOf: PointColorOf = (meta) => ({
   color: kindColor(meta.kind),
 });
 
-const DIM_COLOR = "#39424b";
+const DIM_COLOR = COLORS.dim;
 
 /**
  * Shared interactive point-cloud scene behind Scene3D
@@ -94,12 +94,12 @@ function useAxesGeometry(): THREE.BufferGeometry {
       "color",
       new THREE.Float32BufferAttribute(
         [
-          ...hexToRgb(COLORS.teal),
-          ...hexToRgb(COLORS.teal),
-          ...hexToRgb(COLORS.blue),
-          ...hexToRgb(COLORS.blue),
-          ...hexToRgb(COLORS.amber),
-          ...hexToRgb(COLORS.amber),
+          ...hexToRgb(COLORS.axis),
+          ...hexToRgb(COLORS.axis),
+          ...hexToRgb(COLORS.axis),
+          ...hexToRgb(COLORS.axis),
+          ...hexToRgb(COLORS.axis),
+          ...hexToRgb(COLORS.axis),
         ],
         3,
       ),

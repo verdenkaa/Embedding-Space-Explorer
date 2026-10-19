@@ -2,22 +2,24 @@
  * Relation kinds: text badges + colors. Structural relations must be
  * visually distinct from semantic proximity:
  * every kind carries a TEXT badge (never color-only) and its own glyph.
+ *
+ * These are categorical line colors (their own palette, drawn from the same
+ * muted family as the file/fragment tokens) — the single source for relation
+ * colors; the RELATIONS section and the 3D relation lines both read them.
  */
 
-import { COLORS } from "./palette";
-
 export const RELATION_COLORS: Record<string, string> = {
-  imports: COLORS.blue,
-  belongs_to: COLORS.gray,
-  calls: COLORS.teal,
-  tested_by: "#7bd88f",
-  tests: "#7bd88f",
-  documents: COLORS.amber,
-  describes: COLORS.amber,
-  references: "#b48fd8",
+  imports: "#58b6d8",
+  belongs_to: "#8d9199",
+  calls: "#6c9ef8",
+  tested_by: "#81c995",
+  tests: "#81c995",
+  documents: "#e8c56d",
+  describes: "#e8c56d",
+  references: "#b39ddb",
 };
 
-const FALLBACK_COLOR = "#b48fd8";
+const FALLBACK_COLOR = "#b39ddb";
 
 export function relationColor(kind: string): string {
   return RELATION_COLORS[kind] ?? FALLBACK_COLOR;

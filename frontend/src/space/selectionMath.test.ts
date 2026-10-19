@@ -178,11 +178,19 @@ describe("ticks", () => {
 });
 
 describe("palette", () => {
-  it("kind colors follow the corpus grouping", () => {
-    expect(kindColor("function")).toBe(kindColor("method"));
+  it("kind colors follow the fragment palette", () => {
+    // function (FN) and method (MTH) are distinct in the JetBrains palette
+    expect(kindColor("function")).toBe("#6c9ef8");
+    expect(kindColor("method")).toBe("#b39ddb");
+    expect(kindColor("function")).not.toBe(kindColor("method"));
+    // class-like kinds share the CLS color
     expect(kindColor("class")).toBe(kindColor("interface"));
-    expect(kindColor("section")).toBe("#e8b45a");
-    expect(kindColor("unknown-kind")).toBe(kindColor("chunk")); // gray fallback
+    expect(kindColor("class")).toBe("#e8a36b");
+    // document sections have their own color
+    expect(kindColor("section")).toBe("#8abf91");
+    // unknown kinds fall back to the neutral gray (same as chunk)
+    expect(kindColor("unknown-kind")).toBe(kindColor("chunk"));
+    expect(kindColor("chunk")).toBe("#8d9199");
   });
 
   it("hexToRgb converts to normalized triples", () => {
@@ -342,7 +350,7 @@ describe("cluster palette", () => {
   it("labels get deterministic, distinct colors; noise is the neutral gray", () => {
     expect(clusterColor(0)).toBe(clusterColor(0));
     expect(clusterColor(1)).not.toBe(clusterColor(2));
-    expect(clusterColor(-1)).toBe("#8fa0ae");
+    expect(clusterColor(-1)).toBe("#8d9199");
     // colors stay in the readable band (not near-black on the dark bg)
     for (const label of [0, 1, 2, 3, 5, 8, 13, 21]) {
       const hex = clusterColor(label);
