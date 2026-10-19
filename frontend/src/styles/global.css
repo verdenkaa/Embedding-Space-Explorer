@@ -488,6 +488,7 @@ code,
 
 .btn--small {
   padding: 3px 8px;
+  min-height: 22px;
   font-size: var(--text-xs);
 }
 
@@ -755,7 +756,7 @@ code,
   padding: 2px 3px;
   border-radius: 3px;
   border: 1px solid var(--color-border-strong);
-  color: var(--color-text-dim);
+  color: var(--color-file-other);
   flex-shrink: 0;
 }
 

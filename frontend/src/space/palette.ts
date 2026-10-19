@@ -113,17 +113,6 @@ const EXT_TYPE: Record<string, FileType> = {
   env: "config",
 };
 
-/** Short badge text for a file type (matches the tree/legend labels). */
-export const FILE_TYPE_BADGE: Record<FileType, string> = {
-  python: "py",
-  javascript: "js",
-  typescript: "ts",
-  markdown: "md",
-  json: "{}",
-  config: "cfg",
-  other: "··",
-};
-
 /** Human label of a file type (legend text when coloring by file). */
 export const FILE_TYPE_LABEL: Record<FileType, string> = {
   python: "Python",
