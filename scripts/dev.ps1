@@ -148,7 +148,7 @@ if (-not $SkipInstall) {
         }
     }
     if (-not $needPip) {
-        & $venvPython -c "import fastapi, uvicorn, sqlalchemy, numpy, sklearn" 2>$null | Out-Null
+        & $venvPython -c "import fastapi, uvicorn, sqlalchemy, numpy, sklearn, nbformat, jupyter_client, ipykernel" 2>$null | Out-Null
         if ($LASTEXITCODE -ne 0) { $needPip = $true }
     }
     if ($needPip) {

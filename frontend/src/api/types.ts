@@ -754,3 +754,84 @@ export interface OpenFolderResponse {
   path: string;
   error?: string | null;
 }
+
+/* ---------------------------------------------------------------------------
+ * Jupyter Notebooks and kernel sessions
+ * ------------------------------------------------------------------------- */
+
+export interface NotebookListItem {
+  path: string;
+  name: string;
+  size: number;
+  mtime: number;
+}
+
+/** nbformat output objects are kept verbatim (unknown MIME types survive). */
+export type CellOutput = Record<string, unknown> & {
+  output_type: string;
+};
+
+export interface NotebookCellJson {
+  cell_type: "code" | "markdown" | "raw";
+  id?: string;
+  source: string | string[];
+  metadata: Record<string, unknown>;
+  outputs?: CellOutput[];
+  execution_count?: number | null;
+}
+
+export interface NotebookJson {
+  cells: NotebookCellJson[];
+  metadata: Record<string, unknown>;
+  nbformat: number;
+  nbformat_minor: number;
+}
+
+export interface NotebookContentResponse {
+  path: string;
+  notebook: NotebookJson;
+  valid: boolean;
+  problems: string[];
+  mtime: number;
+  size: number;
+  ese_project_id: string | null;
+}
+
+export interface NotebookSaveResponse {
+  path: string;
+  mtime: number;
+  size: number;
+  valid: boolean;
+  problems: string[];
+}
+
+export type KernelSessionState = "starting" | "ready" | "restarting" | "dead" | "error";
+
+export interface KernelSessionDTO {
+  session_id: string;
+  project_id: string;
+  path: string;
+  state: KernelSessionState;
+  error: string | null;
+  busy: boolean;
+  started_at: number;
+  last_used: number;
+}
+
+export type ExecutionStatus = "running" | "done" | "error" | "interrupted" | "aborted";
+
+export interface NotebookExecutionDTO {
+  id: string;
+  status: ExecutionStatus;
+  outputs: CellOutput[];
+  execution_count: number | null;
+  error: string | null;
+  truncated: boolean;
+  started_at: number;
+  finished_at: number | null;
+}
+
+export interface NotebookExecuteResponse {
+  execution_id: string;
+  status: string;
+}

@@ -3,6 +3,7 @@ import "allotment/dist/style.css";
 import { useEffect } from "react";
 
 import { useProjectStore } from "../../state/projectStore";
+import { useNotebookStore } from "../../state/notebookStore";
 import { useResearchStore } from "../../state/researchStore";
 import { WorkspacePanel } from "./WorkspacePanel";
 import { DocumentHost } from "./DocumentHost";
@@ -11,7 +12,7 @@ import { DocumentHost } from "./DocumentHost";
  * RESEARCH section: the project's research workspace (TZ §3, §11).
  * Left: document tree + file operations (separate from the corpus — research
  * documents are never indexed into embeddings). Right: the open document
- * (notebook / Markdown note editors mount here).
+ * (Notebook editor for .ipynb; the Markdown note editor mounts here next).
  */
 export function ResearchSection() {
   const projectId = useProjectStore((s) => s.current?.id ?? null);
@@ -21,8 +22,11 @@ export function ResearchSection() {
   const dismissNotice = useResearchStore((s) => s.dismissNotice);
 
   /* Project switch: the workspace belongs to one project — drop everything
-     loaded for the previous one (never write into the wrong workspace). */
+     loaded for the previous one (never write into the wrong workspace).
+     A dirty notebook gets one last save attempt against ITS OWN project
+     (notebookStore keeps the project id it was opened with). */
   useEffect(() => {
+    void useNotebookStore.getState().flushAndReset();
     reset();
   }, [projectId, reset]);
 

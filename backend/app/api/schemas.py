@@ -6,7 +6,7 @@ stable; validation is mandatory for every external input.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -902,3 +902,83 @@ class OpenFolderResponse(BaseModel):
     opened: bool
     path: str
     error: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Jupyter Notebooks (.ipynb) and kernel sessions (TZ §5)
+# ---------------------------------------------------------------------------
+
+
+class NotebookListItem(BaseModel):
+    path: str
+    name: str
+    size: int
+    mtime: float
+
+
+class NotebookContentResponse(BaseModel):
+    path: str
+    #: The notebook document exactly as nbformat sees it (cells/outputs/metadata).
+    notebook: dict[str, Any]
+    valid: bool
+    problems: list[str] = Field(default_factory=list)
+    mtime: float
+    size: int
+    #: Project recorded in metadata.ese at creation (None for foreign files).
+    ese_project_id: str | None = None
+
+
+class NotebookCreateRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=2048)
+
+
+class NotebookSaveRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=2048)
+    notebook: dict[str, Any]
+    base_mtime: float | None = None
+    force: bool = False
+
+
+class NotebookSaveResponse(BaseModel):
+    path: str
+    mtime: float
+    size: int
+    valid: bool
+    problems: list[str] = Field(default_factory=list)
+
+
+class KernelSessionRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=2048)
+
+
+class KernelSessionDTO(BaseModel):
+    session_id: str
+    project_id: str
+    path: str
+    #: starting | ready | restarting | dead | error
+    state: str
+    error: str | None = None
+    busy: bool = False
+    started_at: float
+    last_used: float
+
+
+class NotebookExecuteRequest(BaseModel):
+    code: str = Field(max_length=2 * 1024 * 1024)
+
+
+class NotebookExecuteResponse(BaseModel):
+    execution_id: str
+    status: str
+
+
+class NotebookExecutionDTO(BaseModel):
+    id: str
+    #: running | done | error | interrupted | aborted
+    status: str
+    outputs: list[dict[str, Any]] = Field(default_factory=list)
+    execution_count: int | None = None
+    error: str | None = None
+    truncated: bool = False
+    started_at: float
+    finished_at: float | None = None

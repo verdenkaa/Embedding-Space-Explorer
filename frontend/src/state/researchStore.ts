@@ -19,6 +19,7 @@ import type {
   WorkspaceEntryKind,
   WorkspaceFileContent,
 } from "../api/types";
+import { useNotebookStore } from "./notebookStore";
 import { useProjectStore } from "./projectStore";
 
 export interface ResearchError {
@@ -72,6 +73,20 @@ function toError(err: unknown): ResearchError {
     code: "unknown_error",
     message: err instanceof Error ? err.message : String(err),
   };
+}
+
+/**
+ * Guard for switching away from a dirty notebook (TZ §5.2: warn before
+ * losing unsaved changes). Returns false when the user chose to stay.
+ */
+function confirmLeaveDirtyNotebook(targetPath: string | null): boolean {
+  const nb = useNotebookStore.getState();
+  if (!nb.doc || !nb.dirty) return true;
+  if (targetPath === nb.doc.path) return true;
+  return window.confirm(
+    `Блокнот ${nb.doc.path} имеет несохранённые изменения. ` +
+      "При переключении они будут потеряны. Продолжить?",
+  );
 }
 
 const EMPTY: Pick<
@@ -128,9 +143,11 @@ export const useResearchStore = create<ResearchState>()((set, get) => ({
     const pid = currentProjectId();
     if (!pid) return;
     if (path === null) {
+      if (!confirmLeaveDirtyNotebook(null)) return;
       set({ selectedPath: null, file: null });
       return;
     }
+    if (!confirmLeaveDirtyNotebook(path)) return;
     const entries = get().tree ?? [];
     const entry = entries.find((e) => e.path === path);
     if (entry?.kind === "dir") {
@@ -168,6 +185,19 @@ export const useResearchStore = create<ResearchState>()((set, get) => ({
   renamePath: async (fromPath, toPath) => {
     const pid = currentProjectId();
     if (!pid) return false;
+    const nb = useNotebookStore.getState();
+    if (nb.doc && (nb.doc.path === fromPath || nb.doc.path.startsWith(`${fromPath}/`))) {
+      if (
+        nb.dirty &&
+        !window.confirm(
+          `Блокнот ${nb.doc.path} имеет несохранённые изменения. ` +
+            "Переименование закроет редактор, изменения будут потеряны. Продолжить?",
+        )
+      ) {
+        return false;
+      }
+      nb.reset();
+    }
     set({ busy: true, error: null });
     try {
       await workspaceApi.rename(pid, fromPath, toPath);
@@ -186,6 +216,18 @@ export const useResearchStore = create<ResearchState>()((set, get) => ({
   deletePath: async (path, confirm = false) => {
     const pid = currentProjectId();
     if (!pid) return false;
+    const nb = useNotebookStore.getState();
+    if (nb.doc && (nb.doc.path === path || nb.doc.path.startsWith(`${path}/`))) {
+      if (
+        nb.dirty &&
+        !window.confirm(
+          `Блокнот ${nb.doc.path} имеет несохранённые изменения и будет удалён. Продолжить?`,
+        )
+      ) {
+        return false;
+      }
+      nb.reset();
+    }
     set({ busy: true, error: null });
     try {
       await workspaceApi.remove(pid, path, confirm);

@@ -27,6 +27,13 @@ import type {
   ModelInfo,
   NeighborMetric,
   NeighborsResponse,
+  NotebookContentResponse,
+  NotebookExecuteResponse,
+  NotebookExecutionDTO,
+  NotebookJson,
+  NotebookListItem,
+  NotebookSaveResponse,
+  KernelSessionDTO,
   OpenFolderResponse,
   PreparationPreviews,
   CreatePresetRequest,
@@ -402,4 +409,64 @@ export const workspaceApi = {
       `/api/projects/${pid}/workspace/open-folder`,
       jsonInit("POST", { sub }),
     ),
+};
+
+/* ---------------------------------------------------------------------------
+ * Notebook API: .ipynb files + kernel sessions (TZ §5). Execution follows
+ * the app's polling model (no WebSocket): POST execute → poll execution.
+ * ------------------------------------------------------------------------- */
+
+export const notebookApi = {
+  list: (pid: string): Promise<NotebookListItem[]> =>
+    request<NotebookListItem[]>(`/api/projects/${pid}/notebooks`),
+  create: (pid: string, path: string): Promise<NotebookListItem> =>
+    request<NotebookListItem>(`/api/projects/${pid}/notebooks`, jsonInit("POST", { path })),
+  getContent: (pid: string, path: string): Promise<NotebookContentResponse> =>
+    request<NotebookContentResponse>(
+      `/api/projects/${pid}/notebooks/content?path=${encodeURIComponent(path)}`,
+    ),
+  saveContent: (
+    pid: string,
+    payload: {
+      path: string;
+      notebook: NotebookJson;
+      base_mtime?: number | null;
+      force?: boolean;
+    },
+  ): Promise<NotebookSaveResponse> =>
+    request<NotebookSaveResponse>(
+      `/api/projects/${pid}/notebooks/content`,
+      jsonInit("PUT", payload),
+    ),
+
+  startSession: (pid: string, path: string): Promise<KernelSessionDTO> =>
+    request<KernelSessionDTO>(
+      `/api/projects/${pid}/notebooks/sessions`,
+      jsonInit("POST", { path }),
+    ),
+  listSessions: (pid: string): Promise<KernelSessionDTO[]> =>
+    request<KernelSessionDTO[]>(`/api/projects/${pid}/notebooks/sessions`),
+  getSession: (pid: string, sid: string): Promise<KernelSessionDTO> =>
+    request<KernelSessionDTO>(`/api/projects/${pid}/notebooks/sessions/${sid}`),
+  closeSession: (pid: string, sid: string): Promise<{ closed: string }> =>
+    request<{ closed: string }>(`/api/projects/${pid}/notebooks/sessions/${sid}`, {
+      method: "DELETE",
+    }),
+  execute: (pid: string, sid: string, code: string): Promise<NotebookExecuteResponse> =>
+    request<NotebookExecuteResponse>(
+      `/api/projects/${pid}/notebooks/sessions/${sid}/execute`,
+      jsonInit("POST", { code }),
+    ),
+  getExecution: (pid: string, sid: string, eid: string): Promise<NotebookExecutionDTO> =>
+    request<NotebookExecutionDTO>(
+      `/api/projects/${pid}/notebooks/sessions/${sid}/executions/${eid}`,
+    ),
+  interrupt: (pid: string, sid: string): Promise<KernelSessionDTO> =>
+    request<KernelSessionDTO>(`/api/projects/${pid}/notebooks/sessions/${sid}/interrupt`, {
+      method: "POST",
+    }),
+  restart: (pid: string, sid: string): Promise<KernelSessionDTO> =>
+    request<KernelSessionDTO>(`/api/projects/${pid}/notebooks/sessions/${sid}/restart`, {
+      method: "POST",
+    }),
 };

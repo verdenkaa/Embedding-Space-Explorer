@@ -66,7 +66,7 @@ need_pip=1
 if [ "${FORCE_INSTALL:-0}" != "1" ] && [ -f "$DEPS_STAMP" ] \
     && [ ! "$BACKEND_DIR/requirements.txt" -nt "$DEPS_STAMP" ] \
     && [ ! "$BACKEND_DIR/requirements-dev.txt" -nt "$DEPS_STAMP" ] \
-    && "$VENV_PY" -c 'import fastapi, uvicorn, sqlalchemy, numpy, sklearn' >/dev/null 2>&1; then
+    && "$VENV_PY" -c 'import fastapi, uvicorn, sqlalchemy, numpy, sklearn, nbformat, jupyter_client, ipykernel' >/dev/null 2>&1; then
     need_pip=0
 fi
 if [ "${SKIP_INSTALL:-0}" != "1" ] && [ "$need_pip" = "1" ]; then

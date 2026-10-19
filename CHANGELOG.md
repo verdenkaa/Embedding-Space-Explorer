@@ -7,6 +7,67 @@
 
 ### Добавлено
 
+- **Jupyter Notebook в разделе RESEARCH** (собственный интерфейс, без
+  JupyterLab/iframe):
+  - `.ipynb` — стандартный формат Jupyter (nbformat v4): файлы, созданные в
+    Jupyter, открываются в приложении и наоборот; повреждённые блокноты
+    открываются с предупреждением (без падения), сохранение нормализует
+    структуру (id ячеек, minor 5), неизвестные MIME-выводы и метаданные
+    сохраняются без потерь;
+  - backend `app/notebooks/`: KernelSessionManager — одно долгоживущее ядро
+    ipykernel на пару (проект, resolved-путь блокнота); переменные живут
+    между ячейками, разные блокноты не смешиваются; cwd ядра = `workspace/`
+    проекта; interrupt (KeyboardInterrupt), restart со сбросом состояния,
+    детекция мёртвого ядра, idle-TTL 30 мин, лимит 4 сессий, shutdown всех
+    ядер в lifespan; выполнение — поток + polling (модель jobs, без
+    WebSocket), вывод ограничен ~2 МБ с явной отметкой обрезки;
+  - API `/api/projects/{id}/notebooks/*`: список, создание (с привязкой
+    проекта в `metadata.ese.project_id`), чтение/сохранение с валидацией
+    nbformat и optimistic-concurrency, сессии ядер (start/list/get/close/
+    execute/execution/interrupt/restart); доступ к сессии проверяется по
+    проекту — чужие сессии невидимы;
+  - **Python-мост `ese`** (backend/ese/): документированный read-only доступ
+    из ячеек к данным проекта — `project.current()/load()/list_projects()`,
+    `info()`, `list_spaces()`, `open_space()` → `embeddings()` (ленивая
+    загрузка .npz), `ids`, `fragments()`, `fragment_text()`,
+    `projections()/projection()`, `clusters()/clustering()`, `neighbors()`
+    (переиспользует neighbor_search), `relations()/slices()/groups()/
+    metrics()/experiments()`, каталоги `results_dir/notes_dir` для
+    результатов экспериментов; SQLite открывается `mode=ro` +
+    `PRAGMA query_only` (случайная запись в основное хранилище исключена);
+  - frontend: NotebookEditor (Monaco-ячейки, markdown-ячейки с предпросмотром
+    KaTeX, нумерация выполнения, toolbar ячейки: ↑↓ + конвертация/удаление),
+    выводы: stream/traceback (ANSI-цвета)/execute_result/display_data
+    (text, HTML, PNG/JPEG/SVG, JSON, markdown, latex; неизвестные MIME —
+    честная свёрнутая выгрузка), тулбар: Сохранить (Ctrl+S) / ▶ (Ctrl+Enter)
+    / ▶▶ все / ⏹ стоп / ⟳ перезапуск ядра / ⏻ остановить ядро /
+    очистка выводов, индикатор ● несохранённых изменений, beforeunload,
+    баннеры: конфликт файла (перезагрузить/перезаписать), проблемы
+    валидации, чужой проект в metadata;
+  - общий рендерер Markdown+LaTeX (marked + KaTeX + DOMPurify: защита code-зон
+    от математики, экранированные \$ не открывают формулу, `aligned` и
+    многострочные $…$ поддерживаются; битая формула деградирует в исходник,
+    документ остаётся сохраняемым) — будет переиспользован редактором заметок;
+  - notebookStore: серверный документ (никогда localStorage), re-attach к
+    живой сессии при повторном открытии, poll-execution с живым обновлением
+    выводов, flushAndReset (последняя попытка сохранения в СВОЙ проект при
+    переключении проекта), guard несохранённых изменений при переключении
+    файла/переименовании/удалении;
+  - зависимости: nbformat, jupyter_client, ipykernel, matplotlib (+точные
+    пины транзитивных) в requirements.txt; marked, katex, dompurify во
+    frontend; health-диагностика сообщает о новых зависимостях; dev-скрипты
+    проверяют их импорт.
+
+### Изменено
+
+- docs: architecture §3.5–3.6 (безопасность ядер, мост ese), data-model
+  (формат .ipynb, сессии, лимиты), README (walkthrough Notebook + API `ese`
+  + границы безопасности).
+
+### Ранее в этой серии (этап 2)
+
+### Добавлено
+
 - **Исследовательское рабочее пространство проекта** (раздел RESEARCH):
   - каталог `<project>/workspace/` на диске с фиксированной структурой
     (`notebooks/`, `notes/`, `datasets/`, `results/`, `exports/`, `latex/`),

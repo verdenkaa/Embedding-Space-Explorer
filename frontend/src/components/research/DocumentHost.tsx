@@ -1,4 +1,6 @@
+import { useProjectStore } from "../../state/projectStore";
 import { useResearchStore } from "../../state/researchStore";
+import { NotebookEditor } from "./NotebookEditor";
 
 function formatMtime(mtime: number): string {
   if (!mtime) return "";
@@ -8,15 +10,22 @@ function formatMtime(mtime: number): string {
 /**
  * Right pane of the RESEARCH section: hosts the open document.
  *
- * Stage 2 shows a read-only viewer (files are real, on disk, editable via the
- * tree operations). The Notebook editor (.ipynb) and the Markdown note editor
- * mount here in the next stages, replacing the viewer by file type.
+ * .ipynb → the Notebook editor (kernel sessions, cells, outputs).
+ * Other text files → read-only viewer for now; the Markdown note editor
+ * mounts here in the next stage.
  */
 export function DocumentHost() {
+  const projectId = useProjectStore((s) => s.current?.id ?? null);
   const selectedPath = useResearchStore((s) => s.selectedPath);
   const file = useResearchStore((s) => s.file);
   const fileLoading = useResearchStore((s) => s.fileLoading);
   const tree = useResearchStore((s) => s.tree);
+
+  if (selectedPath?.toLowerCase().endsWith(".ipynb") && projectId) {
+    // The notebook document is owned by notebookStore (not researchStore.file):
+    // cells/outputs live in the .ipynb, never in the generic text buffer.
+    return <NotebookEditor projectId={projectId} path={selectedPath} />;
+  }
 
   if (!selectedPath) {
     return (

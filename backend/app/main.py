@@ -25,6 +25,7 @@ from app.api.routes_health import router as health_router
 from app.api.routes_jobs import router as jobs_router
 from app.api.routes_metrics import router as metrics_router
 from app.api.routes_neighbors import router as neighbors_router
+from app.api.routes_notebooks import router as notebooks_router
 from app.api.routes_projections import methods_router as projection_methods_router
 from app.api.routes_projections import projections_router
 from app.api.routes_projects import router as projects_router
@@ -35,6 +36,7 @@ from app.config import Settings, ensure_data_dir
 from app.core.logging import get_logger, setup_logging
 from app.core.security import LocalOnlyMiddleware
 from app.jobs.manager import JobManager
+from app.notebooks.kernel_manager import KernelSessionManager
 from app.storage.projects_store import ProjectStore
 
 log = get_logger("main")
@@ -68,6 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ensure_data_dir(resolved)
         store: ProjectStore = application.state.project_store
         application.state.job_manager = JobManager(store)
+        application.state.kernel_manager = KernelSessionManager()
         log.info(
             "backend %s started on %s:%d, data dir: %s",
             __version__,
@@ -76,6 +79,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             resolved.data_dir,
         )
         yield
+        kernels: KernelSessionManager = application.state.kernel_manager
+        kernels.shutdown_all()
         manager: JobManager = application.state.job_manager
         manager.shutdown()
         store.close_all()
@@ -112,6 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(metrics_router)
     app.include_router(experiments_router)
     app.include_router(exports_router)
+    app.include_router(notebooks_router)
     return app
 
 

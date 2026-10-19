@@ -36,6 +36,12 @@ RUNTIME_DEPENDENCIES: tuple[tuple[str, bool], ...] = (
     ("sentence-transformers", True),
     ("scikit-learn", True),
     ("umap-learn", True),
+    # Research notebooks: .ipynb format + persistent Python kernels.
+    ("nbformat", True),
+    ("jupyter_client", True),
+    ("ipykernel", True),
+    # Notebook plots (%matplotlib inline) — required by the pinned lock.
+    ("matplotlib", True),
 )
 
 
