@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useProjectStore } from "../../state/projectStore";
 import { cellKey, useNotebookStore } from "../../state/notebookStore";
+import { EseHelpDialog } from "./EseHelpDialog";
 import { NotebookCell } from "./NotebookCell";
 
 const KERNEL_LABEL: Record<string, string> = {
@@ -47,6 +48,7 @@ export function NotebookEditor({ projectId, path }: { projectId: string; path: s
   const clearError = useNotebookStore((s) => s.clearError);
 
   const [restarting, setRestarting] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   /* (Re)load the document whenever a different notebook/project is opened. */
   useEffect(() => {
@@ -174,7 +176,23 @@ export function NotebookEditor({ projectId, path }: { projectId: string; path: s
           onClick={() => addCell(cells.length - 1, "code")}
           title="Добавить code-ячейку в конец"
         >
-          + Ячейка
+          + Код
+        </button>
+        <button
+          type="button"
+          className="btn btn--small"
+          onClick={() => addCell(cells.length - 1, "markdown")}
+          title="Добавить markdown-ячейку в конец (текст, формулы LaTeX: $…$ и $…$)"
+        >
+          + Текст
+        </button>
+        <button
+          type="button"
+          className="btn btn--small"
+          onClick={() => setHelpOpen(true)}
+          title="Справка: доступ к данным проекта из Python (ese) — пути и API"
+        >
+          ese ?
         </button>
       </div>
 
@@ -228,7 +246,7 @@ export function NotebookEditor({ projectId, path }: { projectId: string; path: s
             onSelect={() => setSelectedCell(index)}
             onSourceChange={(source) => setCellSource(index, source)}
             onRun={() => void executeCell(index)}
-            onAddBelow={() => addCell(index, "code")}
+            onAddBelow={(type) => addCell(index, type)}
             onDelete={() => deleteCell(index)}
             onMove={(direction) => moveCell(index, direction)}
             onConvert={(type) => convertCell(index, type)}
@@ -236,6 +254,8 @@ export function NotebookEditor({ projectId, path }: { projectId: string; path: s
           />
         ))}
       </div>
+
+      {helpOpen && <EseHelpDialog projectId={projectId} onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

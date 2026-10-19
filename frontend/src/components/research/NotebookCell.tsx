@@ -16,7 +16,7 @@ interface NotebookCellProps {
   onSelect: () => void;
   onSourceChange: (source: string) => void;
   onRun: () => void;
-  onAddBelow: () => void;
+  onAddBelow: (type: "code" | "markdown") => void;
   onDelete: () => void;
   onMove: (direction: -1 | 1) => void;
   onConvert: (type: "code" | "markdown") => void;
@@ -136,13 +136,24 @@ export function NotebookCell(props: NotebookCellProps) {
           <button
             type="button"
             className="nb-cell__tool"
-            title="Добавить ячейку ниже"
+            title="Добавить code-ячейку ниже"
             onClick={(e) => {
               e.stopPropagation();
-              onAddBelow();
+              onAddBelow("code");
             }}
           >
             +
+          </button>
+          <button
+            type="button"
+            className="nb-cell__tool"
+            title="Добавить markdown-ячейку ниже (текст, формулы LaTeX)"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddBelow("markdown");
+            }}
+          >
+            md+
           </button>
           <button
             type="button"

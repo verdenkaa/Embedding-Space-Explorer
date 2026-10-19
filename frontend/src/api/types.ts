@@ -835,3 +835,31 @@ export interface NotebookExecuteResponse {
   execution_id: string;
   status: string;
 }
+
+export interface EseApiEntry {
+  name: string;
+  kind: "function" | "method" | "property";
+  owner: string | null;
+  signature: string;
+  doc: string;
+}
+
+export interface EseHelpContext {
+  project_id: string;
+  project_name: string;
+  roots: string[];
+  data_dir: string;
+  project_dir: string;
+  workspace_dir: string;
+  notebooks_dir: string;
+  notes_dir: string;
+  results_dir: string;
+  exports_dir: string;
+  kernel_env: Record<string, string>;
+}
+
+export interface EseHelpResponse {
+  context: EseHelpContext;
+  quickstart: string;
+  api: EseApiEntry[];
+}

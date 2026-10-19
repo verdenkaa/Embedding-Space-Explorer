@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { CellOutput } from "../../api/types";
 import { ansiToHtml, tracebackToHtml } from "../../markdown/ansi";
@@ -11,6 +11,64 @@ import { renderMarkdown } from "../../markdown/renderMarkdown";
  * markdown, latex) or falls back to an honest collapsible dump — unknown
  * MIME types are never dropped (they stay in the .ipynb on save).
  */
+
+/**
+ * Plot/image output: a thumbnail (readable, but never full-screen) that
+ * opens a lightbox at ORIGINAL size on click; the lightbox closes via the
+ * ✕ button, Escape or a backdrop click.
+ */
+function ImageOutput({ src, alt }: { src: string; alt: string }) {
+  const [zoomed, setZoomed] = useState(false);
+
+  useEffect(() => {
+    if (!zoomed) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setZoomed(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoomed]);
+
+  return (
+    <>
+      <img
+        className="nb-output__image nb-output__image--thumb"
+        src={src}
+        alt={alt}
+        title="Нажмите, чтобы открыть в полном размере"
+        onClick={() => setZoomed(true)}
+      />
+      {zoomed && (
+        <div
+          className="nb-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Изображение в полном размере"
+          onClick={() => setZoomed(false)}
+        >
+          <button
+            type="button"
+            className="nb-lightbox__close"
+            title="Закрыть (Esc)"
+            aria-label="Закрыть"
+            onClick={(e) => {
+              e.stopPropagation();
+              setZoomed(false);
+            }}
+          >
+            ×
+          </button>
+          <img
+            className="nb-lightbox__image"
+            src={src}
+            alt={alt}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+    </>
+  );
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -63,10 +121,10 @@ function MimeOutput({ output }: { output: CellOutput }) {
   const data = dataOf(output);
 
   if (typeof data["image/png"] === "string") {
-    return <img className="nb-output__image" src={`data:image/png;base64,${data["image/png"]}`} alt="результат выполнения" />;
+    return <ImageOutput src={`data:image/png;base64,${data["image/png"]}`} alt="результат выполнения (график/изображение)" />;
   }
   if (typeof data["image/jpeg"] === "string") {
-    return <img className="nb-output__image" src={`data:image/jpeg;base64,${data["image/jpeg"]}`} alt="результат выполнения" />;
+    return <ImageOutput src={`data:image/jpeg;base64,${data["image/jpeg"]}`} alt="результат выполнения (изображение)" />;
   }
   if (typeof data["image/svg+xml"] === "string") {
     const svg = DOMPurify.sanitize(data["image/svg+xml"] as string, {

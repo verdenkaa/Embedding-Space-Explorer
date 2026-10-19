@@ -8,6 +8,7 @@ notebook, bound to (project, resolved path). The frontend polls executions
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -17,6 +18,9 @@ from app.api.deps import get_project
 from app.api.errors import ApiError
 from app.api.routes_workspace import _translate as translate_workspace_error
 from app.api.schemas import (
+    EseApiEntry,
+    EseHelpContext,
+    EseHelpResponse,
     KernelSessionDTO,
     KernelSessionRequest,
     NotebookContentResponse,
@@ -312,3 +316,100 @@ def restart_session(
     session = _owned_session(manager, ctx.id, session_id)
     session.restart()
     return _session_dto(session)
+
+
+# ---------------------------------------------------------------------------
+# ese bridge reference (generated FROM the module itself — never drifts)
+# ---------------------------------------------------------------------------
+
+
+def _clean_doc(obj: object, limit: int = 700) -> str:
+    import inspect
+
+    doc = inspect.getdoc(obj) or ""
+    doc = " ".join(line.strip() for line in doc.strip().splitlines())
+    return doc[:limit]
+
+
+def _signature_of(obj: Callable[..., Any]) -> str:
+    import inspect
+
+    try:
+        return str(inspect.signature(obj))
+    except (TypeError, ValueError):
+        return "()"
+
+
+@router.get("/ese-help", response_model=EseHelpResponse)
+def ese_help(ctx: Annotated[ProjectContext, Depends(get_project)]) -> EseHelpResponse:
+    """Live reference of the `ese` Python bridge: paths + API introspection."""
+    import inspect
+
+    import ese
+    from ese import project as ese_project
+
+    workspace = ws.ensure_workspace(ctx)
+    context = EseHelpContext(
+        project_id=ctx.id,
+        project_name=ctx.manifest.name,
+        roots=list(ctx.manifest.roots),
+        data_dir=str(ctx.data_dir),
+        project_dir=str(ctx.project_dir),
+        workspace_dir=str(workspace),
+        notebooks_dir=str(workspace / "notebooks"),
+        notes_dir=str(workspace / "notes"),
+        results_dir=str(workspace / "results"),
+        exports_dir=str(workspace / "exports"),
+        kernel_env={
+            "ESE_PROJECT_ID": ctx.id,
+            "ESE_DATA_DIR": str(ctx.data_dir),
+            "ESE_WORKSPACE_DIR": str(workspace),
+            "PYTHONPATH": str(backend_root()),
+            "cwd": str(workspace),
+        },
+    )
+
+    api: list[EseApiEntry] = []
+    for name in ("current", "load", "list_projects", "data_dir", "quickstart"):
+        fn = getattr(ese_project, name, None)
+        if fn is None:
+            continue
+        api.append(
+            EseApiEntry(
+                name=name,
+                kind="function",
+                owner=None,
+                signature=f"{name}{_signature_of(fn)}",
+                doc=_clean_doc(fn),
+            )
+        )
+    for cls in (ese_project.ProjectHandle, ese_project.SpaceHandle):
+        for member_name, member in inspect.getmembers(cls):
+            if member_name.startswith("_"):
+                continue
+            if isinstance(member, property):
+                api.append(
+                    EseApiEntry(
+                        name=member_name,
+                        kind="property",
+                        owner=cls.__name__,
+                        signature=f"{cls.__name__}.{member_name}",
+                        doc=_clean_doc(member.fget),
+                    )
+                )
+            elif callable(member):
+                api.append(
+                    EseApiEntry(
+                        name=member_name,
+                        kind="method",
+                        owner=cls.__name__,
+                        signature=f"{member_name}{_signature_of(member)}",
+                        doc=_clean_doc(member),
+                    )
+                )
+
+    return EseHelpResponse(
+        context=context,
+        quickstart=(ese.__doc__ or "").strip(),
+        api=api,
+    )

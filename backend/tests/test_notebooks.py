@@ -559,3 +559,38 @@ def test_matplotlib_image_output(client: TestClient, project: str) -> None:
     ]
     assert pngs, f"expected an image/png output, got {result['outputs']}"
     assert len(pngs[0]["data"]["image/png"]) > 100  # real base64 payload
+
+
+def test_ese_help_reports_live_paths_and_api(client: TestClient, project: str) -> None:
+    """The in-app reference is generated from the module: paths + signatures."""
+    response = client.get(f"/api/projects/{project}/notebooks/ese-help")
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    ctx = body["context"]
+    assert ctx["project_id"] == project
+    tree = client.get(f"/api/projects/{project}/workspace/tree").json()
+    assert Path(ctx["workspace_dir"]) == Path(tree["root"])
+    assert ctx["results_dir"].endswith("results")
+    assert ctx["kernel_env"]["ESE_PROJECT_ID"] == project
+    assert len(ctx["roots"]) >= 1
+
+    assert "ese" in body["quickstart"]
+    names = {(e["owner"], e["name"]) for e in body["api"]}
+    # module functions
+    assert (None, "current") in names
+    assert (None, "load") in names
+    # ProjectHandle surface
+    assert ("ProjectHandle", "list_spaces") in names
+    assert ("ProjectHandle", "open_space") in names
+    assert ("ProjectHandle", "results_dir") in names
+    # SpaceHandle surface with signatures
+    space_entries = {e["name"]: e for e in body["api"] if e["owner"] == "SpaceHandle"}
+    assert "embeddings" in space_entries
+    assert "neighbors" in space_entries
+    assert "fragment_text" in space_entries
+    assert space_entries["neighbors"]["signature"].startswith("neighbors(")
+    assert "k" in space_entries["neighbors"]["signature"]
+    # private members are not exposed
+    assert all(not e["name"].startswith("_") for e in body["api"])
+    assert space_entries["embeddings"]["doc"]

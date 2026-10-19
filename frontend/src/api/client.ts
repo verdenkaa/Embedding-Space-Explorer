@@ -19,6 +19,7 @@ import type {
   CreateRelationRequest,
   CreateSliceRequest,
   EmbeddingRunDTO,
+  EseHelpResponse,
   ExperimentDTO,
   FragmentGroupDTO,
   ExperimentSummaryDTO,
@@ -469,4 +470,9 @@ export const notebookApi = {
     request<KernelSessionDTO>(`/api/projects/${pid}/notebooks/sessions/${sid}/restart`, {
       method: "POST",
     }),
+};
+
+export const eseHelpApi = {
+  get: (pid: string): Promise<EseHelpResponse> =>
+    request<EseHelpResponse>(`/api/projects/${pid}/notebooks/ese-help`),
 };

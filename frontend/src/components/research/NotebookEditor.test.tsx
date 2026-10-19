@@ -158,16 +158,81 @@ describe("NotebookEditor", () => {
     );
   });
 
-  it("cell toolbar: add and delete cells", async () => {
+  it("cell toolbar: add code and markdown cells, delete cells", async () => {
     await renderEditor();
     const before = useNotebookStore.getState().doc!.notebook.cells.length;
 
-    const addButtons = screen.getAllByTitle("Добавить ячейку ниже");
+    // per-cell "+" adds a code cell below
+    const addButtons = screen.getAllByTitle("Добавить code-ячейку ниже");
     fireEvent.click(addButtons[0]);
-    expect(useNotebookStore.getState().doc!.notebook.cells.length).toBe(before + 1);
+    let cells = useNotebookStore.getState().doc!.notebook.cells;
+    expect(cells.length).toBe(before + 1);
+    expect(cells[1].cell_type).toBe("code");
+
+    // per-cell "md+" adds a markdown cell below
+    const mdButtons = screen.getAllByTitle("Добавить markdown-ячейку ниже (текст, формулы LaTeX)");
+    fireEvent.click(mdButtons[0]);
+    cells = useNotebookStore.getState().doc!.notebook.cells;
+    expect(cells.length).toBe(before + 2);
+    expect(cells[1].cell_type).toBe("markdown");
 
     const delButtons = screen.getAllByTitle("Удалить ячейку");
     fireEvent.click(delButtons[delButtons.length - 1]);
+    fireEvent.click(screen.getAllByTitle("Удалить ячейку").slice(-1)[0]);
     expect(useNotebookStore.getState().doc!.notebook.cells.length).toBe(before);
+  });
+
+  it("global toolbar adds a markdown cell (+ Текст)", async () => {
+    await renderEditor();
+    const before = useNotebookStore.getState().doc!.notebook.cells.length;
+    fireEvent.click(screen.getByText("+ Текст"));
+    const cells = useNotebookStore.getState().doc!.notebook.cells;
+    expect(cells.length).toBe(before + 1);
+    expect(cells[cells.length - 1].cell_type).toBe("markdown");
+  });
+
+  it("opens the ese help dialog with live paths and API", async () => {
+    const calls = await renderEditor();
+    // the help dialog fetches the generated reference
+    const { fetchMock } = mockFetch({
+      "GET /api/projects/p1/notebooks/ese-help": {
+        context: {
+          project_id: "p1",
+          project_name: "P",
+          roots: ["/src"],
+          data_dir: "/data",
+          project_dir: "/data/projects/p1",
+          workspace_dir: "/data/projects/p1/workspace",
+          notebooks_dir: "/data/projects/p1/workspace/notebooks",
+          notes_dir: "/data/projects/p1/workspace/notes",
+          results_dir: "/data/projects/p1/workspace/results",
+          exports_dir: "/data/projects/p1/workspace/exports",
+          kernel_env: { ESE_PROJECT_ID: "p1" },
+        },
+        quickstart: "from ese import project",
+        api: [
+          { name: "current", kind: "function", owner: null, signature: "current()", doc: "Проект ядра." },
+          {
+            name: "embeddings",
+            kind: "method",
+            owner: "SpaceHandle",
+            signature: "embeddings()",
+            doc: "Матрица (N, D).",
+          },
+        ],
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    fireEvent.click(screen.getByText("ese ?"));
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").textContent).toContain("Пути текущего проекта"),
+    );
+    expect(screen.getByRole("dialog").textContent).toContain("/data/projects/p1/workspace/results");
+    expect(screen.getByRole("dialog").textContent).toContain("embeddings()");
+    expect(calls).toBeDefined();
+
+    fireEvent.click(screen.getByText("Закрыть"));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });

@@ -267,6 +267,9 @@ describe("execution flow", () => {
           { execution_id: "e1", status: "running" },
         ],
         "GET /api/projects/p1/notebooks/sessions/s1/executions/e1": [running, done],
+        "PUT /api/projects/p1/notebooks/content": [
+          { path: "notebooks/a.ipynb", mtime: 500, size: 1, valid: true, problems: [] },
+        ],
       }),
     );
 
@@ -278,8 +281,10 @@ describe("execution flow", () => {
     const cell = s.doc!.notebook.cells[0];
     expect(cell.execution_count).toBe(1);
     expect(cell.outputs?.[0]).toMatchObject({ output_type: "execute_result" });
-    // Outputs changed the document → it must be marked dirty for the save.
-    expect(s.dirty).toBe(true);
+    // Autosave after a finished execution: the .ipynb on disk carries the
+    // results, so the document is clean again (savedMtime updated).
+    await vi.waitFor(() => expect(useNotebookStore.getState().dirty).toBe(false));
+    expect(useNotebookStore.getState().doc?.savedMtime).toBe(500);
   });
 });
 

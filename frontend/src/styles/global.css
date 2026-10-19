@@ -3792,3 +3792,160 @@ code,
   color: var(--color-text-faint);
   font-style: italic;
 }
+
+/* ---- notebook image outputs: thumbnail + lightbox ---- */
+
+.nb-output__image--thumb {
+  max-height: 260px;
+  width: auto;
+  max-width: 100%;
+  cursor: zoom-in;
+  border: 1px solid var(--color-border);
+  transition: border-color 0.12s;
+}
+
+.nb-output__image--thumb:hover {
+  border-color: var(--color-accent);
+}
+
+.nb-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 16, 18, 0.86);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 32px;
+  cursor: zoom-out;
+}
+
+.nb-lightbox__image {
+  max-width: none;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.6);
+  cursor: default;
+}
+
+.nb-lightbox__close {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 201;
+}
+
+.nb-lightbox__close:hover {
+  background: var(--color-hover);
+  color: var(--color-error);
+}
+
+/* ---- ese help dialog ---- */
+
+.ese-help {
+  width: 860px;
+  max-width: 94vw;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ese-help__body {
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: var(--space-2);
+}
+
+.ese-help__body section {
+  margin-bottom: var(--space-4);
+}
+
+.ese-help__body h4 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-md);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 4px;
+}
+
+.ese-help__paths {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.ese-help__paths td {
+  padding: 3px 8px 3px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  vertical-align: top;
+  word-break: break-all;
+}
+
+.ese-help__paths td:first-child {
+  color: var(--color-text-faint);
+  white-space: nowrap;
+  width: 170px;
+}
+
+.ese-help__quickstart {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-editor);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text-dim);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.ese-help__api {
+  margin: 0;
+}
+
+.ese-help__api-entry {
+  margin-bottom: var(--space-2);
+}
+
+.ese-help__api-entry dt {
+  font-size: var(--text-sm);
+  color: var(--color-file-python);
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.ese-help__api-entry dd {
+  margin: 2px 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-dim);
+  line-height: 1.5;
+}
+
+.ese-help__kind {
+  margin-left: 6px;
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-weight: 400;
+}
+
+.ese-help__note {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  line-height: 1.5;
+}

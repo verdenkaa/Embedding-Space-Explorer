@@ -982,3 +982,40 @@ class NotebookExecutionDTO(BaseModel):
     truncated: bool = False
     started_at: float
     finished_at: float | None = None
+
+
+# ---------------------------------------------------------------------------
+# ese bridge help (in-app reference for the notebook Python API)
+# ---------------------------------------------------------------------------
+
+
+class EseApiEntry(BaseModel):
+    name: str
+    #: function | method | property
+    kind: str
+    #: owning class for methods/properties (None for module functions)
+    owner: str | None = None
+    signature: str
+    doc: str
+
+
+class EseHelpContext(BaseModel):
+    """Live paths and identifiers of the CURRENT project (no guessing)."""
+
+    project_id: str
+    project_name: str
+    roots: list[str]
+    data_dir: str
+    project_dir: str
+    workspace_dir: str
+    notebooks_dir: str
+    notes_dir: str
+    results_dir: str
+    exports_dir: str
+    kernel_env: dict[str, str]
+
+
+class EseHelpResponse(BaseModel):
+    context: EseHelpContext
+    quickstart: str
+    api: list[EseApiEntry]

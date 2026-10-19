@@ -66,7 +66,7 @@ interface NotebookState {
   /** Save if dirty (best effort), then drop everything (project switch/close). */
   flushAndReset: () => Promise<void>;
   reset: () => void;
-  save: (opts?: { force?: boolean }) => Promise<boolean>;
+  save: (opts?: { force?: boolean; silent?: boolean }) => Promise<boolean>;
 
   /* editing */
   setCellSource: (index: number, source: string) => void;
@@ -208,7 +208,7 @@ export const useNotebookStore = create<NotebookState>()((set, get) => ({
         conflict: false,
         problems: result.problems,
         doc: { ...doc, savedMtime: result.mtime },
-        notice: `Сохранено: ${doc.path}`,
+        notice: opts?.silent ? get().notice : `Сохранено: ${doc.path}`,
       });
       return true;
     } catch (err) {
@@ -413,6 +413,12 @@ export const useNotebookStore = create<NotebookState>()((set, get) => ({
     } finally {
       set({ runningCell: null });
       void get().refreshSession();
+      // Autosave after every execution: outputs/results are part of the
+      // .ipynb — a finished run is persisted without asking (TZ §5.3
+      // "сохранение исходного кода и результатов выполнения").
+      if (get().dirty && get().doc?.path === doc.path) {
+        await get().save({ silent: true });
+      }
     }
   },
 
