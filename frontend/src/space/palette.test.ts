@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  AXIS_COLORS,
   COLORS,
   FILE_COLORS,
   extOf,
@@ -55,11 +56,17 @@ describe("palette mirrors tokens.css (single source of truth)", () => {
   it("scene/grid colors match the surface & grid tokens", () => {
     expect(COLORS.bg).toBe(token("color-plot"));
     expect(COLORS.grid).toBe(token("color-grid-line"));
-    expect(COLORS.axis).toBe(token("color-axis"));
+    expect(COLORS.grid3d).toBe(token("color-grid-line-3d"));
     expect(COLORS.textDim).toBe(token("color-text-dim"));
     expect(COLORS.textFaint).toBe(token("color-text-faint"));
     expect(COLORS.accent).toBe(token("color-accent"));
     expect(COLORS.frame).toBe(token("color-border-strong"));
+  });
+
+  it("principal-axis colors match the --color-axis-* tokens", () => {
+    expect(AXIS_COLORS[0]).toBe(token("color-axis-x"));
+    expect(AXIS_COLORS[1]).toBe(token("color-axis-y"));
+    expect(AXIS_COLORS[2]).toBe(token("color-axis-z"));
   });
 });
 

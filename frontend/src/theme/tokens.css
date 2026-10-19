@@ -55,9 +55,12 @@
   --color-fragment-section: #8abf91; /* document section */
   --color-fragment-other: #8d9199; /* chunk / fallback */
 
-  /* ---- Data: coordinate grid (plot) ---- */
-  --color-grid-line: #303237; /* minor grid lines */
-  --color-axis: #656a73; /* principal axes */
+  /* ---- Data: coordinate grid & axes (plot) ---- */
+  --color-grid-line: #303237; /* 2D canvas grid lines (pixel-aligned) */
+  --color-grid-line-3d: #45474d; /* 3D floor grid (oblique AA lines need more) */
+  --color-axis-x: #45d6c5; /* principal axis X */
+  --color-axis-y: #63a9ff; /* principal axis Y */
+  --color-axis-z: #b48fd8; /* principal axis Z */
 
   /* ---- Legacy aliases (kept so existing rules resolve) ---- */
   --color-accent-blue: var(--color-file-typescript);

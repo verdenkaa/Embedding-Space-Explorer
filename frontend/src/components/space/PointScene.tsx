@@ -11,10 +11,16 @@ import {
 } from "react";
 import * as THREE from "three";
 
-import { COLORS, buildLegendFrom, hexToRgb, kindColor } from "../../space/palette";
+import {
+  AXIS_COLORS,
+  COLORS,
+  buildLegendFrom,
+  hexToRgb,
+  kindColor,
+} from "../../space/palette";
 import { toFragmentRef } from "../../space/fragmentRef";
 import { indicesInNdcRect, marqueeExceedsSlop, normalizeRect } from "../../space/selectionMath";
-import { FLOOR_Y, floorGridLabels } from "../../space/gridMath";
+import { AXIS_HALF, FLOOR_Y, gridLabels3D } from "../../space/gridMath";
 import type { FitTransform } from "../../space/selectionMath";
 import { useProjectStore } from "../../state/projectStore";
 import {
@@ -84,12 +90,14 @@ function useGridGeometry(): THREE.BufferGeometry {
 
 function useAxesGeometry(): THREE.BufferGeometry {
   return useMemo(() => {
-    // Separate segments per axis so each gets its own color group.
+    // Separate segments per axis so each gets its own color group; full span
+    // (−AXIS_HALF..AXIS_HALF) so numeric ticks along an axis sit on its line.
+    const h = AXIS_HALF;
     const g = new THREE.BufferGeometry();
     g.setAttribute(
       "position",
       new THREE.Float32BufferAttribute(
-        [0, 0, 0, 1.15, 0, 0, 0, 0, 0, 0, 1.15, 0, 0, 0, 0, 0, 0, 1.15],
+        [-h, 0, 0, h, 0, 0, 0, -h, 0, 0, h, 0, 0, 0, -h, 0, 0, h],
         3,
       ),
     );
@@ -97,12 +105,12 @@ function useAxesGeometry(): THREE.BufferGeometry {
       "color",
       new THREE.Float32BufferAttribute(
         [
-          ...hexToRgb(COLORS.axis),
-          ...hexToRgb(COLORS.axis),
-          ...hexToRgb(COLORS.axis),
-          ...hexToRgb(COLORS.axis),
-          ...hexToRgb(COLORS.axis),
-          ...hexToRgb(COLORS.axis),
+          ...hexToRgb(AXIS_COLORS[0]),
+          ...hexToRgb(AXIS_COLORS[0]),
+          ...hexToRgb(AXIS_COLORS[1]),
+          ...hexToRgb(AXIS_COLORS[1]),
+          ...hexToRgb(AXIS_COLORS[2]),
+          ...hexToRgb(AXIS_COLORS[2]),
         ],
         3,
       ),
@@ -126,11 +134,13 @@ function makeTextTexture(text: string, colorHex: string): THREE.CanvasTexture | 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
-  const font = "600 30px 'JetBrains Mono', Consolas, monospace";
+  // High-res raster: the sprite is scaled DOWN in world space, so the texture
+  // stays crisp while the label itself stays small on screen.
+  const font = "600 44px 'JetBrains Mono', Consolas, monospace";
   ctx.font = font;
-  const pad = 8;
-  const width = Math.max(16, Math.ceil(ctx.measureText(text).width) + pad * 2);
-  const height = 40;
+  const pad = 10;
+  const width = Math.max(24, Math.ceil(ctx.measureText(text).width) + pad * 2);
+  const height = 60;
   canvas.width = width;
   canvas.height = height;
   // the 2D context state resets when the canvas is resized
@@ -140,15 +150,45 @@ function makeTextTexture(text: string, colorHex: string): THREE.CanvasTexture | 
   ctx.fillStyle = colorHex;
   ctx.fillText(text, width / 2, height / 2);
   const texture = new THREE.CanvasTexture(canvas);
+  // canvas pixels are sRGB: tell the renderer to decode them, otherwise the
+  // muted label colors wash out toward white
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.needsUpdate = true;
   return texture;
 }
 
-/** Numeric + axis-name labels for the floor grid («numbers» mode only). */
+/** True once the bundled webfonts are usable (labels must not bake a fallback
+ *  glyph shape into their texture). */
+function useFontsReady(): boolean {
+  const [ready, setReady] = useState(
+    () => typeof document === "undefined" || !("fonts" in document),
+  );
+  useEffect(() => {
+    if (ready) return;
+    let alive = true;
+    document.fonts.ready
+      .then(() => {
+        if (alive) setReady(true);
+      })
+      .catch(() => {
+        if (alive) setReady(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [ready]);
+  return ready;
+}
+
+/** Numeric + axis-name labels along the principal axes («numbers» mode only).
+ *  Sprite height is a small fraction of the [-1,1] scene so a tick never
+ *  covers its neighbours; the high-res texture keeps the text crisp. */
 function GridLabels({ fit, axisLabels }: { fit: FitTransform; axisLabels: string[] }) {
+  const fontsReady = useFontsReady();
   const sprites = useMemo(() => {
     const built: THREE.Sprite[] = [];
-    for (const label of floorGridLabels(fit, axisLabels)) {
+    if (!fontsReady) return built; // rebuild once the real font is available
+    for (const label of gridLabels3D(fit, axisLabels)) {
       const texture = makeTextTexture(
         label.text,
         label.isAxisName ? COLORS.textDim : COLORS.textFaint,
@@ -163,14 +203,14 @@ function GridLabels({ fit, axisLabels }: { fit: FitTransform; axisLabels: string
       const sprite = new THREE.Sprite(material);
       sprite.position.set(label.position[0], label.position[1], label.position[2]);
       const aspect = texture.image.width / texture.image.height;
-      const h = label.isAxisName ? 0.3 : 0.26;
+      const h = label.isAxisName ? 0.11 : 0.085;
       sprite.scale.set(h * aspect, h, 1);
       sprite.renderOrder = 20;
       sprite.raycast = () => null; // never intercept point picking
       built.push(sprite);
     }
     return built;
-  }, [fit, axisLabels]);
+  }, [fit, axisLabels, fontsReady]);
 
   useEffect(
     () => () => {
@@ -323,7 +363,9 @@ function SceneContents({
       />
       {gridMode !== "off" && (
         <lineSegments geometry={gridGeometry}>
-          <lineBasicMaterial color={COLORS.grid} transparent opacity={0.9} />
+          {/* oblique 1px lines lose ~half their contrast to AA: grid3d is
+              stronger than the 2D canvas grid token on purpose */}
+          <lineBasicMaterial color={COLORS.grid3d} />
         </lineSegments>
       )}
       <lineSegments geometry={axesGeometry}>

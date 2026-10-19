@@ -15,6 +15,10 @@ export const COLORS = {
   bg: "#202124",
   /** Coordinate-grid lines (matches --color-grid-line). */
   grid: "#303237",
+  /** 3D floor-grid lines: oblique 1px WebGL lines lose ~half of their
+   *  contrast to antialiasing, so the scene needs a stronger value than the
+   *  2D canvas (matches --color-grid-line-3d). */
+  grid3d: "#45474d",
   /** Principal axes (matches --color-axis). */
   axis: "#656a73",
   /** Plot frame / tick marks (matches --color-border-strong). */
@@ -36,6 +40,17 @@ export const COLORS = {
   /** Hover ring. */
   hover: "#ffffff",
 } as const;
+
+/**
+ * Principal-axis line colors of the 3D scene (X, Y, Z — matches
+ * --color-axis-x/y/z). Teal / blue / violet: mutually distinct and distinct
+ * from the reserved selection orange.
+ */
+export const AXIS_COLORS: readonly [string, string, string] = [
+  "#45d6c5",
+  "#63a9ff",
+  "#b48fd8",
+];
 
 /* ------------------------------------------------------------------ */
 /* Fragment-type colors (MTH / FN / CLS + document / fallback)          */
