@@ -403,6 +403,38 @@ def _fragment_ids(client: TestClient, pid: str, limit: int = 3) -> list[str]:
     return [str(item["id"]) for item in items]
 
 
+def test_experiment_config_accepts_file_color_mode(
+    client: TestClient,
+    sample_project: Path,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    """color_by «file» (coloring points by file type) round-trips; unknown modes are rejected."""
+    pid, run_id = _embedded_project(client, sample_project)
+    proj3 = _compute_projection(client, pid, run_id, 3)
+    config = {
+        "view_mode": "3d",
+        "embedding_run_id": run_id,
+        "projections": {"three": proj3, "two": [], "four": None},
+        "slice": None,
+        "slice_display": "dim",
+        "clustering_run_id": None,
+        "color_by": "file",
+        "group_ids": [],
+        "selection": [],
+        "selection_truncated": False,
+        "metric_run_ids": [],
+    }
+    created = client.post(
+        f"/api/projects/{pid}/experiments", json={"name": "by-file", "config": config}
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["config"]["color_by"] == "file"
+    # an unknown color mode is rejected by the schema (never silently stored)
+    bad = {**config, "color_by": "rainbow"}
+    resp = client.post(f"/api/projects/{pid}/experiments", json={"name": "bad", "config": bad})
+    assert resp.status_code == 422
+
+
 def test_experiments_save_open_compare_delete(
     client: TestClient,
     sample_project: Path,
@@ -443,7 +475,7 @@ def test_experiments_save_open_compare_delete(
     assert exp["config"]["selection"] == fids  # the dead id was dropped
     snapshot = exp["snapshot"]
     assert snapshot["selection_dropped_at_save"] == 1
-    assert snapshot["app_version"] == "0.8.0"
+    assert snapshot["app_version"] == "0.9.0"
     assert snapshot["schema_version"] == 7
     assert snapshot["corpus"]["fragments"] == 21
     summary = snapshot["summary"]
