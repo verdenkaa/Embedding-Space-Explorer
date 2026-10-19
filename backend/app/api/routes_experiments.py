@@ -1,4 +1,4 @@
-"""Experiment endpoints (TZ §9.2, §10.1): save / list / open / delete.
+"""Experiment endpoints: save / list / open / delete.
 
 Saving validates every reference (unknown runs or groups are rejected with
 the exact list) and records an interpretation snapshot AT SAVE TIME. Opening

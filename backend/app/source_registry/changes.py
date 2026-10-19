@@ -1,4 +1,4 @@
-"""File hashing and change classification (TZ §9.3, scenario D)."""
+"""File hashing and change classification."""
 
 from __future__ import annotations
 

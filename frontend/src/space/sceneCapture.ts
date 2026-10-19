@@ -1,5 +1,5 @@
 /**
- * Client-side scene capture (stage 5): PNG export saves EXACTLY the pixels
+ * Client-side scene capture: PNG export saves EXACTLY the pixels
  * currently on screen (WebGL scenes render with preserveDrawingBuffer; 2D
  * plots are plain canvases). The backend never re-renders "screenshots".
  */

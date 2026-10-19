@@ -1,4 +1,4 @@
-"""Database engine/session management with schema versioning (TZ §9.4).
+"""Database engine/session management with schema versioning.
 
 Rules:
 - one SQLite database per project: <data_dir>/projects/<id>/project.db;
@@ -80,7 +80,7 @@ def open_database(db_path: Path) -> tuple[Engine, sessionmaker[Session]]:
             f"v{CURRENT_DB_SCHEMA}; update the application to open this project"
         )
     if version is not None and version < CURRENT_DB_SCHEMA:
-        # Backup before migrating (TZ §9.4), then apply ADDITIVE migrations:
+        # Backup before migrating, then apply ADDITIVE migrations:
         # create_all only creates missing tables and never drops data.
         backup = db_path.with_suffix(f".db.bak-{int(time.time())}")
         shutil.copy2(db_path, backup)

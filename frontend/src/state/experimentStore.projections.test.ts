@@ -1,5 +1,5 @@
 /**
- * experimentStore projection tests (stage 3): catalog with backend-declared
+ * experimentStore projection tests: catalog with backend-declared
  * parameter specs (defaults seeded from the catalog — no hidden values),
  * compute request shape ([3, 2] components in one job), inventory refresh on
  * job completion and honest error mapping.

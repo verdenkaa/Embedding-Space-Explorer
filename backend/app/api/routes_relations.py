@@ -1,4 +1,4 @@
-"""Structural relation endpoints (TZ §7.2, §7.3).
+"""Structural relation endpoints.
 
 Provenance is never mixed: every relation keeps origin=extracted|imported|
 manual, and the semantic-neighbor layer (routes_neighbors) stays a separate
@@ -250,7 +250,7 @@ def delete_relation(
 
 
 # ---------------------------------------------------------------------------
-# Import (TZ §7.3)
+# Import
 # ---------------------------------------------------------------------------
 
 

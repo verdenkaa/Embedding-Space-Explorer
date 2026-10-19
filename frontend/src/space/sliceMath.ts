@@ -58,7 +58,7 @@ export function cloudSliceMask(
 }
 
 /* ------------------------------------------------------------------ */
-/* View integration: masks per display mode                            */
+/* View integration: masks per display mode */
 /* ------------------------------------------------------------------ */
 
 /** What the scenes need from a slice overlay (structural — no store import). */

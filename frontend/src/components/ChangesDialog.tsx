@@ -24,7 +24,7 @@ function ChangeList({ title, items }: { title: string; items: string[] }) {
 /**
  * Confirmation dialog for scenario D: shows new/modified/deleted files from a
  * live scan BEFORE anything is recomputed. Nothing is applied until the user
- * confirms (TZ §6.1, §9.3).
+ * confirms.
  */
 export function ChangesDialog() {
   const changes = useProjectStore((s) => s.changes);

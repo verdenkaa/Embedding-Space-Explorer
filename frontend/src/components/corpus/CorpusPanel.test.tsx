@@ -1,6 +1,6 @@
 /**
  * CorpusPanel tests: file tree rendering and selection, fragment list,
- * live research tabs (stage 4), changes dialog with confirmed re-index
+ * live research tabs, changes dialog with confirmed re-index
  * (scenario D).
  */
 
@@ -183,7 +183,7 @@ describe("CorpusPanel", () => {
     expect(screen.getByText("tree-sitter-python")).toBeTruthy();
   });
 
-  it("all four research tabs are live (stage 4) and switch the pane", () => {
+  it("all four research tabs are live and switch the pane", () => {
     const { fetchMock } = mockFetch(baseRoutes());
     vi.stubGlobal("fetch", fetchMock);
     resetStore();

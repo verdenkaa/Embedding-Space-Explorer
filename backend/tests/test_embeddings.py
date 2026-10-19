@@ -1,4 +1,4 @@
-"""Stage-2 embedding tests.
+"""embedding tests.
 
 Unit/logic tests run WITHOUT torch/sentence-transformers (fake provider
 injection). The real-model integration test is marked `real_model` and
@@ -238,7 +238,7 @@ def test_embed_flow_compute_cache_and_incremental(
     assert "21 reused" in str(info["message"])
 
     # Batch size is an execution detail: changing it must REUSE the cache
-    # (TZ §12: low-RAM users lower batch size without losing results).
+    # (low-RAM users lower batch size without losing results).
     job = client.post(
         f"/api/projects/{pid}/embeddings/compute",
         json={"model_id": FAKE_MODEL_ID, "mode": MODE_RAW, "batch_size": 16},
@@ -396,7 +396,7 @@ def test_db_migration_from_v1_is_additive(settings: Settings) -> None:
         session.commit()
 
     # Downgrade: simulate a v1 database (drop later tables, set meta=1).
-    # Children before parents: stage-4/5 tables reference embedding_runs /
+    # Children before parents: tables reference embedding_runs /
     # projection_runs through foreign keys.
     with ctx.engine.begin() as conn:
         for table in (
@@ -416,7 +416,7 @@ def test_db_migration_from_v1_is_additive(settings: Settings) -> None:
     store.close_all()
 
     # Re-open: migration must recreate the table, bump meta, keep data,
-    # and leave a backup copy (TZ §9.4).
+    # and leave a backup copy.
     engine, factory = open_database(db_path)
     with factory() as session:
         kept = session.get(FileRow, "keep1")
@@ -436,13 +436,13 @@ def test_db_migration_from_v1_is_additive(settings: Settings) -> None:
     assert "embedding_runs" in tables
     assert "projection_runs" in tables
     assert "projection_presets" in tables
-    # stage-4 tables are recreated by the same additive migration (db v5)
+    # tables are recreated by the same additive migration (db v5)
     assert "relations" in tables
     assert "clustering_runs" in tables
     assert "fragment_groups" in tables
     assert "fragment_group_members" in tables
     assert "saved_slices" in tables
-    # stage-5 tables are recreated by the same additive migration (db v6)
+    # tables are recreated by the same additive migration (db v6)
     assert "metric_runs" in tables
     assert "experiments" in tables
     assert "files" in tables

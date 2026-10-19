@@ -2,7 +2,7 @@
 
 Points are served WITH full traceability metadata (file, symbol, lines) so
 the frontend never needs a second round-trip to open the source of a
-selected point (TZ §3, scenario B).
+selected point.
 """
 
 from __future__ import annotations
@@ -130,7 +130,7 @@ def compute_projection(
     """Queue a projection job (3D and/or 2D coordinates over stored vectors).
 
     Parameters are validated BEFORE queueing so typos/range errors give an
-    immediate 400 instead of a failed job (TZ §12).
+    immediate 400 instead of a failed job.
     """
     method = get_method(payload.method)
     if method is None:
@@ -294,7 +294,7 @@ def get_projection_points(
     """Coordinates + source metadata for the whole cloud (one round-trip).
 
     Points of fragments deleted since the compute are dropped and counted
-    (`dropped_orphans`) — the map never shows ghosts (TZ §9.3).
+    (`dropped_orphans`) — the map never shows ghosts.
     """
     with ctx.session_factory() as session:
         row = session.get(ProjectionRunRow, projection_id)
@@ -377,7 +377,7 @@ def delete_all_projections(
 ) -> dict[str, int]:
     """Delete EVERY projection run of the project (rows + coordinate caches).
 
-    Requires explicit `confirm=true` (TZ §12: destructive actions need
+    Requires explicit `confirm=true` (destructive actions need
     confirmation). Embedding vectors, presets and the corpus are untouched.
     """
     if not confirm:

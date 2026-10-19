@@ -101,7 +101,7 @@ def validate_references(
 
 
 def build_snapshot(ctx: ProjectContext, config: dict[str, Any]) -> dict[str, Any]:
-    """Interpretation context AT SAVE TIME (TZ §9.2: versions, corpus, states)."""
+    """Interpretation context AT SAVE TIME (versions, corpus, states)."""
     snapshot: dict[str, Any] = {
         "saved_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "app_version": __version__,

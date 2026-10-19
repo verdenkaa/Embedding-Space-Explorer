@@ -1,5 +1,5 @@
 /**
- * Cluster coloring of the scenes (TZ §8.1): deterministic palette + TEXT
+ * Cluster coloring of the scenes: deterministic palette + TEXT
  * legend keys («кластер N» / «шум» / «без метки») — color is never the only
  * identifier, and clusters are never renamed to "topics".
  */

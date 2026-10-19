@@ -2,7 +2,7 @@
 
 Adding a new model = a new `ModelInfo` entry here (for sentence-transformers
 runtimes). A different runtime = a new EmbeddingProvider subclass + a branch
-in `create_provider`. Nothing else changes (TZ §10.1).
+in `create_provider`. Nothing else changes.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ MODEL_CATALOG: tuple[ModelInfo, ...] = (
         description=(
             "Мультиязычная (включая русский) универсальная текстовая модель, 384 измерения. "
             "НЕ специализирована на исходном коде — качество на коде является рабочей "
-            "гипотезой (ТЗ §2.3). Стартовая модель по умолчанию."
+            "гипотезой. Стартовая модель по умолчанию."
         ),
         is_default=True,
     ),

@@ -8,7 +8,7 @@ import { useSpaceStore } from "../../state/spaceStore";
 import { AnalysisJobProgress } from "./NeighborsTab";
 
 /**
- * CLUSTERS tab (TZ §8.1, §8.2): automatic DBSCAN clustering over an
+ * CLUSTERS tab: automatic DBSCAN clustering over an
  * EXPLICIT space (original vectors or one projection — the run list says
  * which one produced the labels) + manual groups saved from the current
  * selection. Manual groups are independent entities: clustering never

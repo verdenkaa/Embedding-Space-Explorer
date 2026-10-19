@@ -1,4 +1,4 @@
-"""Default exclusion rules (TZ §6.1, §11).
+"""Default exclusion rules.
 
 - Heavy/service directories are excluded by NAME at any depth.
 - Secret-like files are excluded by default; they can be explicitly included

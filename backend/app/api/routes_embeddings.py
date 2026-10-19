@@ -36,7 +36,7 @@ embeddings_router = APIRouter(prefix="/api/projects/{project_id}", tags=["embedd
 
 @preparation_router.get("/preparation-preview", response_model=PreparationPreviewsDTO)
 def preparation_preview() -> PreparationPreviewsDTO:
-    """Show exactly what text will be embedded in each mode (TZ §6.3)."""
+    """Show exactly what text will be embedded in each mode."""
     return PreparationPreviewsDTO(
         raw_fragment=render_template_preview(MODE_RAW),
         context_enriched=render_template_preview(MODE_CONTEXT),

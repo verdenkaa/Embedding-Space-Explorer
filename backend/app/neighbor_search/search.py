@@ -1,4 +1,4 @@
-"""k-nearest-neighbor search with explicit metrics (TZ §5.6, §7.1).
+"""k-nearest-neighbor search with explicit metrics.
 
 Brute-force numpy over the run's vectors: exact by construction and fast
 enough for a local research corpus (N×D dot products); no approximate index

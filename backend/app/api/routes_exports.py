@@ -1,4 +1,4 @@
-"""Export endpoints (TZ §13.17): coordinates, metadata, relations, metrics
+"""Export endpoints: coordinates, metadata, relations, metrics
 and experiments as downloadable files.
 
 Every export is an explicit user action over an explicit target (a projection

@@ -10,8 +10,7 @@ interface FolderPickerDialogProps {
 
 /**
  * Server-side directory browser (the browser itself cannot reveal local
- * paths). Lists directory NAMES only — never files (TZ §11 trade-off,
- * documented in routes_fs.py).
+ * paths). Lists directory NAMES only — never files.
  */
 export function FolderPickerDialog({ onPick, onCancel }: FolderPickerDialogProps) {
   const [listing, setListing] = useState<FsListResponse | null>(null);

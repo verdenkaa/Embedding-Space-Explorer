@@ -1,5 +1,5 @@
 /**
- * Analysis store (stage 4): semantic neighbors, structural relations,
+ * Analysis store: semantic neighbors, structural relations,
  * automatic clustering, manual groups, slice loading and the background
  * jobs of this section (relations extraction, clustering).
  *
@@ -8,7 +8,7 @@
  * - experimentStore → embeddings/projections configuration & inventory;
  * - spaceStore    → view state (slice overlay, cluster colors, relation
  *                   lines) — this store FETCHES, spaceStore DISPLAYS;
- * - analysisStore (this) → stage-4 data + its job channel.
+ * - analysisStore (this) → data + its job channel.
  *
  * Honesty rules encoded here: neighbors are requested from the ORIGINAL
  * embeddings endpoint only; relation provenance is preserved as served;
@@ -82,11 +82,11 @@ interface AnalysisState {
   savedSlices: SavedSliceDTO[] | null;
   sliceLoading: boolean;
 
-  /* metrics (stage 5): runs inventory + compute form */
+  /* metrics: runs inventory + compute form */
   metricRuns: MetricRunDTO[] | null;
   metricsForm: { k: number; sample: number; seed: number };
 
-  /* stage-4 background jobs (relations extraction, clustering) */
+  /* background jobs (relations extraction, clustering) */
   activeJob: JobInfo | null;
   error: AnalysisError | null;
 

@@ -1,9 +1,9 @@
 /**
- * UI state store (zustand is the single state manager — TZ §2.2).
+ * UI state store (zustand is the single state manager).
  *
- * Stage 0: backend connection + diagnostics.
- * Stage 1: active section switching.
- * Stage 3: space / experiments / diagnostics (experiment state lives in
+ * backend connection + diagnostics.
+ * active section switching.
+ * space / experiments / diagnostics (experiment state lives in
  * experimentStore, space view state in spaceStore). The separate CORPUS
  * section was removed by user feedback: the corpus panel and the source
  * inspector live inside SPACE.
@@ -39,7 +39,7 @@ interface UiState {
    * Fetch backend health. Background polls call it without options;
    * a user-initiated retry passes `{ interactive: true }` so the loading
    * state is shown even when a previous attempt failed.
-   */
+ */
   refreshHealth: (opts?: { interactive?: boolean }) => Promise<void>;
 }
 

@@ -22,7 +22,6 @@ export interface DependencyInfo {
   installed: boolean;
   version: string | null;
   required: boolean;
-  planned_stage: string | null;
 }
 
 export interface CheckResult {
@@ -47,7 +46,7 @@ export interface HealthResponse {
 }
 
 /* ------------------------------------------------------------------ */
-/* Stage 1: projects, corpus, jobs                                     */
+/* projects, corpus, jobs */
 /* ------------------------------------------------------------------ */
 
 export interface SplitOptions {
@@ -221,7 +220,7 @@ export interface StalenessReport {
 }
 
 /* ------------------------------------------------------------------ */
-/* Stage 2: embeddings                                                 */
+/* embeddings */
 /* ------------------------------------------------------------------ */
 
 export type PrepMode = "raw_fragment" | "context_enriched";
@@ -269,7 +268,7 @@ export interface PreparationPreviews {
 }
 
 /* ------------------------------------------------------------------ */
-/* Stage 3: projections                                                */
+/* projections */
 /* ------------------------------------------------------------------ */
 
 export type ProjectionParamType = "int" | "float" | "bool" | "choice" | "int_list";
@@ -296,7 +295,7 @@ export interface ProjectionMethodInfo {
   method_id: string;
   display_name: string;
   description: string;
-  /** Honest interpretation caveat shown next to the method (TZ §5.2). */
+  /** Honest interpretation caveat shown next to the method. */
   caveat: string;
   available: boolean;
   supported_components: number[];
@@ -384,7 +383,7 @@ export interface CreatePresetRequest {
 }
 
 /* ------------------------------------------------------------------ */
-/* Stage 4: slices of the original space                               */
+/* slices of the original space */
 /* ------------------------------------------------------------------ */
 
 export type SliceNormalKind = "axis" | "pca" | "vector";
@@ -442,7 +441,7 @@ export interface SavedSliceDTO {
 }
 
 /* ------------------------------------------------------------------ */
-/* Stage 4: semantic neighbors                                          */
+/* semantic neighbors */
 /* ------------------------------------------------------------------ */
 
 export type NeighborMetric = "cosine" | "euclidean";
@@ -478,7 +477,7 @@ export interface NeighborsResponse {
 }
 
 /* ------------------------------------------------------------------ */
-/* Stage 4: structural relations                                        */
+/* structural relations */
 /* ------------------------------------------------------------------ */
 
 export type RelationOrigin = "extracted" | "imported" | "manual";
@@ -533,7 +532,7 @@ export interface ImportRelationsResponse {
 }
 
 /* ------------------------------------------------------------------ */
-/* Stage 4: clustering and manual groups                                */
+/* clustering and manual groups */
 /* ------------------------------------------------------------------ */
 
 export type ClusteringSpace = "original" | "projection";
@@ -598,7 +597,7 @@ export interface FragmentGroupDTO {
 
 
 // ---------------------------------------------------------------------------
-// Stage 5: metrics (TZ §5.6)
+// metrics
 // ---------------------------------------------------------------------------
 
 export interface MetricValueDTO {
@@ -640,7 +639,7 @@ export interface ComputeMetricsRequest {
 }
 
 // ---------------------------------------------------------------------------
-// Stage 5: saved experiments (TZ §9.2)
+// saved experiments
 // ---------------------------------------------------------------------------
 
 export type ViewModeId = "3d" | "2d" | "4d" | "split";

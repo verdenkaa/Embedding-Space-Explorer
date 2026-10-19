@@ -10,19 +10,19 @@ import { useSpaceStore } from "../../state/spaceStore";
 import { PointScene, type PointColorOf } from "./PointScene";
 
 /**
- * 3D embedding space (TZ §4.3, UI-ТЗ §3) — a thin wrapper around the shared
+ * 3D embedding space — a thin wrapper around the shared
  * PointScene: real projection coordinates from the backend cache, the same
- * selection state as every other view (TZ §4.4).
+ * selection state as every other view.
  *
  * Interactions (no explicit mode buttons — by user feedback): orbit with
  * LMB-drag, hold Shift to draw a selection marquee (Ctrl adds the area to
  * the selection), click selects a point (Ctrl toggles), Esc clears.
  *
- * Stage-4 overlays: the ORIGINAL-space slice (dim/hide out-of-layer points —
+ * the ORIGINAL-space slice (dim/hide out-of-layer points —
  * the slice itself is a selection in the D-dimensional space, the scene only
  * DISPLAYS it through this projection), cluster coloring (explicit run) and
  * structural relation lines of the active fragment (type filters + limit —
- * never an unreadable hairball, TZ §7.2).
+ * never an unreadable hairball).
  */
 
 export function Scene3D() {
@@ -150,7 +150,7 @@ export function Scene3D() {
     sliceMasks,
   ]);
 
-  /* -------- states: loading / error / empty (honest, TZ §12) -------- */
+  /* -------- states: loading / error / empty (honest) -------- */
 
   if (!cloud && loading) {
     return (

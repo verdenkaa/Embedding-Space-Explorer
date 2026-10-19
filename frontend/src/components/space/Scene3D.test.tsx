@@ -327,7 +327,7 @@ describe("Scene3D with a cloud", () => {
 });
 
 
-describe("Scene3D stage-4 overlays", () => {
+describe("Scene3D overlays", () => {
   it("«⇄ Связи» toggles relation lines and the filter panel lists kinds", () => {
     seedCloud();
     useProjectStore.setState({ activeFragmentId: "fragA" });

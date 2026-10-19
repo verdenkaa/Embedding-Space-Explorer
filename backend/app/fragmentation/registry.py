@@ -1,6 +1,6 @@
 """Splitter registry: file → strategy selection and fragment assembly.
 
-Extension points (TZ §10.1): to support a new language, add a LANGUAGE_CONFIGS
+Extension points: to support a new language, add a LANGUAGE_CONFIGS
 entry (tree-sitter) or a dedicated Splitter and map extensions in
 `SPLITTER_BY_EXT`. Nothing else in the pipeline changes.
 """
@@ -62,7 +62,7 @@ def fragment_file(
     """Fragment decoded file text using the strategy for its extension.
 
     Guarantees: never raises for bad input; parse failures degrade to the
-    fallback chunker with a warning (TZ §6.2).
+    fallback chunker with a warning.
     """
     language = language_for_path(rel_path)
     result = FragmentFileResult(language=language)

@@ -1,6 +1,6 @@
-"""Stage-3 projection tests.
+"""projection tests.
 
-Unit tests cover the mathematics on known synthetic vectors (TZ §15.1),
+Unit tests cover the mathematics on known synthetic vectors,
 cache/fingerprint rules and validation. API tests drive the full flow with
 the shared fake embedding provider: index → embed → project → points →
 staleness after reindex → recompute. UMAP is exercised on small data with a
@@ -46,7 +46,7 @@ from tests.conftest import (
 
 def _line_data(n: int = 20, dim: int = 8, seed: int = 7) -> np.ndarray:
     """Points exactly on a line: PC1 must capture ~100% of the variance and
-    PC2+ must be ~0 (known geometry, TZ §15.1)."""
+    PC2+ must be ~0 (known geometry)."""
     rng = np.random.default_rng(seed)
     direction = rng.normal(size=dim)
     direction /= np.linalg.norm(direction)
@@ -363,7 +363,7 @@ def test_projection_flow_pca(
         assert point["start_line"] >= 1 and point["end_line"] >= point["start_line"]
 
     # Cross-check one point against the corpus API (traceability contract):
-    # point → fragment → file and lines (TZ §1, §3 scenario B).
+    # point → fragment → file and lines.
     sample = points["points"][0]
     frag = client.get(f"/api/projects/{pid}/fragments/{sample['fragment_id']}").json()
     assert frag["rel_path"] == sample["rel_path"]
@@ -542,7 +542,7 @@ def test_projection_points_errors(
     assert missing.json()["error"]["code"] == "projection_not_found"
 
     # Compute, then corrupt the coordinate cache → explicit 409 instead of an
-    # empty cloud served as a result (TZ §17.2).
+    # empty cloud served as a result.
     job = client.post(
         f"/api/projects/{pid}/projections/compute",
         json={"embedding_run_id": run_id, "method": "pca", "components": [2]},
@@ -674,7 +674,7 @@ def test_projection_job_is_observable(
 def test_real_model_projection_e2e(
     client: TestClient, sample_project: Path, settings: Settings
 ) -> None:
-    """Stage-3 acceptance on REAL data: model → embeddings → PCA/UMAP →
+    """acceptance on REAL data: model → embeddings → PCA/UMAP →
     points; served coordinates are recomputed from the stored .npz vectors
     and must match (proves the map is built from saved embeddings, not
     fabricated). Downloads ~90 MB of weights on first run.
@@ -754,9 +754,9 @@ def test_real_model_projection_e2e(
 
 
 def test_db_migration_v2_to_v3_keeps_embedding_runs(settings: Settings) -> None:
-    """Upgrade path for EXISTING stage-2 projects: opening a v2 database
+    """Upgrade path for EXISTING projects: opening a v2 database
     creates projection_runs additively, keeps embedding runs and vectors
-    pointers intact, and leaves a backup (TZ §9.4)."""
+    pointers intact, and leaves a backup."""
     from app.storage.db import open_database
     from app.storage.projects_store import ProjectStore
     from sqlalchemy import text
@@ -782,7 +782,7 @@ def test_db_migration_v2_to_v3_keeps_embedding_runs(settings: Settings) -> None:
         )
         session.commit()
 
-    # Simulate a stage-2 (v2) database: no projection_runs yet.
+    # Simulate a (v2) database: no projection_runs yet.
     with ctx.engine.begin() as conn:
         conn.execute(text("DROP TABLE projection_runs"))
         conn.execute(text("UPDATE meta SET value='2' WHERE key='schema_version'"))
@@ -815,7 +815,7 @@ def test_db_migration_v2_to_v3_keeps_embedding_runs(settings: Settings) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Raw axes method (stage-3 rework: user-selected original-space dimensions)
+# Raw axes method
 # ---------------------------------------------------------------------------
 
 
@@ -1050,7 +1050,7 @@ def test_preset_crud_and_apply(
 
 
 def test_db_migration_v3_to_v4_keeps_projections(settings: Settings) -> None:
-    """Upgrade path for existing stage-3 projects: opening a v3 database
+    """Upgrade path for existing projects: opening a v3 database
     adds projection_presets without touching projection runs."""
     from app.storage.db import open_database
     from app.storage.projects_store import ProjectStore
@@ -1096,7 +1096,7 @@ def test_db_migration_v3_to_v4_keeps_projections(settings: Settings) -> None:
         )
         session.commit()
 
-    # Simulate a stage-3 (v3) database.
+    # Simulate a (v3) database.
     with ctx.engine.begin() as conn:
         conn.execute(text("DROP TABLE projection_presets"))
         conn.execute(text("UPDATE meta SET value='3' WHERE key='schema_version'"))

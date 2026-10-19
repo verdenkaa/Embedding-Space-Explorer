@@ -1,9 +1,9 @@
-"""Relation extraction job (TZ §7.2): full re-extraction of surface relations.
+"""Relation extraction job: full re-extraction of surface relations.
 
 Policy:
 - extraction is IDEMPOTENT by full replace: rows with origin='extracted' are
   deleted and rebuilt from the CURRENT corpus (imported and manual relations
-  are never touched — provenance separation, TZ §7.2);
+  are never touched — provenance separation);
 - after a reindex the extracted set may be outdated (fragments changed):
   the UI says so and offers re-extraction; nothing is recomputed silently;
 - unresolved import specifiers (third-party packages, dynamic paths) are

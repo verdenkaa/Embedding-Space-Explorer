@@ -40,7 +40,7 @@ const kindColorOf: PointColorOf = (meta) => ({
 const DIM_COLOR = "#39424b";
 
 /**
- * Shared interactive point-cloud scene (TZ §4.3, UI-ТЗ §3) behind Scene3D
+ * Shared interactive point-cloud scene behind Scene3D
  * and Scene4D: one batched THREE.Points object with buffer attributes —
  * never a React component per point. Real projection coordinates come from
  * the backend cache; the only client-side math is a view-only fit.
@@ -51,7 +51,7 @@ const DIM_COLOR = "#39424b";
  * - click a point       → select it (open the source);
  * - Ctrl/Cmd + click    → toggle one point in/out of the selection;
  * - Ctrl/Cmd + marquee  → ADD the area to the current selection;
- * - Esc / background click / toolbar button → clear (TZ §8.3).
+ * - Esc / background click / toolbar button → clear.
  *
  * `mask` (4D view) hides points outside the current "time" window: hidden
  * points are not rendered and cannot be hovered/picked/marquee-selected.
@@ -61,7 +61,7 @@ const HIT_THRESHOLD = 0.05; // world units; display coords live in [-1, 1]
 const DRAG_SLOP_PX = 4;
 
 /* ------------------------------------------------------------------ */
-/* Static scene furniture: thin technical grid + delicate axes          */
+/* Static scene furniture: thin technical grid + delicate axes */
 /* ------------------------------------------------------------------ */
 
 function useGridGeometry(): THREE.BufferGeometry {
@@ -109,7 +109,7 @@ function useAxesGeometry(): THREE.BufferGeometry {
 }
 
 /* ------------------------------------------------------------------ */
-/* Inside the Canvas                                                   */
+/* Inside the Canvas */
 /* ------------------------------------------------------------------ */
 
 interface SceneContentsProps {
@@ -315,7 +315,7 @@ function SceneContents({
 }
 
 /* ------------------------------------------------------------------ */
-/* Component + DOM overlays                                            */
+/* Component + DOM overlays */
 /* ------------------------------------------------------------------ */
 
 export interface PointSceneProps {
@@ -615,7 +615,7 @@ export function PointScene({
         />
       </Canvas>
 
-      {/* Projection identity badge — axes belong to the projection (TZ §5.2) */}
+      {/* Projection identity badge — axes belong to the projection */}
       <div className="point-scene__badge mono">{badge}</div>
 
       {/* Toolbar: no mode buttons — Shift temporarily arms the marquee */}
@@ -658,7 +658,7 @@ export function PointScene({
         {toolbarExtras}
       </div>
 
-      {/* Legend: color + text badge (never color-only, TZ §4.1); collapsible
+      {/* Legend: color + text badge (never color-only); collapsible
           and scrollable so many kinds can never cover the scene */}
       <div className="point-scene__legend" aria-label="Легенда: цвет по типу фрагмента">
         <button

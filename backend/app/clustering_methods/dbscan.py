@@ -1,4 +1,4 @@
-"""DBSCAN clustering (TZ §8.1) + run identity.
+"""DBSCAN clustering + run identity.
 
 Labels are int32 with -1 = noise/unassigned — shown honestly as
 «шум/не определено», never as a separate "meaning" (spec requirement).
@@ -44,7 +44,7 @@ def clustering_fingerprint(
     metric: str,
     params: Mapping[str, object],
 ) -> str:
-    """Stable id of everything that influences the labels (TZ §9.3)."""
+    """Stable id of everything that influences the labels."""
     payload = "\n".join(
         [
             f"emb={embedding_run_id}",
@@ -59,7 +59,7 @@ def clustering_fingerprint(
 
 
 def clustering_versions(algorithm: str) -> dict[str, str]:
-    """Library versions that influenced the labels (TZ §9.2)."""
+    """Library versions that influenced the labels."""
     from importlib import metadata
 
     versions: dict[str, str] = {"numpy": np.__version__}

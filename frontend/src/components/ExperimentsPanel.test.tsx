@@ -112,7 +112,7 @@ describe("ExperimentsPanel", () => {
     expect(screen.getByText("✓ скачана")).toBeTruthy();
     // Not-downloaded model shows a download button with its size.
     expect(screen.getByRole("button", { name: /Скачать \(~90 МБ\)/ })).toBeTruthy();
-    // Honest limitation from the catalog (TZ §2.3).
+    // Honest limitation from the catalog.
     expect(screen.getByText(/НЕ специализирована на коде/)).toBeTruthy();
   });
 

@@ -1,16 +1,16 @@
-"""Projection methods: interface, parameter specs, fingerprints (TZ §5.2).
+"""Projection methods: interface, parameter specs, fingerprints.
 
 A projection maps stored D-dimensional embedding vectors to 2D/3D display
 coordinates. It never modifies the original vectors; method, parameters,
 seed and library versions are persisted with every projection run so the
-result stays observable and reproducible (TZ §9.2).
+result stays observable and reproducible.
 
-Key distinction kept by the whole app (TZ §5): a projection is NOT a slice
+Key distinction kept by the whole app: a projection is NOT a slice
 of the original space. Axes of a projection belong to the projection; the
 UI must say which method produced the visible coordinates.
 
 Adding a new method = a `ProjectionMethod` subclass + a catalog entry in
-`registry.py`; nothing else in the app changes (TZ §10.1).
+`registry.py`; nothing else in the app changes.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ class ProjectionParamsError(ValueError):
 class ProjectionMethodUnavailableError(RuntimeError):
     """Raised when the method's runtime cannot be imported/initialized.
 
-    Carries an actionable message (TZ §12): typically a dependency that was
+    Carries an actionable message: typically a dependency that was
     not installed or not enough free RAM for the numba import.
     """
 
@@ -52,7 +52,7 @@ class ParamSpec:
     """Declarative description of one tunable parameter.
 
     Drives both server-side validation and the UI form (single source of
-    truth — no hidden values, TZ §12).
+    truth — no hidden values).
     """
 
     name: str
@@ -88,7 +88,7 @@ class ProjectionMethod:
     method_id: str = ""
     display_name: str = ""
     description: str = ""
-    #: honesty note for the UI: how the map may mislead (TZ §5.2, §19)
+    #: honesty note for the UI: how the map may mislead
     caveat: str = ""
     param_specs: tuple[ParamSpec, ...] = ()
 
@@ -127,7 +127,7 @@ class ProjectionMethod:
         """Compute display coordinates for ALL given vectors.
 
         Implementations must be deterministic for a fixed (input, params,
-        seed) — reproducibility is a core requirement (TZ §9.2).
+        seed) — reproducibility is a core requirement.
         """
         raise NotImplementedError
 
@@ -199,7 +199,7 @@ def projection_fingerprint(
     """Stable id of everything that influences the resulting coordinates.
 
     Same configuration over the same embedding run = same fingerprint =
-    same cache file (recompute is idempotent, TZ §9.3).
+    same cache file (recompute is idempotent).
     """
     payload = "\n".join(
         [

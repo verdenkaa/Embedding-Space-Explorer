@@ -1,7 +1,7 @@
 """Indexing job: scan → classify changes → re-fragment incrementally.
 
 Only new/modified files are re-fragmented; unchanged files keep their rows,
-fragments and (future) embedding caches (TZ §9.3). Deleted files — and files
+fragments and (future) embedding caches. Deleted files — and files
 that became excluded since the last index — lose their rows and fragments.
 Skipped-file reasons are not persisted: the changes endpoint reports them
 live from each scan (they are a property of the scan, not of the index).

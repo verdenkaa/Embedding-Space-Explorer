@@ -1,4 +1,4 @@
-"""Semantic neighbor search over the ORIGINAL embeddings (TZ §7.1).
+"""Semantic neighbor search over the ORIGINAL embeddings.
 
 Never over projection coordinates: the search runs on stored vectors with an
 explicit metric (cosine by default, consistent with L2-normalized runs).

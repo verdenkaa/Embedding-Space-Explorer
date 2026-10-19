@@ -1,6 +1,6 @@
-"""Stage-4 tests: slices of the original space + semantic neighbors.
+"""Tests: slices of the original space + semantic neighbors.
 
-TZ §15.1: "корректная геометрия среза для известных синтетических векторов",
+Acceptance: "корректная геометрия среза для известных синтетических векторов",
 "корректный поиск соседей и метрики на малом известном наборе". The unit
 tests hand-compute the expected geometry; the API tests drive the full
 stack with the deterministic fake provider (no torch).
@@ -325,7 +325,7 @@ def test_neighbors_api_flow(
     for n in data["neighbors"]:
         assert n["rel_path"] and n["start_line"] >= 1 and n["end_line"] >= n["start_line"]
         assert abs(n["distance"] - (1.0 - n["score"])) < 1e-4
-    # the note states the space the similarity was computed in (TZ §7.1)
+    # the note states the space the similarity was computed in
     assert "ИСХОДНЫМ" in data["note"] and "cosine" in data["note"]
 
     euclid = client.post(

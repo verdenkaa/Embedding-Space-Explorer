@@ -1,9 +1,9 @@
 /**
- * Project/corpus store (zustand — the single state manager, TZ §2.2).
+ * Project/corpus store (zustand — the single state manager).
  *
  * Holds: project list & current project, file list, selected file (detail +
  * content), selection state (active fragment + multi-selection — shared by
- * the 3D scene, 2D map, fragment lists and Monaco by fragment id, TZ §4.4),
+ * the 3D scene, 2D map, fragment lists and Monaco by fragment id),
  * located fragments from editor selection, changes report, active background
  * job with polling.
  */

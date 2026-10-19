@@ -38,7 +38,7 @@ export function ExperimentJobPoller() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Parameter inputs rendered from the backend catalog specs             */
+/* Parameter inputs rendered from the backend catalog specs */
 /* ------------------------------------------------------------------ */
 
 interface AxesInputProps {
@@ -192,7 +192,7 @@ function MethodParams({
 }
 
 /* ------------------------------------------------------------------ */
-/* Panel                                                                */
+/* Panel */
 /* ------------------------------------------------------------------ */
 
 export function ProjectionControls() {

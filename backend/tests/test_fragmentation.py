@@ -1,4 +1,4 @@
-"""Fragmentation tests: known line ranges, stable IDs, fallbacks (TZ §6.2, §15.1)."""
+"""Fragmentation tests: known line ranges, stable IDs, fallbacks."""
 
 from __future__ import annotations
 
@@ -183,7 +183,7 @@ def test_parse_error_does_not_crash() -> None:
     result = _frag("def broken(:\n    pass\n", "broken.py")
     assert result.ok is True
     # tree-sitter error recovery keeps whatever structure it can parse and
-    # reports a warning; the indexer never crashes on bad syntax (TZ §6.2).
+    # reports a warning; the indexer never crashes on bad syntax.
     assert any("syntax errors" in w for w in result.warnings)
     assert result.method == "tree-sitter-python"
     recovered = [f for f in result.fragments if f.symbol_path == "broken"]
@@ -198,7 +198,7 @@ def test_python_without_defs_falls_back() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Stable IDs (TZ §6.2, §15.1)
+# Stable IDs
 # ---------------------------------------------------------------------------
 
 

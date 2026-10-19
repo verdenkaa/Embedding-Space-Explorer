@@ -1,6 +1,6 @@
 """Projection jobs: compute 2D/3D/4D display coordinates from stored vectors.
 
-Design notes (TZ §5.2, §9.3):
+Design notes:
 - one job computes every requested spec (by default the [3, 2] pair, for
   raw_axes also several axis pairs compared side by side) → one projection
   run row + one .npz per spec;

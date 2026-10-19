@@ -7,17 +7,17 @@ import { useSpaceStore } from "../../state/spaceStore";
 import { PointScene, type PointColorOf } from "./PointScene";
 
 /**
- * 4D view (user request, stage-3 polish): a projection with FOUR components
+ * 4D view (user request): a projection with FOUR components
  * rendered as the usual 3D scene over axes 1–3 plus a "time" slider over the
  * 4th axis. The slider carries a window [t ± w/2]; only points inside the
  * window are shown (hidden outside — user's choice), so dragging it shows
  * how the cloud is layered along the 4th dimension.
  *
- * Honesty (TZ §5): this is a client-side WINDOW over an already computed
+ * Honesty: this is a client-side WINDOW over an already computed
  * projection — for PCA/UMAP the 4th axis belongs to the projection, for raw
  * axes it is a dimension of the original space. The badge always names the
  * method and the axis; the real slice engine (arbitrary hyperplanes in the
- * original D-dimensional space) is stage 4.
+ * original D-dimensional space) lives in the separate «Срез» panel.
  */
 
 const ANIM_STEP = 0.006; // fraction of the axis range per tick
@@ -104,7 +104,7 @@ export function Scene4D() {
     return () => clearInterval(timer);
   }, [playing, setSlice4d]);
 
-  /* -------- states: loading / error / empty (honest, TZ §12) -------- */
+  /* -------- states: loading / error / empty (honest) -------- */
 
   if (!cloud && loading) {
     return (

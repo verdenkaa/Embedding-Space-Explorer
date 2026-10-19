@@ -1,6 +1,6 @@
 /**
  * Relation kinds: text badges + colors. Structural relations must be
- * visually distinct from semantic proximity (TZ §7.2, stage-4 acceptance):
+ * visually distinct from semantic proximity:
  * every kind carries a TEXT badge (never color-only) and its own glyph.
  */
 
@@ -60,5 +60,5 @@ export const ORIGIN_LABELS: Record<string, string> = {
   manual: "вручную",
 };
 
-/** Cap on relation lines drawn in one scene (readability, TZ §7.2). */
+/** Cap on relation lines drawn in one scene (readability). */
 export const RELATION_LINE_LIMIT = 300;

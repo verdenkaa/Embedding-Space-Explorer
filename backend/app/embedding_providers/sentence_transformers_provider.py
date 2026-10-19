@@ -1,7 +1,7 @@
 """sentence-transformers provider (CPU, local cache, batched encode).
 
 All heavy imports are lazy so the application starts and reports honest
-diagnostics even before stage-2 dependencies are installed.
+diagnostics even before dependencies are installed.
 """
 
 from __future__ import annotations
@@ -60,11 +60,11 @@ class SentenceTransformerProvider(EmbeddingProvider):
         except ImportError as exc:  # pragma: no cover - guarded by health/deps
             raise ProviderLoadError(
                 "sentence-transformers is not installed; run scripts/dev.bat to install "
-                "stage-2 dependencies"
+                "dependencies"
             ) from exc
         except (MemoryError, RuntimeError, OSError) as exc:
             # A failed torch import leaves partially-initialized modules behind;
-            # surface an actionable message instead of pybind cascades (TZ §12).
+            # surface an actionable message instead of pybind cascades.
             raise ProviderLoadError(
                 f"failed to initialize torch/sentence-transformers ({exc.__class__.__name__}). "
                 "Likely not enough free RAM: close memory-hungry applications and restart "
@@ -136,7 +136,7 @@ class SentenceTransformerProvider(EmbeddingProvider):
 
 
 def set_hf_offline_flags(offline: bool) -> None:
-    """Force huggingface_hub offline mode after the first download (TZ §1.1)."""
+    """Force huggingface_hub offline mode after the first download."""
     os.environ["HF_HUB_OFFLINE"] = "1" if offline else "0"
     os.environ["TRANSFORMERS_OFFLINE"] = "1" if offline else "0"
 

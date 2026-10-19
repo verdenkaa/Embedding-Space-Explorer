@@ -1,4 +1,4 @@
-"""Text preparation modes for embeddings (TZ §6.3).
+"""Text preparation modes for embeddings.
 
 Two explicit modes; the exact template is stored with every embedding run —
 metadata is never added silently:

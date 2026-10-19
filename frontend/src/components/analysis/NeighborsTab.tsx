@@ -8,7 +8,7 @@ import { useProjectStore } from "../../state/projectStore";
 import { JobProgress } from "../corpus/JobProgress";
 
 /**
- * NEIGHBORS tab (TZ §7.1): semantic k-nearest neighbors of the ACTIVE
+ * NEIGHBORS tab: semantic k-nearest neighbors of the ACTIVE
  * fragment, computed by the backend over the ORIGINAL embeddings (the note
  * says so explicitly — semantic proximity is never confused with structural
  * links or with distances on a projection map).
@@ -142,7 +142,7 @@ export function NeighborsTab() {
   );
 }
 
-/** Progress of stage-4 jobs, shared by the tabs that start them. */
+/** Progress of jobs, shared by the tabs that start them. */
 export function AnalysisJobProgress() {
   const activeJob = useAnalysisStore((s) => s.activeJob);
   const cancelActiveJob = useAnalysisStore((s) => s.cancelActiveJob);

@@ -11,7 +11,7 @@ import { useProjectStore } from "./state/projectStore";
 import { useUiStore } from "./state/uiStore";
 
 /**
- * Health polling interval (TZ §10: polling, no WebSocket). Deliberately fixed:
+ * Health polling interval (polling, no WebSocket). Deliberately fixed:
  * scheduling must not depend on the connection state, otherwise a
  * state-change → effect → retry → state-change loop can starve the event loop
  * when the backend is down (regression-tested in App.test.tsx).

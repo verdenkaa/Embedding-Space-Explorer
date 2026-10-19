@@ -18,8 +18,7 @@ const SELECTION_DEBOUNCE_MS = 300;
 
 /**
  * Right panel: read-only Monaco viewer with fragment highlighting and
- * reverse tracing — selecting lines locates all intersecting fragments
- * (TZ §6.4, UI-ТЗ §6).
+ * reverse tracing — selecting lines locates all intersecting fragments.
  */
 export function SourceInspector() {
   const fileContent = useProjectStore((s) => s.fileContent);

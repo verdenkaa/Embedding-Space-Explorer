@@ -1,6 +1,6 @@
-"""Tree-sitter based structural splitter (TZ §6.2).
+"""Tree-sitter based structural splitter.
 
-Supported languages (stage 1 starting set): Python, JavaScript, TypeScript,
+Supported languages: Python, JavaScript, TypeScript,
 TSX. Extracts functions, methods, classes and other named structural nodes
 with correct line ranges (decorators included), nesting (symbol paths and
 parent links), and chunking of oversized nodes.

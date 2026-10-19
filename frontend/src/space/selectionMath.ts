@@ -5,7 +5,7 @@
  * Conventions:
  * - "raw" coordinates are the projection coordinates as computed by the
  *   backend (PC1/UMAP1 units — they belong to the PROJECTION, never to the
- *   original embedding space, TZ §5.2);
+ *   original embedding space);
  * - "display" coordinates are raw coordinates centered and uniformly scaled
  *   to fit [-1, 1] — a VIEW transform for the 3D scene only (it never feeds
  *   back into any computation);
@@ -13,7 +13,7 @@
  */
 
 /* ------------------------------------------------------------------ */
-/* 3D fit transform                                                    */
+/* 3D fit transform */
 /* ------------------------------------------------------------------ */
 
 export interface FitTransform {
@@ -86,7 +86,7 @@ export function applyFitStrided(
 }
 
 /* ------------------------------------------------------------------ */
-/* Rectangles & NDC selection (marquee)                                */
+/* Rectangles & NDC selection (marquee) */
 /* ------------------------------------------------------------------ */
 
 export interface Rect {
@@ -133,7 +133,7 @@ export function indicesInNdcRect(ndc: Float32Array, rect: Rect): number[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* 2D plot mapping                                                     */
+/* 2D plot mapping */
 /* ------------------------------------------------------------------ */
 
 export interface PlotBounds {
@@ -252,7 +252,7 @@ export function indicesInDataRect(
 }
 
 /* ------------------------------------------------------------------ */
-/* Axis ticks                                                          */
+/* Axis ticks */
 /* ------------------------------------------------------------------ */
 
 /** "Nice" tick values (1/2/5 · 10^k steps) covering [min, max]. */
@@ -288,7 +288,7 @@ export function formatTick(value: number, step: number): string {
 }
 
 /* ------------------------------------------------------------------ */
-/* 4D view: the "time" layer along one axis                            */
+/* 4D view: the "time" layer along one axis */
 /* ------------------------------------------------------------------ */
 
 /** Min/max of one component of an interleaved buffer (finite values only). */
@@ -359,7 +359,7 @@ function clamp01(v: number): number {
 }
 
 /* ------------------------------------------------------------------ */
-/* 2D plot zoom & pan (bounds-space camera)                            */
+/* 2D plot zoom & pan (bounds-space camera) */
 /* ------------------------------------------------------------------ */
 
 /** Zoom limits relative to the auto-fit bounds (span ratio fit/current). */

@@ -1,4 +1,4 @@
-"""Stage-5 tests: metrics (pure + API), experiments, exports, migration v5→v6.
+"""tests: metrics (pure + API), experiments, exports, migration v5→v6.
 
 Metric math is verified on synthetic data with KNOWN ground truth (identity
 "projection" must retain every neighbor; a constructed relation pair must be
@@ -120,7 +120,7 @@ def test_sample_indices_is_deterministic_and_sorted() -> None:
     a = sample_indices(100, 20, seed=42)
     b = sample_indices(100, 20, seed=42)
     c = sample_indices(100, 20, seed=7)
-    assert np.array_equal(a, b)  # reproducibility (TZ §9.2)
+    assert np.array_equal(a, b)  # reproducibility
     assert not np.array_equal(a, c)
     assert np.all(np.diff(a) > 0)  # sorted, no duplicates
     assert len(a) == 20
@@ -626,11 +626,11 @@ def test_export_metric_run_json(
 
 
 # ---------------------------------------------------------------------------
-# Migration v5 → v6 (additive, keeps stage-4 data)
+# Migration v5 → v6 (additive, keeps data)
 # ---------------------------------------------------------------------------
 
 
-def test_db_migration_v5_to_v6_keeps_stage4_data(settings: Settings) -> None:
+def test_db_migration_v5_to_v6_keeps_existing_data(settings: Settings) -> None:
     from datetime import UTC, datetime
 
     from app.storage.db import open_database
@@ -658,7 +658,7 @@ def test_db_migration_v5_to_v6_keeps_stage4_data(settings: Settings) -> None:
         )
         session.commit()
 
-    # Simulate a stage-4 (v5) database: drop the stage-5 tables.
+    # Simulate a (v5) database: drop the tables.
     with ctx.engine.begin() as conn:
         for table in ("metric_runs", "experiments"):
             conn.execute(text(f"DROP TABLE {table}"))

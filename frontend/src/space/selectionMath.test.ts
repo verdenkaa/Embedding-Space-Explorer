@@ -1,7 +1,7 @@
 /**
  * selectionMath + palette unit tests: the picking/fit/tick math is pure and
  * must be exact — both views rely on it for hit-testing and marquee selection
- * (TZ §15.2: "параметры среза передаются без искажения" applies to view math
+ * ("параметры среза передаются без искажения" applies to view math
  * being deterministic and invertible).
  */
 
@@ -203,7 +203,7 @@ describe("palette", () => {
 
 
 /* ------------------------------------------------------------------ */
-/* Stage-3 polish: strided fit, 4D layer, marquee slop, 2D zoom & pan  */
+/* strided fit, 4D layer, marquee slop, 2D zoom & pan */
 /* ------------------------------------------------------------------ */
 
 describe("computeFitStrided / applyFitStrided", () => {
@@ -338,7 +338,7 @@ describe("2D zoom & pan (bounds-space camera)", () => {
 });
 
 
-describe("cluster palette (stage 4)", () => {
+describe("cluster palette", () => {
   it("labels get deterministic, distinct colors; noise is the neutral gray", () => {
     expect(clusterColor(0)).toBe(clusterColor(0));
     expect(clusterColor(1)).not.toBe(clusterColor(2));

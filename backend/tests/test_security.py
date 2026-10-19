@@ -1,4 +1,4 @@
-"""Tests for the loopback-only security middleware (TZ §11)."""
+"""Tests for the loopback-only security middleware."""
 
 from __future__ import annotations
 

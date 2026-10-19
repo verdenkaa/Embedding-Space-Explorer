@@ -1,5 +1,5 @@
 /**
- * Stage-4 analysis tabs tests: NEIGHBORS (navigation + honest note),
+ * analysis tabs tests: NEIGHBORS (navigation + honest note),
  * RELATIONS (provenance badges, file-level endpoints, navigation),
  * CLUSTERS (explicit space form → payload, «На сцену» applies labels,
  * manual groups from the shared selection).

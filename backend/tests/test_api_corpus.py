@@ -1,4 +1,4 @@
-"""End-to-end API tests for the stage-1 corpus flow (TZ §15.3).
+"""End-to-end API tests for the corpus flow.
 
 Flow: create project -> index (job) -> files/fragments/content/locate/search
 -> change one file -> changes report -> confirmed re-index -> partial

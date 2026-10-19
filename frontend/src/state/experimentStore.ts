@@ -1,8 +1,8 @@
 /**
- * Experiment store: embedding models & runs (stage 2) + projection catalog,
- * form, inventory and compute job (stage 3). Depends on projectStore one-way
+ * Experiment store: embedding models & runs + projection catalog,
+ * form, inventory and compute job. Depends on projectStore one-way
  * (reads the current project id); later stages add slices/clustering/metrics
- * (TZ §2.2).
+ *.
  */
 
 import { create } from "zustand";
@@ -39,7 +39,7 @@ interface ExperimentState {
   modelId: string | null;
   mode: PrepMode;
   batchSize: number;
-  /* projections (stage 3) */
+  /* projections */
   projectionMethods: ProjectionMethodInfo[] | null;
   projections: ProjectionRunDTO[] | null;
   presets: ProjectionPresetDTO[] | null;

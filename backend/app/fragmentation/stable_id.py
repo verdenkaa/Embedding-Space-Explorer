@@ -1,4 +1,4 @@
-"""Stable fragment IDs (TZ §6.2).
+"""Stable fragment IDs.
 
 Requirements:
 - stable while logical boundaries and content are unchanged (line insertions

@@ -11,7 +11,7 @@ import { useSpaceStore } from "../../state/spaceStore";
 import { JobProgress } from "../corpus/JobProgress";
 
 /**
- * Metrics panel (stage 5, UI-ТЗ §7): compact numeric blocks, SECONDARY to
+ * Metrics panel: compact numeric blocks, SECONDARY to
  * the space — collapsed by default, never occupies the screen permanently.
  *
  * Honesty rules:

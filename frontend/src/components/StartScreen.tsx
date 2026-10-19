@@ -5,7 +5,7 @@ import { useProjectStore } from "../state/projectStore";
 import { FolderPickerDialog } from "./FolderPickerDialog";
 
 /**
- * Start screen (TZ §12): the short path — open/create a project, then index.
+ * Start screen: the short path — open/create a project, then index.
  * Shown when no project is open.
  */
 export function StartScreen() {

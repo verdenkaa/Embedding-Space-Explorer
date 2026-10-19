@@ -1,4 +1,4 @@
-"""Vector storage: interface + .npz file cache (TZ §2.2, §9).
+"""Vector storage: interface + .npz file cache.
 
 Vectors live OUTSIDE SQLite: one .npz per embedding run in
 `<project>/cache/embeddings/`, with parallel arrays:
@@ -9,7 +9,7 @@ Vectors live OUTSIDE SQLite: one .npz per embedding run in
     vectors      (N, D) float32
 
 A vector-store adapter interface keeps the door open for LanceDB etc. if
-measurements ever demand it (TZ §2.2) — nothing else in the app touches .npz.
+measurements ever demand it — nothing else in the app touches .npz.
 Saves are atomic (tmp + os.replace).
 """
 
@@ -61,8 +61,8 @@ class NpzEmbeddingCache:
                     cache.frag_hashes = [str(x) for x in data["frag_hashes"]]
                     cache.vectors = np.asarray(data["vectors"], dtype=np.float32)
             except (KeyError, ValueError, OSError):
-                # Corrupted cache: start empty rather than crash the project
-                # (TZ §9.4); the embed job simply recomputes vectors.
+                # Corrupted cache: start empty rather than crash the project;
+                # the embed job simply recomputes vectors.
                 cache.ids, cache.text_hashes, cache.frag_hashes = [], [], []
                 cache.vectors = np.zeros((0, 0), dtype=np.float32)
         cache._reindex()
@@ -107,7 +107,7 @@ class NpzEmbeddingCache:
 
         Projections record it at compute time; a mismatch means vectors were
         added/pruned/recomputed since, so dependent results are stale and
-        must be recomputed (TZ §9.3). Re-embedding identical texts does NOT
+        must be recomputed. Re-embedding identical texts does NOT
         change the signature — projections stay fresh.
         """
         digest = hashlib.sha256()

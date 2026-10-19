@@ -1,4 +1,4 @@
-"""Projection methods package (stage 3).
+"""Projection methods package.
 
 Public surface used by jobs/api:
 - `registry`: METHODS catalog (PCA / UMAP / raw axes), get_method/require_method,

@@ -4,7 +4,7 @@ import { kindBadge, kindColorClass } from "../../monaco/helpers";
 interface FragmentListProps {
   fragments: FragmentMeta[];
   activeFragmentId: string | null;
-  /** Multi-selection from the space views (amber marker, TZ §4.4). */
+  /** Multi-selection from the space views (amber marker). */
   selectedIds?: string[];
   showPath?: boolean;
   /** Search-result mode entries carry rel_path. */

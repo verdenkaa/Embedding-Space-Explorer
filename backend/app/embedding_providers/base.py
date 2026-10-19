@@ -1,4 +1,4 @@
-"""Embedding providers: model interface and implementations (TZ §2.3).
+"""Embedding providers: model interface and implementations.
 
 The provider interface is the single extension point for models: a new model
 is a catalog entry (+ optionally a new provider class for a different runtime).
@@ -34,7 +34,7 @@ class ModelNotDownloadedError(RuntimeError):
 class ProviderLoadError(RuntimeError):
     """Raised when the ML runtime cannot be imported/initialized.
 
-    Carries an actionable message (TZ §12): typically missing dependencies
+    Carries an actionable message: typically missing dependencies
     or not enough free RAM for the torch import.
     """
 
@@ -68,7 +68,7 @@ class EmbeddingProvider:
         """Encode texts to float32 [N, dim]; cancel_check may raise.
 
         Implementations process in batches of `batch_size` (RAM budget on
-        8 GB machines, TZ §2.3) and call progress_cb(done, total) after each
+        8 GB machines) and call progress_cb(done, total) after each
         batch. `cancel_check` is invoked between batches and must raise
         EmbeddingCancelledError when cancellation was requested.
         """

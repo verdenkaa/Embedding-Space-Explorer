@@ -3,7 +3,7 @@
 The user picks 2–4 axis indices (0..D-1) of the embedding vectors and sees
 their exact coordinates — the only "projection" that distorts nothing inside
 the chosen subspace (4 axes feed the 4D view: first three are the scene,
-the fourth is the "time" slider). Honesty requirements (TZ §5.1):
+the fourth is the "time" slider). Honesty requirements:
 - axes are model dimensions; the app never claims human-interpretable
   semantics for an individual axis (the UI says so);
 - distances on such a map ignore all non-selected dimensions — they are NOT

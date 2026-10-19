@@ -1,5 +1,5 @@
 /**
- * analysisStore tests (stage 4): neighbors/relations loading, the relations
+ * analysisStore tests: neighbors/relations loading, the relations
  * extraction job channel, import reports, clustering start + applying labels
  * to the scene (explicit user action), groups, and the slice overlay
  * lifecycle (server u-array → client-side window defaults).

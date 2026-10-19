@@ -1,4 +1,4 @@
-"""Metric endpoints (TZ §5.6): compute, inventory, detail, deletion.
+"""Metric endpoints: compute, inventory, detail, deletion.
 
 Metric values are always served together with their explanation, k, sample
 size and seed — a bare number without interpretation is forbidden (§12).

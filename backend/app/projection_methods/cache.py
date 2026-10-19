@@ -1,4 +1,4 @@
-"""Projection coordinate cache: one .npz per projection run (TZ §9.1).
+"""Projection coordinate cache: one .npz per projection run.
 
     <project>/cache/projections/<fingerprint>.npz
         ids        (N,)   unicode   — fragment ids (same order as coords)
@@ -8,7 +8,7 @@
 Unlike the embedding cache, a damaged file is NOT silently treated as
 empty: `load` returns None for both "absent" and "damaged", and the API
 turns that into an explicit "recompute the projection" error — serving an
-empty cloud as if it were the result would violate honesty (TZ §17.2).
+empty cloud as if it were the result would violate honesty.
 Saves are atomic (tmp + os.replace), as everywhere else.
 """
 

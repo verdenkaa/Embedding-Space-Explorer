@@ -1,6 +1,6 @@
 """Pure metric computations over numpy arrays (unit-testable, no IO).
 
-Definitions (TZ §5.6 minimal set):
+Definitions:
 
 - neighbor_retention@k  — mean share of the ORIGINAL-space k nearest
   neighbors (cosine over embeddings) that remain within the projection's

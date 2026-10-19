@@ -1,4 +1,4 @@
-"""Projection method catalog (single extension point, TZ §10.1).
+"""Projection method catalog (single extension point).
 
 Adding a new projection method:
 1. implement `ProjectionMethod` (see pca_method.py / umap_method.py);
@@ -33,7 +33,7 @@ def require_method(method_id: str) -> ProjectionMethod:
 
 
 def library_versions(method_id: str) -> dict[str, str]:
-    """Versions of everything that influenced the coordinates (TZ §9.2).
+    """Versions of everything that influenced the coordinates.
 
     Recorded in the projection run row; library updates do NOT invalidate
     caches (same policy as embedding runs) but are visible for

@@ -1,6 +1,6 @@
 /**
- * projectStore multi-selection tests (stage 3): the selection state shared by
- * 3D scene, 2D map, fragment lists and Monaco (TZ §4.4, §8.3, §15.2).
+ * projectStore multi-selection tests: the selection state shared by
+ * 3D scene, 2D map, fragment lists and Monaco.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";

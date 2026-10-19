@@ -1,6 +1,6 @@
-"""Embedding jobs: model download and vector computation (stage 2).
+"""Embedding jobs: model download and vector computation.
 
-Design notes (TZ §2.3, §9.3):
+Design notes:
 - CPU-only, batched; batch size defaults are conservative for 8 GB machines.
 - Cancellation between batches KEEPS already-computed vectors (checkpointed
   .npz), so a retry continues instead of restarting.
@@ -54,7 +54,7 @@ def run_params() -> dict[str, object]:
     """Parameters that INFLUENCE THE VECTORS (run identity / cache key).
 
     batch_size is deliberately NOT here: it is an execution detail and must
-    not invalidate cached vectors (TZ §12: lowering batch size on low RAM
+    not invalidate cached vectors (lowering batch size on low RAM
     restarts the stage without losing cached results).
     """
     return {"normalize": True, "device": "cpu", "dtype": "float32"}
@@ -190,7 +190,7 @@ def _finalize_run(project: ProjectContext, fingerprint: str, cache: NpzEmbedding
 
 
 def prune_embedding_caches(project: ProjectContext, warn: Callable[[str], None]) -> None:
-    """Drop vectors of deleted/changed fragments after (re)indexing (TZ §9.3)."""
+    """Drop vectors of deleted/changed fragments after (re)indexing."""
     with project.session_factory() as session:
         runs = session.execute(select(EmbeddingRunRow)).scalars().all()
         if not runs:

@@ -1,6 +1,6 @@
 """Logging setup.
 
-Policy (TZ §9.4, §12): logs must never contain source-code content of the
+Policy: logs must never contain source-code content of the
 researched project unless explicitly required for a diagnostic message. Keep
 log records to identifiers, paths, statuses, and parameter values.
 """

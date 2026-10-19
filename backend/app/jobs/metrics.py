@@ -1,4 +1,4 @@
-"""Metric jobs (TZ §5.6): quality numbers of a projection and agreement of
+"""Metric jobs: quality numbers of a projection and agreement of
 original-space neighbors with known structural relations.
 
 Design notes:

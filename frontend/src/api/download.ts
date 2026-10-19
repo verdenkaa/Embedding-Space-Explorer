@@ -1,5 +1,5 @@
 /**
- * File-download helpers (stage 5): trigger a browser download from an API
+ * File-download helpers: trigger a browser download from an API
  * endpoint (blob + Content-Disposition filename) or from a live canvas
  * (PNG scene capture — the backend never re-renders "screenshots").
  */

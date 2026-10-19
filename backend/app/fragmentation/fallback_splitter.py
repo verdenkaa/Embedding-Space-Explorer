@@ -1,4 +1,4 @@
-"""Fallback splitter: size-limited line chunks with overlap (TZ §6.2).
+"""Fallback splitter: size-limited line chunks with overlap.
 
 Used for unsupported formats and when a structural parser fails or yields
 nothing. Also used to break up oversized structural nodes / sections so no

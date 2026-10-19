@@ -1,6 +1,6 @@
 /**
  * Typed API client. Every panel talks to the backend only through this module
- * (TZ §10.2). Errors are normalized into ApiError with a machine-readable
+ *. Errors are normalized into ApiError with a machine-readable
  * code and a human-facing hint.
  */
 
@@ -122,7 +122,7 @@ export interface FragmentSearchParams {
 }
 
 export const api = {
-  /* health (stage 0) */
+  /* health */
   getHealth: (): Promise<HealthResponse> => request<HealthResponse>("/api/health"),
 
   /* projects */
@@ -180,7 +180,7 @@ export const api = {
   cancelJob: (pid: string, jid: string): Promise<JobInfo> =>
     request<JobInfo>(`/api/projects/${pid}/jobs/${jid}/cancel`, { method: "POST" }),
 
-  /* embeddings (stage 2) */
+  /* embeddings */
   listModels: (): Promise<ModelInfo[]> => request<ModelInfo[]>("/api/models"),
   getPreparationPreview: (): Promise<PreparationPreviews> =>
     request<PreparationPreviews>("/api/embeddings/preparation-preview"),
@@ -191,7 +191,7 @@ export const api = {
   listEmbeddingRuns: (pid: string): Promise<EmbeddingRunDTO[]> =>
     request<EmbeddingRunDTO[]>(`/api/projects/${pid}/embeddings`),
 
-  /* projections (stage 3) */
+  /* projections */
   listProjectionMethods: (): Promise<ProjectionMethodInfo[]> =>
     request<ProjectionMethodInfo[]>("/api/projections/methods"),
   computeProjection: (pid: string, payload: ComputeProjectionRequest): Promise<JobInfo> =>
@@ -220,7 +220,7 @@ export const api = {
       method: "DELETE",
     }),
 
-  /* slices of the original space (stage 4) */
+  /* slices of the original space */
   computeSlice: (pid: string, payload: ComputeSliceRequest): Promise<SliceComputeResponse> =>
     request<SliceComputeResponse>(`/api/projects/${pid}/slices/compute`, jsonInit("POST", payload)),
   listSlices: (pid: string): Promise<SavedSliceDTO[]> =>
@@ -230,7 +230,7 @@ export const api = {
   deleteSlice: (pid: string, sliceId: string): Promise<{ deleted: string }> =>
     request<{ deleted: string }>(`/api/projects/${pid}/slices/${sliceId}`, { method: "DELETE" }),
 
-  /* semantic neighbors (stage 4) */
+  /* semantic neighbors */
   findNeighbors: (
     pid: string,
     fragmentId: string,
@@ -248,7 +248,7 @@ export const api = {
       }),
     ),
 
-  /* structural relations (stage 4) */
+  /* structural relations */
   listRelations: (
     pid: string,
     params: {
@@ -281,7 +281,7 @@ export const api = {
   extractRelations: (pid: string): Promise<JobInfo> =>
     request<JobInfo>(`/api/projects/${pid}/relations/extract`, { method: "POST" }),
 
-  /* clustering + manual groups (stage 4) */
+  /* clustering + manual groups */
   computeClustering: (pid: string, payload: ComputeClusteringRequest): Promise<JobInfo> =>
     request<JobInfo>(`/api/projects/${pid}/clustering/compute`, jsonInit("POST", payload)),
   listClustering: (pid: string): Promise<ClusteringRunDTO[]> =>
@@ -299,7 +299,7 @@ export const api = {
   deleteGroup: (pid: string, groupId: string): Promise<{ deleted: string }> =>
     request<{ deleted: string }>(`/api/projects/${pid}/groups/${groupId}`, { method: "DELETE" }),
 
-  /* metrics (stage 5) */
+  /* metrics */
   computeMetrics: (pid: string, payload: ComputeMetricsRequest): Promise<JobInfo> =>
     request<JobInfo>(`/api/projects/${pid}/metrics/compute`, jsonInit("POST", payload)),
   listMetricRuns: (pid: string): Promise<MetricRunDTO[]> =>
@@ -311,7 +311,7 @@ export const api = {
       method: "DELETE",
     }),
 
-  /* saved experiments (stage 5) */
+  /* saved experiments */
   listExperiments: (pid: string): Promise<ExperimentSummaryDTO[]> =>
     request<ExperimentSummaryDTO[]>(`/api/projects/${pid}/experiments`),
   saveExperiment: (pid: string, payload: CreateExperimentRequest): Promise<ExperimentDTO> =>
@@ -331,7 +331,7 @@ export const api = {
 };
 
 /* ---------------------------------------------------------------------------
- * Export URL builders (stage 5, TZ §13.17). Pure string helpers — the actual
+ * Export URL builders. Pure string helpers — the actual
  * download goes through downloadFromApi (blob + Content-Disposition).
  * ------------------------------------------------------------------------- */
 

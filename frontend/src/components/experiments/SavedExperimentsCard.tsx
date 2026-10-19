@@ -8,7 +8,7 @@ import { useProjectStore } from "../../state/projectStore";
 import { useSavedExperimentsStore } from "../../state/savedExperimentsStore";
 
 /**
- * Saved experiments card (stage 5, TZ §9.2): save the current SPACE state as
+ * Saved experiments card: save the current SPACE state as
  * a named reopenable snapshot; open restores what is still alive and REPORTS
  * everything that is not (deleted/stale references are never silently
  * substituted); compare puts two snapshots side by side (configs + save-time

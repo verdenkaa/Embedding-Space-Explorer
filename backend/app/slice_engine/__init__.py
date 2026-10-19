@@ -1,6 +1,6 @@
 """Slice engine: mathematical layer selection in the ORIGINAL space.
 
-Public API of the module (TZ §10.1 `slice_engine`):
+Public API of the module:
 - resolve_normal: build a unit D-dim normal from an MVP spec (axis / PCA
   direction / explicit vector);
 - compute_slice: signed coordinates along the normal + in-layer mask.

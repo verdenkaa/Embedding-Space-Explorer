@@ -1,4 +1,4 @@
-"""UMAP projection (TZ §5.2: the additional non-linear method).
+"""UMAP projection (the additional non-linear method).
 
 umap-learn is imported lazily: its numba runtime costs several seconds and
 hundreds of MB of RAM on first import — the app must stay responsive and
@@ -6,7 +6,7 @@ diagnosable without paying that until UMAP is actually requested.
 
 Determinism: with `random_state=seed` UMAP is reproducible (verified by
 tests); the price is single-threaded layout optimization (umap itself warns
-about n_jobs=1 — expected and suppressed, reproducibility wins, TZ §9.2).
+about n_jobs=1 — expected and suppressed, reproducibility wins).
 """
 
 from __future__ import annotations

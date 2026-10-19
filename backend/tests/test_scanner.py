@@ -1,4 +1,4 @@
-"""Scanner tests: exclusions, secrets, binaries, size limits, symlinks (TZ §6.1, §11)."""
+"""Scanner tests: exclusions, secrets, binaries, size limits, symlinks."""
 
 from __future__ import annotations
 

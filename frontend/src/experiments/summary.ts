@@ -1,5 +1,5 @@
 /**
- * Pure formatting helpers for saved experiments (stage 5): the summary chips
+ * Pure formatting helpers for saved experiments: the summary chips
  * of the list view and the side-by-side comparison rows. Kept out of the
  * component for unit tests; every value shown is either served data or an
  * explicit «—» (never an invention).

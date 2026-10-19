@@ -1,4 +1,4 @@
-"""Markdown splitter: sections by ATX headings with line ranges (TZ §6.2).
+"""Markdown splitter: sections by ATX headings with line ranges.
 
 - A section spans from its heading line up to (not including) the next
   heading of ANY level, or EOF.

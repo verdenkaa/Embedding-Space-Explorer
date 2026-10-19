@@ -13,7 +13,7 @@ import { FileTree } from "./FileTree";
 import { FragmentList } from "./FragmentList";
 import { SelectedFragmentCard } from "./SelectedFragmentCard";
 
-/** Left panel tabs (UI-ТЗ §5). All four are live since stage 4. */
+/** Left panel tabs. All four are live. */
 const PANEL_TABS = [
   { id: "fragments", label: "FRAGMENTS", title: "Дерево файлов, фрагменты и поиск" },
   {

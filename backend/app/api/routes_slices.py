@@ -1,16 +1,15 @@
 """Slice endpoints: mathematical layer selection in the ORIGINAL space.
 
-TZ §5.3: a slice is a sample of points in a slab around a hyperplane defined
+A slice is a sample of points in a slab around a hyperplane defined
 in the original D-dimensional space — d(x) = dot(x - p, n), membership
 |d(x)| <= t/2. It is computed synchronously over the stored vectors (one
 N×D dot product — milliseconds for a research corpus), and the response
 carries the coordinate along the normal for EVERY fragment so each view can
-mask the layer over whichever projection is active.
-
-TZ §5.4 honesty: the selection happens in the original space; the DISPLAY
-always goes through a projection and the UI must say so — the response
-carries the note, and saved slices persist the RESOLVED unit normal (exact
-D-dim vector) so a saved slice stays reproducible even if the data changes.
+mask the layer over whichever projection is active. Honesty: the selection
+happens in the original space; the DISPLAY always goes through a projection
+and the UI must say so — the response carries the note, and saved slices
+persist the RESOLVED unit normal (exact D-dim vector) so a saved slice stays
+reproducible even if the data changes.
 """
 
 from __future__ import annotations

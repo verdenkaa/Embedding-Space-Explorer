@@ -1,4 +1,4 @@
-"""Background jobs: id, state, progress, cancellation (TZ §10).
+"""Background jobs: id, state, progress, cancellation.
 
 Single worker thread is enough for a local single-user tool; long operations
 never run inside HTTP requests. Frontend polls GET /api/jobs/{id}.
@@ -181,7 +181,7 @@ class JobManager:
             )
         except Exception as exc:
             # Log with traceback server-side; expose only a short repr to the
-            # API — logs must not leak source content (TZ §9.4).
+            # API — logs must not leak source content.
             log.error("job %s failed: %r\n%s", task.job_id, exc, traceback.format_exc())
             self._finish(
                 task,

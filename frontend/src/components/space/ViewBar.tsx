@@ -122,7 +122,7 @@ export function ViewSelect({ kind }: { kind: CloudKind }) {
   );
 }
 
-/** Two-step "delete everything computed" (TZ §12: destructive → confirm). */
+/** Two-step "delete everything computed" (destructive → confirm). */
 export function DeleteAllProjectionsButton() {
   const projections = useExperimentStore((s) => s.projections);
   const deleteAllProjections = useExperimentStore((s) => s.deleteAllProjections);
@@ -173,7 +173,7 @@ export function DeleteAllProjectionsButton() {
 }
 
 /**
- * Export menu (stage 5, UI-ТЗ §3 «Сохранение и экспорт»): images of the live
+ * Export menu: images of the live
  * scenes (client-side canvas capture — what you see is what you get) and
  * CSV/JSON of explicitly chosen data (the active projection's points, the
  * current selection, all relations).

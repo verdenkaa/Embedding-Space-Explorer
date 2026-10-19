@@ -1,10 +1,10 @@
-"""Clustering and manual-group endpoints (TZ §8.1, §8.2).
+"""Clustering and manual-group endpoints.
 
 Clustering:
 - the space is EXPLICIT ("original" vectors with cosine/euclidean distance,
   or one projection's coordinates with euclidean) and persisted per run;
 - compute is a background job (DBSCAN is fast, but the job contract keeps
-  progress/cancellation uniform — TZ §10);
+  progress/cancellation uniform);
 - labels live in cache/clustering/<id>.npz; identity = fingerprint, so the
   same configuration recomputes idempotently;
 - staleness follows the embedding cache signature (like projections);
@@ -12,7 +12,7 @@ Clustering:
 
 Manual groups:
 - named sets of FRAGMENT IDs from the current selection; independent of
-  automatic clustering (never overwritten by it, TZ §8.2);
+  automatic clustering (never overwritten by it);
 - members cascade with deleted fragments; counts stay honest.
 """
 
@@ -265,7 +265,7 @@ def delete_clustering_run(
 
 
 # ---------------------------------------------------------------------------
-# Manual groups (TZ §8.2)
+# Manual groups
 # ---------------------------------------------------------------------------
 
 

@@ -64,7 +64,7 @@ export function computeDecorations(
   return active ? [...others, active] : others;
 }
 
-/** Kind → short badge label (non-color-only identification, TZ §4.1). */
+/** Kind → short badge label (non-color-only identification). */
 export function kindBadge(kind: string): string {
   switch (kind) {
     case "function":

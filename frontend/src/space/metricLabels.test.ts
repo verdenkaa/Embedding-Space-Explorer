@@ -1,5 +1,5 @@
 /**
- * Stage-5 pure-module tests: metric labels/formatting, export URL builders,
+ * pure-module tests: metric labels/formatting, export URL builders,
  * Content-Disposition filename parsing, scene-capture counting.
  */
 

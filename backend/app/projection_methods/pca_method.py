@@ -1,4 +1,4 @@
-"""PCA projection (TZ §5.2: the baseline reproducible linear method).
+"""PCA projection (the baseline reproducible linear method).
 
 scikit-learn PCA with svd_solver="full": deterministic (LAPACK SVD, sign
 flips resolved by svd_flip), so no seed is needed for reproducibility —

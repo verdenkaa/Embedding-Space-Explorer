@@ -93,7 +93,7 @@ class EmbeddingRunRow(Base):
     """One embedding run configuration + its vector cache file.
 
     Identity of a run = (model_id, mode, template, params_json): changing any
-    of these creates a NEW run instead of silently mixing vectors (TZ §2.3).
+    of these creates a NEW run instead of silently mixing vectors.
     Vectors live in an .npz file next to the DB (see docs/data-model.md);
     this row is the inventory + pointer.
     """
@@ -120,7 +120,7 @@ class ProjectionRunRow(Base):
     coordinates live in a .npz file (cache/projections/). `source_signature`
     is the embedding cache signature at compute time: mismatch ⇒ the vectors
     changed since (recompute/prune/reindex) ⇒ the projection is STALE and the
-    UI must say so instead of silently showing an outdated map (TZ §9.3).
+    UI must say so instead of silently showing an outdated map.
     """
 
     __tablename__ = "projection_runs"
@@ -137,7 +137,7 @@ class ProjectionRunRow(Base):
     axis_labels_json: Mapped[str] = mapped_column(String(512))
     #: PCA explained variance ratios (JSON list) or null (UMAP)
     axis_info_json: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    #: library versions that produced the coordinates (TZ §9.2)
+    #: library versions that produced the coordinates
     versions_json: Mapped[str] = mapped_column(String(512))
     npz_relpath: Mapped[str] = mapped_column(String(512))
     count: Mapped[int] = mapped_column(Integer, default=0)
@@ -166,13 +166,13 @@ class ProjectionPresetRow(Base):
 
 
 class RelationRow(Base):
-    """One structural relation (TZ §7.2): imports/calls/belongs_to/tested_by…
+    """One structural relation: imports/calls/belongs_to/tested_by…
 
     Endpoints are files AND/OR fragments — an import at the top of a file
     belongs to no fragment, so file-level endpoints are honest first-class
     citizens (at least one endpoint object on each side is required; code
     enforces it). `origin` separates automatically extracted, imported and
-    manual relations (TZ §7.2: never mix provenance).
+    manual relations (never mix provenance).
     """
 
     __tablename__ = "relations"
@@ -205,7 +205,7 @@ class RelationRow(Base):
 
 
 class ClusteringRunRow(Base):
-    """One automatic clustering run (TZ §8.1).
+    """One automatic clustering run.
 
     Identity = fingerprint(embedding_run, space, projection_run, algorithm,
     params); labels live in cache/clustering/<id>.npz (ids + int32 labels,
@@ -239,7 +239,7 @@ class ClusteringRunRow(Base):
 
 
 class FragmentGroupRow(Base):
-    """A named manual group of fragments (TZ §8.2).
+    """A named manual group of fragments.
 
     Groups survive automatic clustering (independent entities) and store
     fragment IDs — not screen coordinates. Members cascade with fragments:
@@ -272,7 +272,7 @@ class FragmentGroupMemberRow(Base):
 
 
 class SavedSliceRow(Base):
-    """A saved mathematical slice of the ORIGINAL space (TZ §5.3).
+    """A saved mathematical slice of the ORIGINAL space.
 
     The normal is stored RESOLVED (exact D-dim unit vector at save time) so
     the slice stays reproducible even if a later PCA refit flips signs;
@@ -300,7 +300,7 @@ class SavedSliceRow(Base):
 
 
 class MetricRunRow(Base):
-    """One metric run (TZ §5.6): quality numbers of a projection and/or the
+    """One metric run: quality numbers of a projection and/or the
     agreement of original-space neighbors with KNOWN structural relations.
 
     Identity = fingerprint(embedding_run, projection_run, k, sample, seed,
@@ -332,7 +332,7 @@ class MetricRunRow(Base):
 
 
 class ExperimentRow(Base):
-    """A saved, reopenable experiment (TZ §9.2).
+    """A saved, reopenable experiment.
 
     `config_json` references the concrete runs (embeddings/projections/
     slice/clustering/groups/selection/metrics) captured from the UI;

@@ -1,13 +1,13 @@
 /**
- * Space view store (stage 3): interface state of the SPACE section.
+ * Space view store: interface state of the SPACE section.
  *
- * Division of responsibility (TZ §2.2):
+ * Division of responsibility:
  * - projectStore  → shared selection state (active fragment + multi-selection);
  * - experimentStore → experiment configuration (projection form/inventory/job);
  * - spaceStore (this) → loaded point clouds, hover, view settings.
  *
  * Point clouds are built from REAL projection coordinates served by the
- * backend (never synthesized client-side — TZ §17.2). The scene "display"
+ * backend (never synthesized client-side). The scene "display"
  * buffer is a pure view transform (center + uniform scale into [-1,1]) over
  * the first min(n, 3) components; all picking/marquee math that must match
  * the backend coordinates uses the raw buffer.
@@ -82,7 +82,7 @@ export interface Slice4D {
 export const DEFAULT_SLICE_4D: Slice4D = { tFrac: 0.5, wFrac: 0.15, playing: false };
 
 /**
- * Slice of the ORIGINAL space laid over the views (stage 4, TZ §5.3/§5.4).
+ * Slice of the ORIGINAL space laid over the views.
  * The backend serves u(x) = dot(x - centroid, n) per fragment once per
  * (run, normal); position/thickness sliders re-mask client-side (pure math
  * in space/sliceMath.ts). `display`: off — no overlay; dim — points outside

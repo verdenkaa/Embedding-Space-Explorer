@@ -1,5 +1,5 @@
 /**
- * Monaco offline setup (TZ §1.1 — no CDN, works offline after install).
+ * Monaco offline setup.
  *
  * Deliberately SLIM: we import the editor core plus only the monarch
  * tokenizers for the languages the corpus viewer shows (python, javascript,

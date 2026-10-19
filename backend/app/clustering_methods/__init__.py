@@ -1,4 +1,4 @@
-"""Automatic clustering methods (TZ §8.1, §10.1 `clustering_methods`).
+"""Automatic clustering methods.
 
 MVP scope: DBSCAN from scikit-learn — one well-tested algorithm instead of a
 gallery of half-used ones. The space a clustering runs in is EXPLICIT and

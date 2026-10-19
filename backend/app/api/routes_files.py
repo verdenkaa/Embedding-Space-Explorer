@@ -72,7 +72,7 @@ def resolve_readable_path(ctx: ProjectContext, abs_path: str, rel_path: str) -> 
     """Verify a stored file path is still readable inside the project roots.
 
     Never trusts the DB blindly: re-resolves and re-checks containment on
-    every read (TZ §11). Symlinks outside roots are only honored when the
+    every read. Symlinks outside roots are only honored when the
     project explicitly allowed them at scan time.
     """
     if ctx.manifest.split_options.allow_symlinks_outside_root:
@@ -177,7 +177,7 @@ def locate_fragments(
     file_id: str,
     payload: LocateRequest,
 ) -> LocateResponse:
-    """Reverse tracing: line selection → all overlapping fragments (TZ §6.4)."""
+    """Reverse tracing: line selection → all overlapping fragments."""
     with ctx.session_factory() as session:
         get_file_row(session, ctx, file_id)
         rows = (

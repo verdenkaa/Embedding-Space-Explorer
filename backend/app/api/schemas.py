@@ -1,7 +1,7 @@
 """Pydantic DTOs for the HTTP API.
 
 These mirror `frontend/src/api/types.ts`. Field names are snake_case and
-stable; validation is mandatory for every external input (TZ §17.4).
+stable; validation is mandatory for every external input.
 """
 
 from __future__ import annotations
@@ -31,21 +31,17 @@ class ErrorResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Health (stage 0)
+# Health
 # ---------------------------------------------------------------------------
 
 
 class DependencyInfo(BaseModel):
-    """A runtime dependency: installed version or the stage where it is planned."""
+    """A runtime dependency: installed version or an honest «not installed»."""
 
     name: str
     installed: bool
     version: str | None = None
     required: bool
-    planned_stage: str | None = Field(
-        default=None,
-        description="Development stage that introduces this dependency, e.g. 'stage-2'.",
-    )
 
 
 class CheckResult(BaseModel):
@@ -74,7 +70,7 @@ class HealthResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Projects (stage 1)
+# Projects
 # ---------------------------------------------------------------------------
 
 
@@ -272,7 +268,7 @@ class FsListResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Embeddings (stage 2)
+# Embeddings
 # ---------------------------------------------------------------------------
 
 PrepMode = Literal["raw_fragment", "context_enriched"]
@@ -327,7 +323,7 @@ class PreparationPreviewsDTO(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Projections (stage 3)
+# Projections
 # ---------------------------------------------------------------------------
 
 ProjectionParamType = Literal["int", "float", "bool", "choice", "int_list"]
@@ -481,7 +477,7 @@ class CreatePresetRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Stage 4: slices of the ORIGINAL space (TZ §5.3)
+# slices of the ORIGINAL space
 # ---------------------------------------------------------------------------
 
 
@@ -541,7 +537,7 @@ class SavedSliceDTO(BaseModel):
     normal_kind: str
     normal_index: int | None = None
     dim: int
-    #: resolved unit normal at save time (reproducibility, TZ §5.3)
+    #: resolved unit normal at save time (reproducibility)
     vector: list[float]
     position: float
     thickness: float
@@ -549,7 +545,7 @@ class SavedSliceDTO(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Stage 4: semantic neighbors (TZ §7.1)
+# semantic neighbors
 # ---------------------------------------------------------------------------
 
 
@@ -589,7 +585,7 @@ class NeighborsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Stage 4: structural relations (TZ §7.2, §7.3)
+# structural relations
 # ---------------------------------------------------------------------------
 
 
@@ -609,7 +605,7 @@ class RelationEndpointDTO(BaseModel):
 class RelationDTO(BaseModel):
     id: str
     kind: str
-    #: extracted | imported | manual — provenance is never mixed (TZ §7.2)
+    #: extracted | imported | manual — provenance is never mixed
     origin: str
     confidence: float | None = None
     detail: str | None = None
@@ -647,7 +643,7 @@ class ImportRelationsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Stage 4: clustering (TZ §8.1) and manual groups (TZ §8.2)
+# clustering and manual groups
 # ---------------------------------------------------------------------------
 
 
@@ -716,7 +712,7 @@ class FragmentGroupDTO(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Stage 5: metrics (TZ §5.6)
+# metrics
 # ---------------------------------------------------------------------------
 
 
@@ -734,7 +730,7 @@ class ComputeMetricsRequest(BaseModel):
 
 class MetricValueDTO(BaseModel):
     """One metric: value + everything needed to interpret it (never a bare
-    number — TZ §5.6/§12)."""
+    number)."""
 
     value: float | None = None
     k: int | None = None
@@ -763,7 +759,7 @@ class MetricRunDTO(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Stage 5: experiments (TZ §9.2)
+# experiments
 # ---------------------------------------------------------------------------
 
 
@@ -840,6 +836,6 @@ class ExperimentDTO(BaseModel):
 
 
 class ExportFragmentsRequest(BaseModel):
-    """Explicit selection to export (TZ §11: only data the user chose)."""
+    """Explicit selection to export (only data the user chose)."""
 
     fragment_ids: list[str] = Field(min_length=1, max_length=20_000)

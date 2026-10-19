@@ -1,5 +1,5 @@
 /**
- * Saved experiments (stage 5, TZ §9.2): capture the current SPACE state,
+ * Saved experiments: capture the current SPACE state,
  * persist it as a named reopenable snapshot, and restore it later — with an
  * HONEST report of what could not be restored (deleted/stale references are
  * listed, never silently substituted).

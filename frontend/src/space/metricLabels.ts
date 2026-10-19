@@ -1,5 +1,5 @@
 /**
- * Display names of the metric set (stage 5). The backend serves the full
+ * Display names of the metric set. The backend serves the full
  * explanation with every value; these short labels are for compact blocks
  * and tables. Pure module — unit-tested.
  */

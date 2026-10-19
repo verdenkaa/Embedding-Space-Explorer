@@ -8,11 +8,11 @@ import { useProjectStore } from "../../state/projectStore";
 import { AnalysisJobPoller, AnalysisJobProgress } from "../analysis/NeighborsTab";
 
 /**
- * RELATIONS section (stage 4): the project-wide browser of STRUCTURAL
+ * RELATIONS section: the project-wide browser of STRUCTURAL
  * relations — filters by kind/origin, extraction job, ese-relations/v1
  * import with an honest per-row report, manual creation and deletion.
  * Semantic neighbors live in the left panel (NEIGHBORS tab) and are never
- * mixed in here (TZ §7.2).
+ * mixed in here.
  */
 
 const KNOWN_KINDS = [
@@ -27,7 +27,7 @@ const KNOWN_KINDS = [
 ];
 
 /* ------------------------------------------------------------------ */
-/* Fragment picker (search-as-you-type)                                 */
+/* Fragment picker (search-as-you-type) */
 /* ------------------------------------------------------------------ */
 
 function FragmentPicker({
@@ -114,7 +114,7 @@ function FragmentPicker({
 }
 
 /* ------------------------------------------------------------------ */
-/* Section                                                              */
+/* Section */
 /* ------------------------------------------------------------------ */
 
 export function RelationsSection() {

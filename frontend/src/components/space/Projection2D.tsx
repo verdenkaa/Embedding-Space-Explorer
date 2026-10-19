@@ -23,7 +23,7 @@ import { kindBadge } from "../../monaco/helpers";
 import { toFragmentRef } from "../../space/fragmentRef";
 
 /**
- * Synchronized 2D projection(s) (TZ §4.4, UI-ТЗ §3): the same fragments as
+ * Synchronized 2D projection(s): the same fragments as
  * the 3D scene, sharing the selection state by fragment id. Plain canvas 2D —
  * no per-point components; redraws happen only on state changes.
  *
@@ -39,10 +39,10 @@ import { toFragmentRef } from "../../space/fragmentRef";
  * adds the area to the selection), click selects a point (Ctrl toggles),
  * Esc clears.
  *
- * Honesty (TZ §5.2/§5.4): each plot header names the projection method and
+ * Honesty: each plot header names the projection method and
  * its axes, shows PCA explained variance when available, and states that
  * this map is a PROJECTION of all points — not a mathematical slice of the
- * original space (slices arrive at stage 4 and will be labeled separately).
+ * original space (slices arrive and will be labeled separately).
  */
 
 const PADDING = DEFAULT_PADDING;
@@ -132,7 +132,7 @@ export function Projection2D() {
 }
 
 /* ------------------------------------------------------------------ */
-/* One plot                                                            */
+/* One plot */
 /* ------------------------------------------------------------------ */
 
 export function Plot2D({ cloud }: { cloud: PointCloud }) {

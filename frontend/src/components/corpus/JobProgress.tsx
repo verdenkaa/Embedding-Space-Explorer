@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { JobInfo } from "../../api/types";
 import { useProjectStore } from "../../state/projectStore";
 
-/** Polls the corpus (index) job while it runs (TZ §10: polling). */
+/** Polls the corpus (index) job while it runs (polling). */
 const POLL_INTERVAL_MS = 1000;
 
 export function JobPoller() {

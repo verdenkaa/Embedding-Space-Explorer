@@ -43,7 +43,6 @@ function DependenciesCard({ health }: { health: HealthResponse }) {
             <th scope="col">Пакет</th>
             <th scope="col">Версия</th>
             <th scope="col">Статус</th>
-            <th scope="col">Этап</th>
           </tr>
         </thead>
         <tbody>
@@ -59,7 +58,6 @@ function DependenciesCard({ health }: { health: HealthResponse }) {
                   {dep.installed ? "✓ установлена" : "не установлена"}
                 </span>
               </td>
-              <td>{dep.planned_stage ?? "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -150,7 +148,7 @@ function LoadingView() {
   );
 }
 
-/** Stage 0 main view: live backend diagnostics in the dark-IDE style. */
+/** Main view: live backend diagnostics in the dark-IDE style. */
 export function DiagnosticsPanel() {
   const connection = useUiStore((s) => s.connection);
   const health = useUiStore((s) => s.health);
@@ -158,10 +156,10 @@ export function DiagnosticsPanel() {
   return (
     <div className="diagnostics">
       <div className="diagnostics__header">
-        <h1 className="diagnostics__title">Диагностика — Этап 0</h1>
+        <h1 className="diagnostics__title">Диагностика</h1>
         <p className="diagnostics__subtitle">
-          Каркас приложения: локальный backend (FastAPI, только 127.0.0.1) и интерфейс-оболочка.
-          Разделы SPACE / RELATIONS / EXPERIMENTS доступны; оставшиеся этапы — стабилизация и приёмка.
+          Состояние локального backend (FastAPI, только 127.0.0.1): версии,
+          проверки и зависимости приложения.
         </p>
       </div>
 

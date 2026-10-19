@@ -1,4 +1,4 @@
-"""Import of structured relation corpora (TZ §7.3): `ese-relations/v1`.
+"""Import of structured relation corpora: `ese-relations/v1`.
 
 The format is deliberately generic and decoupled from any concrete source
 repository (e.g. signal_desk): a project-specific adapter maps its export

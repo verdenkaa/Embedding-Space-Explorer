@@ -20,10 +20,10 @@ import { SliceControls } from "./SliceControls";
 import { ViewBar } from "./ViewBar";
 
 /**
- * SPACE section: the research-IDE layout of TZ §4.2, adjusted by user
+ * SPACE section: the research-IDE layout of, adjusted by user
  * feedback — corpus (left) | view bar + scenes + projection controls at
  * the BOTTOM (center) | Monaco inspector (right, closable). Every view
- * shares the selection state by fragment id (TZ §4.4).
+ * shares the selection state by fragment id.
  */
 
 export function SpaceSection() {

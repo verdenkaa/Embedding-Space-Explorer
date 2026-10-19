@@ -1,4 +1,4 @@
-"""Job endpoints: status polling and cancellation (TZ §10: polling, no WS)."""
+"""Job endpoints: status polling and cancellation (polling, no WS)."""
 
 from __future__ import annotations
 

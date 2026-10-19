@@ -1,4 +1,4 @@
-"""Surface relation extraction via tree-sitter (TZ §7.2).
+"""Surface relation extraction via tree-sitter.
 
 What is extracted honestly, without a full semantic analyzer:
 - `imports`: import/export-from/require statements in Python/JS/TS/TSX whose

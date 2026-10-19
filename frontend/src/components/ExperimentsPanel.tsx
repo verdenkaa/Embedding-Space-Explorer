@@ -9,9 +9,9 @@ const JOB_POLL_MS = 1000;
 
 /**
  * EXPERIMENTS section: embedding model, text-preparation mode, compute runs
- * and coverage. Projections live in the SPACE section (stage 3);
+ * and coverage. Projections live in the SPACE section;
  * neighbors/clusters/metrics arrive at stages 4–5 — stated honestly, no
- * fake controls (TZ §17.2).
+ * fake controls.
  */
 export function ExperimentsPanel() {
   const current = useProjectStore((s) => s.current);

@@ -4,7 +4,7 @@
  * (monaco/helpers.ts kindColorClass): teal = functions/methods, blue =
  * types/classes, amber = document sections, gray = everything else.
  * Canvas/WebGL cannot read CSS variables, so the hex values are duplicated
- * here — keep them in sync with tokens.css (single visual language, TZ §4.1).
+ * here — keep them in sync with tokens.css (single visual language).
  */
 
 export const COLORS = {
@@ -45,7 +45,7 @@ export function hexToRgb(hex: string): [number, number, number] {
 }
 
 /** Legend entries present in a cloud, in a stable order (label = corpus badge
- * text, so color is never the only identifier — TZ §4.1). */
+ * text, so color is never the only identifier). */
 export interface LegendEntry {
   kind: string;
   color: string;
@@ -56,7 +56,7 @@ export interface LegendEntry {
  * Deterministic cluster palette (golden-angle hues): the same label always
  * gets the same color within a session; noise (-1) is the neutral gray and
  * the legend ALWAYS carries text labels («кластер N» / «шум») — color is
- * never the only identifier (TZ §4.1).
+ * never the only identifier.
  */
 export function clusterColor(label: number): string {
   if (label < 0) return COLORS.gray;

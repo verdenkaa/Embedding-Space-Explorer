@@ -1,5 +1,5 @@
 /**
- * MetricsPanel tests (stage 5): collapsed by default (secondary to space),
+ * MetricsPanel tests: collapsed by default (secondary to space),
  * compute form → explicit payload, result blocks with explanations and
  * «нет данных» for nulls, staleness badge, warnings, empty-state honesty.
  */

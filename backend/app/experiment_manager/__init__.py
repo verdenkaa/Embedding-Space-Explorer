@@ -1,4 +1,4 @@
-"""Experiment manager (TZ §9.2, §10.1): capture, validate and interpret
+"""Experiment manager: capture, validate and interpret
 saved experiments.
 
 An experiment is a named, reopenable snapshot of the research state: which

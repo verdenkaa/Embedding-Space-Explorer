@@ -1,4 +1,4 @@
-"""Semantic neighbor endpoints (TZ §7.1).
+"""Semantic neighbor endpoints.
 
 Neighbors are ALWAYS computed over the ORIGINAL embeddings with an explicit
 metric — never over projection coordinates (unless the user later explicitly

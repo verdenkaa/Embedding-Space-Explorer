@@ -1,5 +1,5 @@
 /**
- * SavedExperimentsCard tests (stage 5): the list with save-time summaries,
+ * SavedExperimentsCard tests: the list with save-time summaries,
  * the save flow (explicit name required), the open report (what was restored
  * and what was honestly skipped) and the two-way comparison table.
  */

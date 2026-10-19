@@ -1,6 +1,6 @@
 """Pytest fixtures for backend tests.
 
-Shared stage-2/3 fakes live here so every API-level test module drives the
+Shared fakes live here so every API-level test module drives the
 same deterministic embedding provider (no torch needed for logic tests).
 """
 

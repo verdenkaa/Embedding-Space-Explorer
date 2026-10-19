@@ -1,8 +1,8 @@
-"""Mathematics of a slice (layer) in the original embedding space (TZ §5.3).
+"""Mathematics of a slice (layer) in the original embedding space.
 
 A slice is a SELECTION of points in a slab around a hyperplane defined in
 the original D-dimensional space — never a crop of a rendered picture and
-never a clipping plane (TZ §5.5). For a plane point `p` and unit normal `n`:
+never a clipping plane. For a plane point `p` and unit normal `n`:
 
     d(x) = dot(x - p, n)        signed distance to the plane
     x in layer  <=>  |d(x)| <= t / 2
@@ -11,8 +11,7 @@ never a clipping plane (TZ §5.5). For a plane point `p` and unit normal `n`:
 vectors), so `position` is a coordinate along the normal in the vectors' own
 units and the slider range comes from the data itself.
 
-MVP normal specifications (TZ §5.3 allows deferring arbitrary D-dim normals
-behind the interface, but the data format must admit them — it does):
+MVP normal specifications:
 - "axis":   a basis vector e_i of the ORIGINAL space (an embedding dimension);
 - "pca":    the i-th principal direction of the run's vectors (deterministic
             full-SVD PCA with svd_flip — reproducible normal);
@@ -115,7 +114,7 @@ def compute_slice(
     position: float,
     thickness: float,
 ) -> SliceResult:
-    """Select the layer around plane p = centroid + position·n (TZ §5.3).
+    """Select the layer around plane p = centroid + position·n.
 
     Pure math over float64 for stable geometry; boundaries are inclusive
     (|d| <= t/2) exactly as the spec defines.

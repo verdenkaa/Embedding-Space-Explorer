@@ -1,6 +1,6 @@
 """Loopback-only HTTP protection.
 
-Threat model for a local web application (TZ §11):
+Threat model for a local web application:
 
 1. Any web page open in the user's browser can issue requests to
    ``http://127.0.0.1:<port>``. Reads are mitigated by CORS (the browser hides

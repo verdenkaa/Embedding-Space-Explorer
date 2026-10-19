@@ -1,5 +1,5 @@
 /**
- * savedExperimentsStore tests (stage 5): capture of the live SPACE state,
+ * savedExperimentsStore tests: capture of the live SPACE state,
  * save payload, honest open-report (missing references are LISTED, never
  * substituted), selection restore and truncation at the cap.
  */

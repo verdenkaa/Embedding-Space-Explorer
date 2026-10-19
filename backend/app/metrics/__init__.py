@@ -1,8 +1,8 @@
-"""Geometry-quality metrics (TZ §5.6, §10.1 `metrics`).
+"""Geometry-quality metrics.
 
 Every metric ships with an explicit explanation and the counts it was
 computed over — a number without its interpretation is forbidden. The
-relation-based metrics encode the corpus-incompleteness rule of TZ §5.6:
+relation-based metrics encode the corpus-incompleteness rule of:
 an ABSENT known relation is never treated as proof of absence (unknown
 pairs are excluded from denominators; the explanations say so).
 """

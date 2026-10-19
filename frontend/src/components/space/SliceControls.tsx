@@ -7,7 +7,7 @@ import { useProjectStore } from "../../state/projectStore";
 import { useSpaceStore } from "../../state/spaceStore";
 
 /**
- * Slice panel (UI-ТЗ §4, TZ §5.3/§5.4): a MATHEMATICAL layer of the ORIGINAL
+ * Slice panel: a MATHEMATICAL layer of the ORIGINAL
  * embedding space, laid over whichever projections the views show.
  *
  * - the backend resolves the normal (an original-space axis, a deterministic

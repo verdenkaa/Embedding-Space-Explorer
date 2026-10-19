@@ -8,7 +8,7 @@ import { useProjectStore } from "../../state/projectStore";
 import { AnalysisJobProgress } from "./NeighborsTab";
 
 /**
- * RELATIONS tab (TZ §7.2): STRUCTURAL relations of the active fragment —
+ * RELATIONS tab: STRUCTURAL relations of the active fragment —
  * visually and semantically separate from semantic neighbors: every kind has
  * a text badge + glyph, every row shows its provenance (extracted /
  * imported / manual). File-level endpoints are shown as files (honest —

@@ -291,7 +291,7 @@ describe("view state", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* Stage-3 polish: 4D clouds, multi-plot 2D, build hand-off, slice     */
+/* 4D clouds, multi-plot 2D, build hand-off, slice */
 /* ------------------------------------------------------------------ */
 
 function points4D(): ProjectionPoints {

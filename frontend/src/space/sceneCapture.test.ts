@@ -4,7 +4,7 @@ import * as download from "../api/download";
 import { exportScenesPng } from "./sceneCapture";
 
 /**
- * Scene capture (stage 5): PNG export must grab EXACTLY the canvases on
+ * Scene capture: PNG export must grab EXACTLY the canvases on
  * screen for the active view mode — 3D/4D scenes (.point-scene canvas) and
  * 2D plots (.projection2d__canvas-wrap canvas), never both by accident.
  */

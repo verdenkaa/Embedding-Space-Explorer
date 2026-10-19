@@ -1,4 +1,4 @@
-"""Safe directory/file scanning (TZ §6.1, §11).
+"""Safe directory/file scanning.
 
 Guarantees:
 - never leaves the resolved root via '..' or symlinks (unless explicitly
@@ -57,7 +57,7 @@ class ScanResult:
     skipped: list[SkippedFile] = field(default_factory=list)
     root_errors: list[str] = field(default_factory=list)
     #: emitted when a secret-like file is included because the user's
-    #: include-patterns explicitly asked for it (TZ §11).
+    #: include-patterns explicitly asked for it.
     warnings: list[str] = field(default_factory=list)
 
 
@@ -226,7 +226,7 @@ def _consider_file(
         result.warnings.append(f"secret-like file included explicitly via include-patterns: {rel}")
 
     # 3. Include filter: when the user provided include patterns, only
-    #    matching files are indexed.
+    # matching files are indexed.
     if include_patterns and not explicitly_included:
         result.skipped.append(
             SkippedFile(str(fpath), SKIP_EXCLUDED_PATTERN, "include-patterns set, no match")
@@ -234,7 +234,7 @@ def _consider_file(
         return
 
     # 4. Hidden files (explicit include-patterns override hidden exclusion;
-    #    hidden DIRECTORIES still require include_hidden=True).
+    # hidden DIRECTORIES still require include_hidden=True).
     if not options.include_hidden and fname.startswith(".") and not explicitly_included:
         result.skipped.append(SkippedFile(str(fpath), SKIP_HIDDEN, "hidden file"))
         return

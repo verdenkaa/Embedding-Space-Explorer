@@ -1,9 +1,8 @@
 """GET /api/health — backend diagnostics.
 
 Reports application/runtime versions, data directory state, and the status of
-every dependency the roadmap relies on. Dependencies planned for later stages
-are reported as *not installed* with the stage that introduces them, instead of
-pretending to be ready (TZ §17.2).
+every dependency the application relies on. A missing package is reported as
+*not installed* instead of pretending to be ready.
 """
 
 from __future__ import annotations
@@ -22,28 +21,28 @@ from app.config import APP_NAME, Settings
 
 router = APIRouter(prefix="/api", tags=["health"])
 
-# (distribution name, required now, stage that introduces it)
-DEPENDENCY_PLAN: tuple[tuple[str, bool, str | None], ...] = (
-    ("fastapi", True, None),
-    ("pydantic", True, None),
-    ("uvicorn", True, None),
-    ("sqlalchemy", True, None),
-    ("tree-sitter", True, None),
-    ("tree-sitter-python", True, None),
-    ("tree-sitter-javascript", True, None),
-    ("tree-sitter-typescript", True, None),
-    ("numpy", True, None),
-    ("torch", True, None),
-    ("sentence-transformers", True, None),
-    ("scikit-learn", True, None),
-    ("umap-learn", True, None),
+# Distribution names the application relies on, and whether each is required.
+RUNTIME_DEPENDENCIES: tuple[tuple[str, bool], ...] = (
+    ("fastapi", True),
+    ("pydantic", True),
+    ("uvicorn", True),
+    ("sqlalchemy", True),
+    ("tree-sitter", True),
+    ("tree-sitter-python", True),
+    ("tree-sitter-javascript", True),
+    ("tree-sitter-typescript", True),
+    ("numpy", True),
+    ("torch", True),
+    ("sentence-transformers", True),
+    ("scikit-learn", True),
+    ("umap-learn", True),
 )
 
 
 def detect_dependencies() -> list[DependencyInfo]:
-    """Collect installed versions for every planned distribution."""
+    """Collect installed versions for every known runtime distribution."""
     infos: list[DependencyInfo] = []
-    for name, required, stage in DEPENDENCY_PLAN:
+    for name, required in RUNTIME_DEPENDENCIES:
         try:
             version: str | None = metadata.version(name)
             installed = True
@@ -56,7 +55,6 @@ def detect_dependencies() -> list[DependencyInfo]:
                 installed=installed,
                 version=version,
                 required=required,
-                planned_stage=stage,
             )
         )
     return infos

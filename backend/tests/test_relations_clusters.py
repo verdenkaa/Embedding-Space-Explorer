@@ -1,7 +1,7 @@
-"""Stage-4 tests: structural relations (extract/import/manual), clustering
+"""Tests: structural relations (extract/import/manual), clustering
 (DBSCAN over an explicit space) and manual groups + db migration v4→v5.
 
-TZ §15.1: "разделение семантических и структурных отношений" (the relations
+Acceptance: "разделение семантических и структурных отношений" (the relations
 API never mixes provenance and never touches similarity), "сохранение и
 загрузка" (groups/clusters persist), "миграции схемы" (v4→v5 additive).
 """
@@ -509,7 +509,7 @@ def test_clustering_api_projection_space(
 
 
 # ---------------------------------------------------------------------------
-# Manual groups (TZ §8.2)
+# Manual groups
 # ---------------------------------------------------------------------------
 
 
@@ -555,7 +555,7 @@ def test_groups_crud_and_validation(client: TestClient, mini_project: str) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_db_migration_v4_to_v5_keeps_stage3_data(settings: Settings) -> None:
+def test_db_migration_v4_to_v5_keeps_existing_data(settings: Settings) -> None:
     from app.storage.db import CURRENT_DB_SCHEMA, open_database
     from app.storage.models import EmbeddingRunRow, ProjectionRunRow
     from sqlalchemy import text
@@ -597,7 +597,7 @@ def test_db_migration_v4_to_v5_keeps_stage3_data(settings: Settings) -> None:
         )
         session.commit()
 
-    # Simulate a stage-3 (v4) database: drop the stage-4 tables.
+    # Simulate a (v4) database: drop the tables.
     with ctx.engine.begin() as conn:
         for table in (
             "fragment_group_members",

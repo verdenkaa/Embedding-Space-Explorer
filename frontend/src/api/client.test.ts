@@ -20,8 +20,8 @@ const HEALTH_FIXTURE: HealthResponse = {
   loopback_only: true,
   data_dir: "C:\\Users\\dev\\.embedding-space-explorer",
   dependencies: [
-    { name: "fastapi", installed: true, version: "0.143.1", required: true, planned_stage: null },
-    { name: "torch", installed: false, version: null, required: false, planned_stage: "stage-2" },
+    { name: "fastapi", installed: true, version: "0.143.1", required: true },
+    { name: "torch", installed: false, version: null, required: false },
   ],
   checks: [
     { name: "data_dir_writable", status: "ok", detail: "C:\\Users\\dev\\.ese" },

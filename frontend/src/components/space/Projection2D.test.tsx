@@ -2,7 +2,7 @@
  * Projection2D tests. jsdom has no canvas backend — getContext is stubbed
  * with a recorder; geometry/hit-testing logic is verified through real
  * pointer events using coordinates computed with the SAME pure helpers the
- * component uses (no magic numbers). Stage-3 polish adds: several plots
+ * component uses (no magic numbers). polish adds: several plots
  * side by side, wheel zoom + drag pan, and the point-size slider.
  */
 
@@ -217,7 +217,7 @@ describe("Projection2D", () => {
     expect(screen.getByText(/PCA · 3 точ\./)).toBeTruthy();
     expect(screen.getByText(/оси: PC1 \/ PC2 \(62% \/ 24% дисперсии\)/)).toBeTruthy();
     expect(screen.getByText("устарела")).toBeTruthy();
-    // the projection-vs-slice distinction is always visible (TZ §5.4)
+    // the projection-vs-slice distinction is always visible
     expect(screen.getByText("проекция всех точек · не срез")).toBeTruthy();
   });
 
@@ -280,7 +280,7 @@ describe("Projection2D", () => {
       expect(useSpaceStore.getState().hoveredId).toBe("fragA");
       expect(useSpaceStore.getState().hoverScreen?.kind).toBe("2d");
     });
-    // tooltip shows name + path + lines (UI-ТЗ §3)
+    // tooltip shows name + path + lines
     expect(screen.getByRole("tooltip")).toBeTruthy();
     expect(screen.getByText("alpha")).toBeTruthy();
     expect(screen.getByText(/src\/a\.py:5–9/)).toBeTruthy();

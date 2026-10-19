@@ -1,4 +1,4 @@
-"""Structural relation providers (TZ §7.2, §10.1 `relation_providers`).
+"""Structural relation providers.
 
 Two independent sources of relations:
 - `extract`: surface relations the parsers can honestly see — imports
@@ -10,7 +10,7 @@ Two independent sources of relations:
   a project-specific adapter maps its export onto this format.
 
 Every relation keeps its `origin` (extracted | imported | manual) — the UI
-never mixes provenance (TZ §7.2).
+never mixes provenance.
 """
 
 from app.relation_providers.extract import (

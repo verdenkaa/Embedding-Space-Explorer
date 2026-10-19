@@ -1,7 +1,7 @@
 import type { FragmentMeta } from "../../api/types";
 import { kindBadge, kindColorClass } from "../../monaco/helpers";
 
-/** Compact card with the active fragment's traceability data (UI-ТЗ §5). */
+/** Compact card with the active fragment's traceability data. */
 export function SelectedFragmentCard({ fragment }: { fragment: FragmentMeta | null }) {
   if (!fragment) return null;
   return (

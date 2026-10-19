@@ -1,4 +1,4 @@
-"""Directory browser for the root picker (TZ §11 trade-off, documented).
+"""Directory browser for the root picker.
 
 Exposes DIRECTORY NAMES only — never file names or contents. Needed because a
 browser cannot reveal local filesystem paths; the backend is loopback-only and

@@ -1,4 +1,4 @@
-"""Project store: create/open/list/delete research projects (TZ §9.1).
+"""Project store: create/open/list/delete research projects.
 
 On-disk layout (per project):
 
@@ -11,7 +11,7 @@ On-disk layout (per project):
         logs/
 
 Corrupted manifests never break the global project list: such entries are
-reported with an `error` field instead of raising (TZ §9.4).
+reported with an `error` field instead of raising.
 """
 
 from __future__ import annotations

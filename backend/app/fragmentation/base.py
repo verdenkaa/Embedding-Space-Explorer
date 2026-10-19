@@ -13,7 +13,7 @@ class SplitOptions(BaseModel):
     """Project-level scanning/segmentation settings (stored in the manifest).
 
     Every value that can influence results is explicit and persisted
-    (TZ §17.4: no hidden parameters).
+    (no hidden parameters).
     """
 
     max_file_size_bytes: int = Field(default=1_000_000, ge=1)
@@ -74,7 +74,7 @@ class SplitResult:
 
 
 class Splitter(Protocol):
-    """Interface for segmentation strategies (TZ §6.2)."""
+    """Interface for segmentation strategies."""
 
     #: Splitter identifier persisted on every fragment, e.g. "tree-sitter-python".
     name: str

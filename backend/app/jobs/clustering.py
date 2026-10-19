@@ -1,10 +1,10 @@
-"""Clustering jobs: DBSCAN labels over an EXPLICIT space (TZ §8.1).
+"""Clustering jobs: DBSCAN labels over an EXPLICIT space.
 
 Design notes:
 - the space is part of the run identity: "original" (embedding vectors with
   cosine/euclidean distance) or "projection" (coordinates of one projection
   run, euclidean); the UI shows which one produced the labels;
-- labels never overwrite manual groups (separate entities, TZ §8.2) and
+- labels never overwrite manual groups (separate entities) and
   never touch the vectors;
 - the run stores the embedding cache signature at compute time; a mismatch
   marks the clustering stale instead of silently showing outdated labels;
