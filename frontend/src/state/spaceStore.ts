@@ -108,7 +108,15 @@ export interface SliceOverlay {
 }
 
 export type SliceDisplayMode = "off" | "dim" | "only";
-export type ColorBy = "kind" | "cluster";
+/** Point coloring: fragment kind, file type, or an applied clustering. */
+export type ColorBy = "kind" | "file" | "cluster";
+/**
+ * Coordinate-grid display mode shared by every view (§ grid):
+ * - off     — no grid lines, no numeric ticks (points/axes only);
+ * - simple  — uniform grid lines, no numeric labels;
+ * - numbers — grid lines + real coordinate values along the axes.
+ */
+export type GridMode = "off" | "simple" | "numbers";
 
 /** What a finished projection job built — used to show the result at once. */
 export type PendingBuild =
@@ -136,11 +144,13 @@ interface SpaceState {
   hoverScreen: { kind: CloudKind; x: number; y: number } | null;
   pointSize: number;
   viewMode: ViewMode;
+  /** Coordinate-grid display mode (shared by the 2D and 3D/4D views). */
+  gridMode: GridMode;
   slice4d: Slice4D;
   /** Slice of the original space overlaid on the views (null = inactive). */
   sliceOverlay: SliceOverlay | null;
   sliceDisplay: SliceDisplayMode;
-  /** Point coloring: by fragment kind or by an applied clustering. */
+  /** Point coloring: fragment kind, file type, or an applied clustering. */
   colorBy: ColorBy;
   clusterLabels: Map<string, number> | null;
   /** Human label of the applied clustering («DBSCAN · исходное · eps 0.5»). */
@@ -151,6 +161,7 @@ interface SpaceState {
   relationLines: boolean;
 
   setViewMode: (mode: ViewMode) => void;
+  setGridMode: (mode: GridMode) => void;
   setActiveProjection: (
     kind: CloudKind,
     projectionId: string | null,
@@ -287,6 +298,7 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
   hoverScreen: null,
   pointSize: 4,
   viewMode: "3d",
+  gridMode: "simple",
   slice4d: { ...DEFAULT_SLICE_4D },
   sliceOverlay: null,
   sliceDisplay: "dim",
@@ -297,6 +309,7 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
   relationLines: false,
 
   setViewMode: (mode) => set({ viewMode: mode }),
+  setGridMode: (mode) => set({ gridMode: mode }),
 
   setActiveProjection: async (kind, projectionId, opts) => {
     const project = useProjectStore.getState().current;

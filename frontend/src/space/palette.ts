@@ -124,6 +124,17 @@ export const FILE_TYPE_BADGE: Record<FileType, string> = {
   other: "··",
 };
 
+/** Human label of a file type (legend text when coloring by file). */
+export const FILE_TYPE_LABEL: Record<FileType, string> = {
+  python: "Python",
+  javascript: "JavaScript",
+  typescript: "TypeScript",
+  markdown: "Markdown",
+  json: "JSON",
+  config: "config",
+  other: "прочее",
+};
+
 /** Language id → file-type color (for tree badges, which know the language). */
 export function languageColor(language: string | null | undefined): string {
   if (!language) return FILE_COLORS.other;

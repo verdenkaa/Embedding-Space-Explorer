@@ -793,7 +793,7 @@ class ExperimentConfigDTO(BaseModel):
     slice: ExperimentSliceDTO | None = None
     slice_display: Literal["off", "dim", "only"] = "dim"
     clustering_run_id: str | None = None
-    color_by: Literal["kind", "cluster"] = "kind"
+    color_by: Literal["kind", "file", "cluster"] = "kind"
     group_ids: list[str] = Field(default_factory=list)
     selection: list[str] = Field(default_factory=list)
     #: true when the selection was truncated at save time (cap 5000)

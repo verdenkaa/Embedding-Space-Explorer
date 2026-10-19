@@ -668,7 +668,7 @@ export interface ExperimentConfigDTO {
   slice: ExperimentSliceDTO | null;
   slice_display: SliceDisplayId;
   clustering_run_id: string | null;
-  color_by: "kind" | "cluster";
+  color_by: "kind" | "file" | "cluster";
   group_ids: string[];
   selection: string[];
   selection_truncated: boolean;

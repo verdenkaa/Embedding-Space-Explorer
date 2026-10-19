@@ -4,6 +4,7 @@ import { hexToRgb } from "../../space/palette";
 import { RELATION_LINE_LIMIT, relationColor } from "../../space/relationLabels";
 import { sliceMasksForCloud } from "../../space/sliceMath";
 import { makeClusterColorOf } from "../../space/clusterColor";
+import { makeFileColorOf } from "../../space/fileColor";
 import { useAnalysisStore } from "../../state/analysisStore";
 import { useProjectStore } from "../../state/projectStore";
 import { useSpaceStore } from "../../state/spaceStore";
@@ -34,7 +35,6 @@ export function Scene3D() {
   const colorBy = useSpaceStore((s) => s.colorBy);
   const clusterLabels = useSpaceStore((s) => s.clusterLabels);
   const clusterCaption = useSpaceStore((s) => s.clusterCaption);
-  const setColorBy = useSpaceStore((s) => s.setColorBy);
   const relationLinesOn = useSpaceStore((s) => s.relationLines);
   const setRelationLines = useSpaceStore((s) => s.setRelationLines);
 
@@ -69,10 +69,11 @@ export function Scene3D() {
     );
   }, [cloud, sliceOverlay, sliceDisplay, fragmentIds]);
 
-  const colorOf = useMemo<PointColorOf | undefined>(
-    () => (colorBy === "cluster" && clusterLabels ? makeClusterColorOf(clusterLabels) : undefined),
-    [colorBy, clusterLabels],
-  );
+  const colorOf = useMemo<PointColorOf | undefined>(() => {
+    if (colorBy === "cluster" && clusterLabels) return makeClusterColorOf(clusterLabels);
+    if (colorBy === "file") return makeFileColorOf();
+    return undefined; // kind (default)
+  }, [colorBy, clusterLabels]);
 
   /* Relation line buffers: active fragment → related fragments present in
      this cloud; file-level endpoints and off-cloud targets are counted and
@@ -218,31 +219,15 @@ export function Scene3D() {
         </span>
       }
       toolbarExtras={
-        <>
-          <button
-            type="button"
-            className={`btn btn--small${relationLinesOn ? " btn--primary" : ""}`}
-            onClick={() => setRelationLines(!relationLinesOn)}
-            aria-pressed={relationLinesOn}
-            title="Линии структурных связей активной точки (только фрагменты этого облака; типы фильтруются внизу)"
-          >
-            ⇄ Связи
-          </button>
-          <button
-            type="button"
-            className={`btn btn--small${colorBy === "cluster" ? " btn--primary" : ""}`}
-            onClick={() => setColorBy(colorBy === "kind" ? "cluster" : "kind")}
-            disabled={colorBy === "kind" && !clusterLabels}
-            aria-pressed={colorBy === "cluster"}
-            title={
-              clusterLabels
-                ? "Раскраска точек: по типу фрагмента / по кластеру (запуск выбран во вкладке CLUSTERS)"
-                : "Сначала запустите кластеризацию и нажмите «На сцену» во вкладке CLUSTERS"
-            }
-          >
-            цвет: {colorBy === "kind" ? "тип" : "кластер"}
-          </button>
-        </>
+        <button
+          type="button"
+          className={`btn btn--small${relationLinesOn ? " btn--primary" : ""}`}
+          onClick={() => setRelationLines(!relationLinesOn)}
+          aria-pressed={relationLinesOn}
+          title="Линии структурных связей активной точки (только фрагменты этого облака; типы фильтруются внизу)"
+        >
+          ⇄ Связи
+        </button>
       }
       footer={
         linesData ? (

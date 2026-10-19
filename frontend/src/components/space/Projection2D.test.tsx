@@ -224,13 +224,31 @@ describe("Projection2D", () => {
   it("draws points, axes and selection marks on the canvas", () => {
     const recorded = stubCanvasContext();
     seedClouds();
+    useSpaceStore.setState({ gridMode: "numbers" });
     useProjectStore.setState({ selectedFragmentIds: ["fragB"], activeFragmentId: "fragA" });
     render(<Projection2D />);
-    // frame + ticks + point glyphs + rings were actually painted
+    // frame + numeric ticks + point glyphs + rings were actually painted
     expect(recorded).toContain("strokeRect");
     expect(recorded).toContain("fillRect");
     expect(recorded).toContain("arc");
     expect(recorded).toContain("fillText");
+  });
+
+  it("grid mode gates the numeric tick labels (simple/off hide them)", () => {
+    // «simple» (the default): grid lines, but NO numeric labels
+    let recorded = stubCanvasContext();
+    seedClouds();
+    useSpaceStore.setState({ gridMode: "simple" });
+    render(<Projection2D />);
+    expect(recorded).not.toContain("fillText");
+    cleanup();
+    vi.restoreAllMocks();
+
+    // «off»: no numeric labels either
+    recorded = stubCanvasContext();
+    useSpaceStore.setState({ gridMode: "off" });
+    render(<Projection2D />);
+    expect(recorded).not.toContain("fillText");
   });
 
   it("click on a point selects it and syncs the shared selection state", async () => {

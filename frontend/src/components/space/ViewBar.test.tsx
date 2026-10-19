@@ -88,6 +88,9 @@ beforeEach(() => {
     loading4d: false,
     error: null,
     viewMode: "3d",
+    colorBy: "kind",
+    gridMode: "simple",
+    clusterLabels: null,
   });
 });
 
@@ -202,5 +205,43 @@ describe("ViewBar cleanup", () => {
     useExperimentStore.setState({ projections: [] });
     render(<ViewBar />);
     expect(screen.queryByRole("button", { name: /Удалить все/ })).toBeNull();
+  });
+});
+
+describe("ViewBar color and grid controls", () => {
+  it("color mode offers kind / file / cluster and switches the shared state", () => {
+    render(<ViewBar />);
+    const group = screen.getByRole("group", { name: "Режим окраски" });
+    expect(group.textContent).toContain("тип");
+    expect(group.textContent).toContain("файл");
+    expect(group.textContent).toContain("кластер");
+    // cluster is unavailable until a clustering is applied
+    expect(screen.getByRole("button", { name: "кластер" })).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("button", { name: "файл" }));
+    expect(useSpaceStore.getState().colorBy).toBe("file");
+    fireEvent.click(screen.getByRole("button", { name: "тип" }));
+    expect(useSpaceStore.getState().colorBy).toBe("kind");
+  });
+
+  it("cluster coloring enables once labels are applied", () => {
+    useSpaceStore.setState({ clusterLabels: new Map([["fragA", 0]]) });
+    render(<ViewBar />);
+    const clusterBtn = screen.getByRole("button", { name: "кластер" });
+    expect(clusterBtn).toHaveProperty("disabled", false);
+    fireEvent.click(clusterBtn);
+    expect(useSpaceStore.getState().colorBy).toBe("cluster");
+  });
+
+  it("grid mode switches off / simple / numbers (default simple)", () => {
+    render(<ViewBar />);
+    const group = screen.getByRole("group", { name: "Режим координатной сетки" });
+    expect(group.textContent).toContain("выкл");
+    expect(group.textContent).toContain("простая");
+    expect(group.textContent).toContain("цифры");
+    expect(useSpaceStore.getState().gridMode).toBe("simple");
+    fireEvent.click(screen.getByRole("button", { name: "цифры" }));
+    expect(useSpaceStore.getState().gridMode).toBe("numbers");
+    fireEvent.click(screen.getByRole("button", { name: "выкл" }));
+    expect(useSpaceStore.getState().gridMode).toBe("off");
   });
 });

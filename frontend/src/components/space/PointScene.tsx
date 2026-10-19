@@ -14,10 +14,13 @@ import * as THREE from "three";
 import { COLORS, buildLegendFrom, hexToRgb, kindColor } from "../../space/palette";
 import { toFragmentRef } from "../../space/fragmentRef";
 import { indicesInNdcRect, marqueeExceedsSlop, normalizeRect } from "../../space/selectionMath";
+import { FLOOR_Y, floorGridLabels } from "../../space/gridMath";
+import type { FitTransform } from "../../space/selectionMath";
 import { useProjectStore } from "../../state/projectStore";
 import {
   useSpaceStore,
   type CloudKind,
+  type GridMode,
   type PointCloud,
   type PointMeta,
 } from "../../state/spaceStore";
@@ -66,7 +69,7 @@ const DRAG_SLOP_PX = 4;
 
 function useGridGeometry(): THREE.BufferGeometry {
   return useMemo(() => {
-    const y = -1.12;
+    const y = FLOOR_Y;
     const verts: number[] = [];
     for (let i = -4; i <= 4; i++) {
       const v = i * 0.25;
@@ -109,6 +112,86 @@ function useAxesGeometry(): THREE.BufferGeometry {
 }
 
 /* ------------------------------------------------------------------ */
+/* Numeric grid labels (canvas-texture sprites, JetBrains Mono)         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Render `text` into a small canvas and return it as a texture. Uses the
+ * bundled JetBrains Mono (already loaded via @font-face), so no external
+ * font is fetched. Returns null where a 2D canvas is unavailable; in jsdom the
+ * whole R3F Canvas is mocked out, so this is never reached in tests.
+ */
+function makeTextTexture(text: string, colorHex: string): THREE.CanvasTexture | null {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const font = "600 30px 'JetBrains Mono', Consolas, monospace";
+  ctx.font = font;
+  const pad = 8;
+  const width = Math.max(16, Math.ceil(ctx.measureText(text).width) + pad * 2);
+  const height = 40;
+  canvas.width = width;
+  canvas.height = height;
+  // the 2D context state resets when the canvas is resized
+  ctx.font = font;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = colorHex;
+  ctx.fillText(text, width / 2, height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/** Numeric + axis-name labels for the floor grid («numbers» mode only). */
+function GridLabels({ fit, axisLabels }: { fit: FitTransform; axisLabels: string[] }) {
+  const sprites = useMemo(() => {
+    const built: THREE.Sprite[] = [];
+    for (const label of floorGridLabels(fit, axisLabels)) {
+      const texture = makeTextTexture(
+        label.text,
+        label.isAxisName ? COLORS.textDim : COLORS.textFaint,
+      );
+      if (!texture) continue;
+      const material = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+      const sprite = new THREE.Sprite(material);
+      sprite.position.set(label.position[0], label.position[1], label.position[2]);
+      const aspect = texture.image.width / texture.image.height;
+      const h = label.isAxisName ? 0.3 : 0.26;
+      sprite.scale.set(h * aspect, h, 1);
+      sprite.renderOrder = 20;
+      sprite.raycast = () => null; // never intercept point picking
+      built.push(sprite);
+    }
+    return built;
+  }, [fit, axisLabels]);
+
+  useEffect(
+    () => () => {
+      for (const sprite of sprites) {
+        sprite.material.map?.dispose();
+        sprite.material.dispose();
+      }
+    },
+    [sprites],
+  );
+
+  return (
+    <>
+      {sprites.map((sprite, i) => (
+        <primitive key={i} object={sprite} />
+      ))}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Inside the Canvas */
 /* ------------------------------------------------------------------ */
 
@@ -119,6 +202,8 @@ interface SceneContentsProps {
   selectedIds: string[];
   hoveredId: string | null;
   orbitEnabled: boolean;
+  /** Coordinate-grid display mode (off / simple / numbers). */
+  gridMode: GridMode;
   /** Original point indices that are currently visible (mask applied). */
   visible: Int32Array;
   /** Original indices drawn faded (context only: no hover/pick/marquee). */
@@ -138,6 +223,7 @@ function SceneContents({
   selectedIds,
   hoveredId,
   orbitEnabled,
+  gridMode,
   visible,
   dimmed,
   colorOf,
@@ -235,12 +321,17 @@ function SceneContents({
         maxDistance={14}
         makeDefault
       />
-      <lineSegments geometry={gridGeometry}>
-        <lineBasicMaterial color="#22303a" transparent opacity={0.55} />
-      </lineSegments>
+      {gridMode !== "off" && (
+        <lineSegments geometry={gridGeometry}>
+          <lineBasicMaterial color={COLORS.grid} transparent opacity={0.9} />
+        </lineSegments>
+      )}
       <lineSegments geometry={axesGeometry}>
-        <lineBasicMaterial vertexColors transparent opacity={0.4} />
+        <lineBasicMaterial vertexColors transparent opacity={0.55} />
       </lineSegments>
+      {gridMode === "numbers" && (
+        <GridLabels fit={cloud.fit} axisLabels={cloud.projection.axis_labels} />
+      )}
 
       <points
         geometry={geometry}
@@ -354,6 +445,7 @@ export function PointScene({
   className,
 }: PointSceneProps) {
   const pointSize = useSpaceStore((s) => s.pointSize);
+  const gridMode = useSpaceStore((s) => s.gridMode);
   const hoveredId = useSpaceStore((s) => s.hoveredId);
   const hoverScreen = useSpaceStore((s) => s.hoverScreen);
   const setHover = useSpaceStore((s) => s.setHover);
@@ -604,6 +696,7 @@ export function PointScene({
           selectedIds={selectedIds}
           hoveredId={hoveredId}
           orbitEnabled={!marqueeArmed && !marquee}
+          gridMode={gridMode}
           visible={visible}
           dimmed={dimmed}
           colorOf={resolveColor}

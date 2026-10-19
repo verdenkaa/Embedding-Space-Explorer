@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 
 import { makeClusterColorOf } from "../../space/clusterColor";
+import { makeFileColorOf } from "../../space/fileColor";
 import { layerMask4D } from "../../space/selectionMath";
 import { cloudSliceMask } from "../../space/sliceMath";
 import { useSpaceStore } from "../../state/spaceStore";
@@ -35,7 +36,6 @@ export function Scene4D() {
   const colorBy = useSpaceStore((s) => s.colorBy);
   const clusterLabels = useSpaceStore((s) => s.clusterLabels);
   const clusterCaption = useSpaceStore((s) => s.clusterCaption);
-  const setColorBy = useSpaceStore((s) => s.setColorBy);
 
   const count = cloud?.points.count ?? 0;
   const layer = useMemo(() => {
@@ -79,10 +79,11 @@ export function Scene4D() {
     };
   }, [layer, sliceMasks, sliceDisplay]);
 
-  const colorOf = useMemo<PointColorOf | undefined>(
-    () => (colorBy === "cluster" && clusterLabels ? makeClusterColorOf(clusterLabels) : undefined),
-    [colorBy, clusterLabels],
-  );
+  const colorOf = useMemo<PointColorOf | undefined>(() => {
+    if (colorBy === "cluster" && clusterLabels) return makeClusterColorOf(clusterLabels);
+    if (colorBy === "file") return makeFileColorOf();
+    return undefined; // kind (default)
+  }, [colorBy, clusterLabels]);
 
   /* "Time" animation: ping-pong sweep of the window across the axis. */
   const dirRef = useRef(1);
@@ -148,22 +149,6 @@ export function Scene4D() {
       dimMask={dimMask}
       colorOf={colorOf}
       className="point-scene--with-footer"
-      toolbarExtras={
-        <button
-          type="button"
-          className={`btn btn--small${colorBy === "cluster" ? " btn--primary" : ""}`}
-          onClick={() => setColorBy(colorBy === "kind" ? "cluster" : "kind")}
-          disabled={colorBy === "kind" && !clusterLabels}
-          aria-pressed={colorBy === "cluster"}
-          title={
-            clusterLabels
-              ? "Раскраска точек: по типу фрагмента / по кластеру"
-              : "Сначала запустите кластеризацию и нажмите «На сцену» во вкладке CLUSTERS"
-          }
-        >
-          цвет: {colorBy === "kind" ? "тип" : "кластер"}
-        </button>
-      }
       badge={
         <span title={`Запуск ${projection.id}`}>
           {projection.method_display_name} · 4D · {projection.axis_labels.join(" / ")} · в слое{" "}

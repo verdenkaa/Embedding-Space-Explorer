@@ -353,14 +353,7 @@ describe("Scene3D overlays", () => {
     expect(useSpaceStore.getState().relationLines).toBe(false);
   });
 
-  it("cluster coloring is disabled until labels are applied, then toggles", () => {
-    seedCloud();
-    render(<Scene3D />);
-    const colorBtn = screen.getByRole("button", { name: /цвет: тип/ });
-    expect((colorBtn as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it("with labels the color button switches the scene palette state", () => {
+  it("names the applied clustering in the badge when coloring by cluster", () => {
     seedCloud();
     useSpaceStore.setState({
       clusterLabels: new Map([
@@ -368,13 +361,9 @@ describe("Scene3D overlays", () => {
         ["fragS", -1],
       ]),
       clusterCaption: "DBSCAN · исходное · cosine · кластеров: 1, шум: 1",
-      colorBy: "kind",
+      colorBy: "cluster",
     });
     render(<Scene3D />);
-    const colorBtn = screen.getByRole("button", { name: /цвет: тип/ });
-    expect((colorBtn as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(colorBtn);
-    expect(useSpaceStore.getState().colorBy).toBe("cluster");
     // the badge names the applied clustering (never a silent recolor)
     expect(screen.getByText(/DBSCAN · исходное/)).toBeTruthy();
   });

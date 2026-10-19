@@ -113,7 +113,7 @@ export const useSavedExperimentsStore = create<SavedExperimentsState>()((set, ge
       slice,
       slice_display: space.sliceDisplay,
       clustering_run_id: space.clusterRunId,
-      color_by: space.clusterRunId ? space.colorBy : "kind",
+      color_by: space.colorBy === "cluster" && !space.clusterRunId ? "kind" : space.colorBy,
       group_ids: (analysis.groups ?? []).map((g) => g.id),
       selection: selection.slice(0, SELECTION_CAP),
       selection_truncated: selection.length > SELECTION_CAP,
@@ -280,7 +280,9 @@ export async function applyExperiment(exp: ExperimentDTO): Promise<OpenReport> {
   } else {
     space.setClusterLabels(null, null);
   }
-  space.setColorBy(clusteringAlive && cfg.color_by === "cluster" ? "cluster" : "kind");
+  space.setColorBy(
+    cfg.color_by === "cluster" ? (clusteringAlive ? "cluster" : "kind") : cfg.color_by,
+  );
 
   /* groups + selection + metrics inventory */
   const missingGroups = missing["group_ids"] ?? [];

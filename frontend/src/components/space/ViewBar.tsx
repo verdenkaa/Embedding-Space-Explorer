@@ -6,7 +6,13 @@ import { runOptionLabel } from "../../space/projectionLabels";
 import { exportScenesPng } from "../../space/sceneCapture";
 import { useProjectStore } from "../../state/projectStore";
 import { useExperimentStore } from "../../state/experimentStore";
-import { useSpaceStore, type CloudKind, type ViewMode } from "../../state/spaceStore";
+import {
+  useSpaceStore,
+  type CloudKind,
+  type ColorBy,
+  type GridMode,
+  type ViewMode,
+} from "../../state/spaceStore";
 
 /**
  * Top bar of the SPACE center column (user feedback): the view-mode toggle
@@ -39,6 +45,77 @@ export function ViewModeToggle() {
           {mode.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+const COLOR_MODES: { id: ColorBy; label: string; hint: string }[] = [
+  { id: "kind", label: "тип", hint: "Окраска по типу фрагмента (fn / mth / cls / …)" },
+  { id: "file", label: "файл", hint: "Окраска по типу файла (расширению)" },
+  { id: "cluster", label: "кластер", hint: "Окраска по кластеру выбранного запуска DBSCAN" },
+];
+
+/** Point-coloring mode (shared by every view): fragment kind / file type / cluster. */
+export function ColorModeControl() {
+  const colorBy = useSpaceStore((s) => s.colorBy);
+  const setColorBy = useSpaceStore((s) => s.setColorBy);
+  const clusterLabels = useSpaceStore((s) => s.clusterLabels);
+  return (
+    <div className="view-bar__group" title="Раскраска точек">
+      <span className="view-bar__group-label mono">цвет</span>
+      <div className="view-mode" role="group" aria-label="Режим окраски">
+        {COLOR_MODES.map((mode) => {
+          const disabled = mode.id === "cluster" && !clusterLabels;
+          return (
+            <button
+              key={mode.id}
+              type="button"
+              className={`view-mode__btn${colorBy === mode.id ? " view-mode__btn--active" : ""}`}
+              disabled={disabled}
+              onClick={() => setColorBy(mode.id)}
+              aria-pressed={colorBy === mode.id}
+              title={
+                disabled
+                  ? "Сначала запустите кластеризацию и нажмите «На сцену» во вкладке CLUSTERS"
+                  : mode.hint
+              }
+            >
+              {mode.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const GRID_MODES: { id: GridMode; label: string; hint: string }[] = [
+  { id: "off", label: "выкл", hint: "Выключена: без координатной сетки и делений" },
+  { id: "simple", label: "простая", hint: "Простая: равномерная сетка без числовых подписей" },
+  { id: "numbers", label: "цифры", hint: "С цифрами осей: сетка + действительные значения координат" },
+];
+
+/** Coordinate-grid mode (shared by the 2D and 3D/4D views). */
+export function GridModeControl() {
+  const gridMode = useSpaceStore((s) => s.gridMode);
+  const setGridMode = useSpaceStore((s) => s.setGridMode);
+  return (
+    <div className="view-bar__group" title="Координатная сетка">
+      <span className="view-bar__group-label mono">сетка</span>
+      <div className="view-mode" role="group" aria-label="Режим координатной сетки">
+        {GRID_MODES.map((mode) => (
+          <button
+            key={mode.id}
+            type="button"
+            className={`view-mode__btn${gridMode === mode.id ? " view-mode__btn--active" : ""}`}
+            onClick={() => setGridMode(mode.id)}
+            aria-pressed={gridMode === mode.id}
+            title={mode.hint}
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -302,7 +379,7 @@ export function ExportMenu() {
   );
 }
 
-/** The whole top bar: mode toggle + per-mode selectors + cleanup + export. */
+/** The whole top bar: mode toggle + per-mode selectors + color/grid + cleanup + export. */
 export function ViewBar() {
   const viewMode = useSpaceStore((s) => s.viewMode);
   return (
@@ -313,6 +390,9 @@ export function ViewBar() {
       {(viewMode === "2d" || viewMode === "split") && <ViewSelect kind="2d" />}
       {viewMode === "4d" && <ViewSelect kind="4d" />}
       <DeleteAllProjectionsButton />
+      <span className="view-bar__separator" aria-hidden="true" />
+      <ColorModeControl />
+      <GridModeControl />
       <span className="view-bar__separator" aria-hidden="true" />
       <ExportMenu />
     </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { COLORS, clusterColor, kindColor } from "../../space/palette";
+import { COLORS, clusterColor, kindColor, pathColor } from "../../space/palette";
 import { cloudSliceMask, type CloudSliceMask } from "../../space/sliceMath";
 import {
   DEFAULT_PADDING,
@@ -143,6 +143,7 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
   const sliceDisplay = useSpaceStore((s) => s.sliceDisplay);
   const colorBy = useSpaceStore((s) => s.colorBy);
   const clusterLabels = useSpaceStore((s) => s.clusterLabels);
+  const gridMode = useSpaceStore((s) => s.gridMode);
 
   const activeFragmentId = useProjectStore((s) => s.activeFragmentId);
   const selectedIds = useProjectStore((s) => s.selectedFragmentIds);
@@ -245,13 +246,18 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
   }, [sliceMasks, sliceDisplay]);
 
   const colorAt = useMemo(() => {
-    if (colorBy !== "cluster" || !clusterLabels) return null;
-    const labels = clusterLabels;
-    return (i: number): string => {
-      const label = labels.get(cloud.metas[i].fragmentId);
-      if (label === undefined) return COLORS.gray;
-      return label < 0 ? clusterColor(-1) : clusterColor(label);
-    };
+    if (colorBy === "cluster" && clusterLabels) {
+      const labels = clusterLabels;
+      return (i: number): string => {
+        const label = labels.get(cloud.metas[i].fragmentId);
+        if (label === undefined) return COLORS.gray;
+        return label < 0 ? clusterColor(-1) : clusterColor(label);
+      };
+    }
+    if (colorBy === "file") {
+      return (i: number): string => pathColor(cloud.metas[i].relPath);
+    }
+    return null; // kind (default)
   }, [colorBy, clusterLabels, cloud]);
 
   /* Wheel zoom towards the cursor (native listener: React's is passive). */
@@ -316,19 +322,21 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
     ctx.beginPath();
     ctx.rect(plotL, plotT, Math.max(0, plotR - plotL), Math.max(0, plotB - plotT));
     ctx.clip();
-    for (const v of xTicks) {
-      const { cx } = dataToCanvas(v, bounds.minY, geom);
-      ctx.beginPath();
-      ctx.moveTo(cx, plotT);
-      ctx.lineTo(cx, plotB);
-      ctx.stroke();
-    }
-    for (const v of yTicks) {
-      const { cy } = dataToCanvas(bounds.minX, v, geom);
-      ctx.beginPath();
-      ctx.moveTo(plotL, cy);
-      ctx.lineTo(plotR, cy);
-      ctx.stroke();
+    if (gridMode !== "off") {
+      for (const v of xTicks) {
+        const { cx } = dataToCanvas(v, bounds.minY, geom);
+        ctx.beginPath();
+        ctx.moveTo(cx, plotT);
+        ctx.lineTo(cx, plotB);
+        ctx.stroke();
+      }
+      for (const v of yTicks) {
+        const { cy } = dataToCanvas(bounds.minX, v, geom);
+        ctx.beginPath();
+        ctx.moveTo(plotL, cy);
+        ctx.lineTo(plotR, cy);
+        ctx.stroke();
+      }
     }
 
     /* points: small squares (distinct from selection rings — not color-only) */
@@ -399,20 +407,22 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
     }
     ctx.restore();
 
-    /* tick labels (outside the clip, along the frame) */
-    ctx.fillStyle = COLORS.textFaint;
-    ctx.strokeStyle = COLORS.frame;
-    for (const v of xTicks) {
-      const { cx } = dataToCanvas(v, bounds.minY, geom);
-      if (cx < plotL - 1 || cx > plotR + 1) continue;
-      ctx.textAlign = "center";
-      ctx.fillText(formatTick(v, xStep), cx, size.h - PADDING.bottom + 12);
-    }
-    for (const v of yTicks) {
-      const { cy } = dataToCanvas(bounds.minX, v, geom);
-      if (cy < plotT - 1 || cy > plotB + 1) continue;
-      ctx.textAlign = "right";
-      ctx.fillText(formatTick(v, yStep), plotL - 5, cy + 3);
+    /* tick labels (outside the clip, along the frame) — only in «numbers» mode */
+    if (gridMode === "numbers") {
+      ctx.fillStyle = COLORS.textFaint;
+      ctx.strokeStyle = COLORS.frame;
+      for (const v of xTicks) {
+        const { cx } = dataToCanvas(v, bounds.minY, geom);
+        if (cx < plotL - 1 || cx > plotR + 1) continue;
+        ctx.textAlign = "center";
+        ctx.fillText(formatTick(v, xStep), cx, size.h - PADDING.bottom + 12);
+      }
+      for (const v of yTicks) {
+        const { cy } = dataToCanvas(bounds.minX, v, geom);
+        if (cy < plotT - 1 || cy > plotB + 1) continue;
+        ctx.textAlign = "right";
+        ctx.fillText(formatTick(v, yStep), plotL - 5, cy + 3);
+      }
     }
 
     /* marquee */
@@ -444,6 +454,7 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
     sliceDisplay,
     isVisible,
     colorAt,
+    gridMode,
   ]);
 
   /* --------------------------- interaction -------------------------- */
