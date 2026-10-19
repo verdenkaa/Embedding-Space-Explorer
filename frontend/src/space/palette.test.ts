@@ -15,6 +15,7 @@ import {
   AXIS_COLORS,
   COLORS,
   FILE_COLORS,
+  clusterColor,
   extOf,
   kindColor,
   languageColor,
@@ -68,6 +69,12 @@ describe("palette mirrors tokens.css (single source of truth)", () => {
     expect(AXIS_COLORS[1]).toBe(token("color-axis-y"));
     expect(AXIS_COLORS[2]).toBe(token("color-axis-z"));
   });
+
+  it("selection markers use the reserved amber token", () => {
+    // --color-accent-amber is a var() alias of --color-warn in tokens.css
+    expect(COLORS.selected).toBe(token("color-warn"));
+    expect(COLORS.active).toBe(token("color-warn"));
+  });
 });
 
 describe("file coloring resolves by language and by extension", () => {
@@ -94,5 +101,55 @@ describe("file coloring resolves by language and by extension", () => {
   it("unknown extensions fall back to the neutral 'other' color", () => {
     expect(pathColor("archive.zip")).toBe(FILE_COLORS.other);
     expect(languageColor(null)).toBe(FILE_COLORS.other);
+  });
+});
+
+/** Hue (deg) of a #rrggbb color; null for achromatic grays. */
+function hueOf(hex: string): number | null {
+  const v = parseInt(hex.slice(1), 16);
+  const r = ((v >> 16) & 255) / 255;
+  const g = ((v >> 8) & 255) / 255;
+  const b = (v & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max === min) return null;
+  const d = max - min;
+  const h =
+    max === r ? ((g - b) / d + (g < b ? 6 : 0)) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return h * 60;
+}
+
+describe("the amber selection color is RESERVED (never a point color)", () => {
+  const KINDS = [
+    "function",
+    "method",
+    "class",
+    "interface",
+    "type_alias",
+    "enum",
+    "object",
+    "section",
+    "chunk",
+  ];
+
+  it("no fragment-kind point color equals the selection color", () => {
+    for (const kind of KINDS) {
+      expect(kindColor(kind)).not.toBe(COLORS.selected);
+    }
+  });
+
+  it("no file-type point color equals the selection color", () => {
+    for (const color of Object.values(FILE_COLORS)) {
+      expect(color).not.toBe(COLORS.selected);
+    }
+  });
+
+  it("the cluster palette skips the reserved orange hue band", () => {
+    for (let label = 0; label < 48; label++) {
+      const hue = hueOf(clusterColor(label));
+      expect(hue === null || hue <= 12 || hue >= 68).toBe(true);
+    }
+    // noise stays the neutral gray
+    expect(clusterColor(-1)).toBe(COLORS.gray);
   });
 });

@@ -36,24 +36,26 @@
 
   /* ---- Semantic status ---- */
   --color-ok: #81c995; /* success */
-  --color-warn: #e8c56d; /* warning */
+  --color-warn: #e8b45a; /* warning / reserved selection amber */
   --color-error: #e58b8b; /* danger */
 
-  /* ---- Data: file types (tree badge = point = legend, one color each) ---- */
-  --color-file-python: #6c9ef8;
-  --color-file-javascript: #e8c56d;
-  --color-file-typescript: #58b6d8;
-  --color-file-markdown: #b39ddb;
-  --color-file-json: #d8a16b;
-  --color-file-config: #8abf91;
-  --color-file-other: #8d9199;
+  /* ---- Data: file types (tree badge = point = legend, one color each).
+         Saturated, mutually distinct; the orange band stays free for
+         selection markers. ---- */
+  --color-file-python: #58a6ff;
+  --color-file-javascript: #b8d55a;
+  --color-file-typescript: #39c5cf;
+  --color-file-markdown: #c586f0;
+  --color-file-json: #ef7fae;
+  --color-file-config: #5fd38a;
+  --color-file-other: #8fa0ae;
 
   /* ---- Data: fragment types (MTH / FN / CLS + doc/other) ---- */
-  --color-fragment-fn: #6c9ef8; /* function */
-  --color-fragment-mth: #b39ddb; /* method */
-  --color-fragment-cls: #e8a36b; /* class / interface / type / enum / object */
-  --color-fragment-section: #8abf91; /* document section */
-  --color-fragment-other: #8d9199; /* chunk / fallback */
+  --color-fragment-fn: #45d6c5; /* function */
+  --color-fragment-mth: #45d6c5; /* method (same family as FN) */
+  --color-fragment-cls: #63a9ff; /* class / interface / type / enum / object */
+  --color-fragment-section: #7bd88f; /* document section */
+  --color-fragment-other: #8fa0ae; /* chunk / fallback */
 
   /* ---- Data: coordinate grid & axes (plot) ---- */
   --color-grid-line: #303237; /* 2D canvas grid lines (pixel-aligned) */

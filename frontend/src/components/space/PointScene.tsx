@@ -416,12 +416,16 @@ function SceneContents({
         </lineSegments>
       )}
 
+      {/* Selection markers are OVERLAYS, not scene geometry: coincident depth
+          with the point itself is driver-dependent, so they skip the depth
+          test and draw last — a selection must always be visible. */}
       {selectedIds.length > 0 && (
-        <points geometry={selectedGeometry} raycast={() => null}>
+        <points geometry={selectedGeometry} raycast={() => null} renderOrder={25}>
           <pointsMaterial
             color={COLORS.selected}
             size={0.034 * pointSize}
             sizeAttenuation
+            depthTest={false}
             depthWrite={false}
           />
         </points>
@@ -429,17 +433,31 @@ function SceneContents({
 
       {activePos && (
         <Billboard position={activePos}>
-          <mesh raycast={() => null}>
+          <mesh raycast={() => null} renderOrder={26}>
             <ringGeometry args={[0.032, 0.045, 40]} />
-            <meshBasicMaterial color={COLORS.active} transparent opacity={0.95} side={THREE.DoubleSide} />
+            <meshBasicMaterial
+              color={COLORS.active}
+              transparent
+              opacity={0.95}
+              depthTest={false}
+              depthWrite={false}
+              side={THREE.DoubleSide}
+            />
           </mesh>
         </Billboard>
       )}
       {hoverPos && (
         <Billboard position={hoverPos}>
-          <mesh raycast={() => null}>
+          <mesh raycast={() => null} renderOrder={27}>
             <ringGeometry args={[0.024, 0.032, 32]} />
-            <meshBasicMaterial color={COLORS.hover} transparent opacity={0.8} side={THREE.DoubleSide} />
+            <meshBasicMaterial
+              color={COLORS.hover}
+              transparent
+              opacity={0.8}
+              depthTest={false}
+              depthWrite={false}
+              side={THREE.DoubleSide}
+            />
           </mesh>
         </Billboard>
       )}

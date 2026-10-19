@@ -179,27 +179,31 @@ describe("ticks", () => {
 
 describe("palette", () => {
   it("kind colors follow the fragment palette", () => {
-    // function (FN) and method (MTH) are distinct in the JetBrains palette
-    expect(kindColor("function")).toBe("#6c9ef8");
-    expect(kindColor("method")).toBe("#b39ddb");
-    expect(kindColor("function")).not.toBe(kindColor("method"));
+    // function (FN) and method (MTH) share the teal family of the original
+    // scheme (the text badge disambiguates them in legend and lists)
+    expect(kindColor("function")).toBe("#45d6c5");
+    expect(kindColor("method")).toBe(kindColor("function"));
     // class-like kinds share the CLS color
     expect(kindColor("class")).toBe(kindColor("interface"));
-    expect(kindColor("class")).toBe("#e8a36b");
-    // document sections have their own color
-    expect(kindColor("section")).toBe("#8abf91");
+    expect(kindColor("class")).toBe("#63a9ff");
+    // document sections have their own green
+    expect(kindColor("section")).toBe("#7bd88f");
     // unknown kinds fall back to the neutral gray (same as chunk)
     expect(kindColor("unknown-kind")).toBe(kindColor("chunk"));
-    expect(kindColor("chunk")).toBe("#8d9199");
+    expect(kindColor("chunk")).toBe("#8fa0ae");
   });
 
-  it("hexToRgb converts to normalized triples", () => {
+  it("hexToRgb converts sRGB hex to LINEAR normalized triples (WebGL)", () => {
     expect(hexToRgb("#ffffff")).toEqual([1, 1, 1]);
     expect(hexToRgb("#000000")).toEqual([0, 0, 0]);
-    const [r, g, b] = hexToRgb("#45d6c5");
-    expect(r).toBeCloseTo(0x45 / 255);
-    expect(g).toBeCloseTo(0xd6 / 255);
-    expect(b).toBeCloseTo(0xc5 / 255);
+    // mid gray: sRGB 0.5 -> linear ~0.214 (vertex colors are consumed as-is,
+    // so raw sRGB values would render washed-out pastel)
+    const [r] = hexToRgb("#808080");
+    expect(r).toBeCloseTo(0.2158, 3);
+    const [tr, tg, tb] = hexToRgb("#45d6c5");
+    expect(tr).toBeCloseTo(Math.pow((0x45 / 255 + 0.055) / 1.055, 2.4), 6);
+    expect(tg).toBeCloseTo(Math.pow((0xd6 / 255 + 0.055) / 1.055, 2.4), 6);
+    expect(tb).toBeCloseTo(Math.pow((0xc5 / 255 + 0.055) / 1.055, 2.4), 6);
   });
 
   it("buildLegend counts kinds in a stable order", () => {
@@ -350,7 +354,7 @@ describe("cluster palette", () => {
   it("labels get deterministic, distinct colors; noise is the neutral gray", () => {
     expect(clusterColor(0)).toBe(clusterColor(0));
     expect(clusterColor(1)).not.toBe(clusterColor(2));
-    expect(clusterColor(-1)).toBe("#8d9199");
+    expect(clusterColor(-1)).toBe("#8fa0ae");
     // colors stay in the readable band (not near-black on the dark bg)
     for (const label of [0, 1, 2, 3, 5, 8, 13, 21]) {
       const hex = clusterColor(label);
