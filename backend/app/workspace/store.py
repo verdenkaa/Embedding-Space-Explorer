@@ -301,7 +301,11 @@ def open_in_file_manager(path: Path) -> tuple[bool, str | None]:
     """Open a REAL directory in the OS file manager. (ok, error)."""
     try:
         if sys.platform == "win32":
-            os.startfile(str(path))  # type: ignore[attr-defined]
+            # getattr keeps mypy happy on every platform: os.startfile exists
+            # only on Windows, and a "# type: ignore[attr-defined]" comment
+            # would be flagged as unused by mypy running ON Windows.
+            startfile = getattr(os, "startfile")  # noqa: B009
+            startfile(str(path))
             return True, None
         if sys.platform == "darwin":
             cmd = ["open", str(path)]

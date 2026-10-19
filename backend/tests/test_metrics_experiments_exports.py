@@ -150,8 +150,8 @@ def test_identity_projection_retains_every_neighbor() -> None:
     )
     metrics = bundle["metrics"]
     assert isinstance(metrics, dict)
-    assert metrics["neighbor_retention"]["value"] == pytest.approx(1.0)  # type: ignore[index]
-    assert metrics["trustworthiness"]["value"] == pytest.approx(1.0)  # type: ignore[index]
+    assert metrics["neighbor_retention"]["value"] == pytest.approx(1.0)
+    assert metrics["trustworthiness"]["value"] == pytest.approx(1.0)
 
 
 def test_random_projection_loses_neighbors() -> None:
@@ -163,8 +163,8 @@ def test_random_projection_loses_neighbors() -> None:
     )
     metrics = bundle["metrics"]
     assert isinstance(metrics, dict)
-    retention = metrics["neighbor_retention"]["value"]  # type: ignore[index]
-    trust = metrics["trustworthiness"]["value"]  # type: ignore[index]
+    retention = metrics["neighbor_retention"]["value"]
+    trust = metrics["trustworthiness"]["value"]
     assert isinstance(retention, float) and retention < 0.6
     assert isinstance(trust, float) and trust < 1.0
 
@@ -412,7 +412,7 @@ def test_experiment_config_accepts_file_color_mode(
     """color_by «file» (coloring points by file type) round-trips; unknown modes are rejected."""
     pid, run_id = _embedded_project(client, sample_project)
     proj3 = _compute_projection(client, pid, run_id, 3)
-    config = {
+    config: dict[str, Any] = {
         "view_mode": "3d",
         "embedding_run_id": run_id,
         "projections": {"three": proj3, "two": [], "four": None},
@@ -453,7 +453,7 @@ def test_experiments_save_open_compare_delete(
         f"/api/projects/{pid}/groups", json={"name": "core", "fragment_ids": fids[:2]}
     ).json()
 
-    config = {
+    config: dict[str, Any] = {
         "view_mode": "split",
         "embedding_run_id": run_id,
         "projections": {"three": proj3, "two": [proj2], "four": None},
