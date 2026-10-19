@@ -13,6 +13,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from app import __version__
 from app.config import Settings
 from app.metrics.compute import (
     MetricsInputError,
@@ -475,7 +476,7 @@ def test_experiments_save_open_compare_delete(
     assert exp["config"]["selection"] == fids  # the dead id was dropped
     snapshot = exp["snapshot"]
     assert snapshot["selection_dropped_at_save"] == 1
-    assert snapshot["app_version"] == "0.9.0"
+    assert snapshot["app_version"] == __version__
     assert snapshot["schema_version"] == 7
     assert snapshot["corpus"]["fragments"] == 21
     summary = snapshot["summary"]

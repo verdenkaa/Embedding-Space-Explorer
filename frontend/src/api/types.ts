@@ -706,3 +706,51 @@ export interface ExperimentDTO {
   live_status: ExperimentLiveStatusDTO | null;
   created_at: string;
 }
+
+/* ---------------------------------------------------------------------------
+ * Research workspace (notebooks, notes, exports)
+ * ------------------------------------------------------------------------- */
+
+export type WorkspaceEntryKind = "dir" | "file";
+
+export interface WorkspaceEntry {
+  /** POSIX-style path relative to the project workspace root. */
+  path: string;
+  name: string;
+  kind: WorkspaceEntryKind;
+  size: number;
+  mtime: number;
+}
+
+export interface WorkspaceTreeResponse {
+  entries: WorkspaceEntry[];
+  truncated: boolean;
+  /** Absolute path for display/copy only — never sent back to the API. */
+  root: string;
+}
+
+export interface WorkspaceFileContent {
+  path: string;
+  content: string;
+  size: number;
+  mtime: number;
+}
+
+export interface WorkspaceCreateRequest {
+  path: string;
+  content?: string;
+  kind?: WorkspaceEntryKind;
+}
+
+export interface WorkspaceSaveRequest {
+  path: string;
+  content: string;
+  base_mtime?: number | null;
+  force?: boolean;
+}
+
+export interface OpenFolderResponse {
+  opened: boolean;
+  path: string;
+  error?: string | null;
+}

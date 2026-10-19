@@ -839,3 +839,66 @@ class ExportFragmentsRequest(BaseModel):
     """Explicit selection to export (only data the user chose)."""
 
     fragment_ids: list[str] = Field(min_length=1, max_length=20_000)
+
+
+# ---------------------------------------------------------------------------
+# Research workspace (notebooks, notes, exports — TZ §3, §10)
+# ---------------------------------------------------------------------------
+
+WorkspaceEntryKind = Literal["dir", "file"]
+
+
+class WorkspaceEntryDTO(BaseModel):
+    """One row of the workspace tree; `path` is POSIX-relative to workspace/."""
+
+    path: str
+    name: str
+    kind: WorkspaceEntryKind
+    size: int = 0
+    mtime: float = 0.0
+
+
+class WorkspaceTreeResponse(BaseModel):
+    entries: list[WorkspaceEntryDTO]
+    truncated: bool = False
+    #: Absolute path of the workspace root (display/copy only, never an input).
+    root: str
+
+
+class WorkspaceFileContent(BaseModel):
+    path: str
+    content: str
+    size: int
+    mtime: float
+
+
+class WorkspaceCreateRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=2048)
+    content: str = Field(default="", max_length=16 * 1024 * 1024)
+    kind: WorkspaceEntryKind = "file"
+
+
+class WorkspaceSaveRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=2048)
+    content: str = Field(max_length=16 * 1024 * 1024)
+    #: mtime the client last saw; server refuses an overwrite when the file
+    #: changed since (409 workspace_conflict) unless force=True.
+    base_mtime: float | None = None
+    force: bool = False
+
+
+class WorkspaceRenameRequest(BaseModel):
+    from_path: str = Field(min_length=1, max_length=2048)
+    to_path: str = Field(min_length=1, max_length=2048)
+
+
+class OpenFolderRequest(BaseModel):
+    """Only a FIXED subdir name is accepted (never an arbitrary path)."""
+
+    sub: str = Field(default="", max_length=64)
+
+
+class OpenFolderResponse(BaseModel):
+    opened: bool
+    path: str
+    error: str | None = None

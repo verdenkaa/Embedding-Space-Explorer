@@ -3188,3 +3188,183 @@ code,
 .saved-exp__compare th {
   font-size: var(--text-xs);
 }
+
+/* ============================================================
+   RESEARCH section — workspace panel, document host, dialogs
+   ============================================================ */
+
+.research-section {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+}
+
+.research-section > .workspace-error {
+  flex: 0 0 auto;
+}
+
+.research-section > .split-view-view,
+.research-section .allotment-root {
+  min-height: 0;
+}
+
+.research-notice {
+  position: absolute;
+  right: 12px;
+  bottom: 34px;
+  z-index: 30;
+  max-width: 420px;
+  padding: 8px 12px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-strong);
+  border-left: 3px solid var(--color-ok);
+  border-radius: 4px;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---- left panel ---- */
+
+.workspace-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+}
+
+.workspace-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.workspace-panel__tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-1) 0;
+}
+
+.workspace-panel__footer {
+  flex-shrink: 0;
+  padding: 4px var(--space-2);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl; /* keep the tail (deepest part) of long paths visible */
+  text-align: left;
+}
+
+/* document-kind badges (workspace tree reuses .tree-row__badge) */
+.tree-row__badge.lang-notebook {
+  color: var(--color-warn);
+  border-color: color-mix(in srgb, var(--color-warn) 40%, transparent);
+}
+.tree-row__badge.lang-tex {
+  color: var(--color-file-typescript);
+  border-color: color-mix(in srgb, var(--color-file-typescript) 40%, transparent);
+}
+.tree-row__badge.lang-pdf {
+  color: var(--color-error);
+  border-color: color-mix(in srgb, var(--color-error) 40%, transparent);
+}
+.tree-row__badge.lang-config {
+  color: var(--color-file-config);
+  border-color: color-mix(in srgb, var(--color-file-config) 40%, transparent);
+}
+.tree-row__badge.lang-other {
+  color: var(--color-file-other);
+  border-color: color-mix(in srgb, var(--color-file-other) 40%, transparent);
+}
+
+/* ---- right pane: document host (stage-2 read-only viewer) ---- */
+
+.document-host {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--color-bg);
+}
+
+.document-host__header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.document-host__path {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.document-host__meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  white-space: nowrap;
+}
+
+.document-host__pre {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--color-text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- dialogs ---- */
+
+.research-dialog {
+  width: 420px;
+  max-width: 92vw;
+}
+
+.research-dialog__label {
+  display: block;
+  margin: var(--space-2) 0 4px;
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+}
+
+.research-dialog__select {
+  width: 100%;
+}
+
+.research-dialog__error {
+  margin: var(--space-2) 0 0;
+  color: var(--color-error);
+  font-size: var(--text-sm);
+}
+
+.research-dialog__warning {
+  margin: var(--space-2) 0 0;
+  color: var(--color-warn);
+  font-size: var(--text-sm);
+}

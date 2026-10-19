@@ -30,6 +30,7 @@ from app.api.routes_projections import projections_router
 from app.api.routes_projects import router as projects_router
 from app.api.routes_relations import router as relations_router
 from app.api.routes_slices import router as slices_router
+from app.api.routes_workspace import router as workspace_router
 from app.config import Settings, ensure_data_dir
 from app.core.logging import get_logger, setup_logging
 from app.core.security import LocalOnlyMiddleware
@@ -98,6 +99,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(fragments_router)
     app.include_router(jobs_router)
     app.include_router(fs_router)
+    app.include_router(workspace_router)
     app.include_router(models_router)
     app.include_router(preparation_router)
     app.include_router(embeddings_router)

@@ -27,6 +27,7 @@ import type {
   ModelInfo,
   NeighborMetric,
   NeighborsResponse,
+  OpenFolderResponse,
   PreparationPreviews,
   CreatePresetRequest,
   ProjectionMethodInfo,
@@ -49,6 +50,11 @@ import type {
   SavedSliceDTO,
   SliceComputeResponse,
   StalenessReport,
+  WorkspaceCreateRequest,
+  WorkspaceEntry,
+  WorkspaceFileContent,
+  WorkspaceSaveRequest,
+  WorkspaceTreeResponse,
 } from "./types";
 
 export class ApiError extends Error {
@@ -358,4 +364,42 @@ export const exportUrls = {
     `/api/projects/${pid}/exports/metrics/${metricId}`,
   experiment: (pid: string, experimentId: string): string =>
     `/api/projects/${pid}/exports/experiments/${experimentId}`,
+};
+
+/* ---------------------------------------------------------------------------
+ * Research workspace API (TZ §3, §10). All paths are RELATIVE to the
+ * project workspace; the backend validates them against its own root.
+ * ------------------------------------------------------------------------- */
+
+export const workspaceApi = {
+  getTree: (pid: string): Promise<WorkspaceTreeResponse> =>
+    request<WorkspaceTreeResponse>(`/api/projects/${pid}/workspace/tree`),
+  getFile: (pid: string, path: string): Promise<WorkspaceFileContent> =>
+    request<WorkspaceFileContent>(
+      `/api/projects/${pid}/workspace/file?path=${encodeURIComponent(path)}`,
+    ),
+  create: (pid: string, payload: WorkspaceCreateRequest): Promise<WorkspaceEntry> =>
+    request<WorkspaceEntry>(
+      `/api/projects/${pid}/workspace/file`,
+      jsonInit("POST", payload),
+    ),
+  save: (pid: string, payload: WorkspaceSaveRequest): Promise<WorkspaceFileContent> =>
+    request<WorkspaceFileContent>(`/api/projects/${pid}/workspace/file`, jsonInit("PUT", payload)),
+  rename: (pid: string, fromPath: string, toPath: string): Promise<WorkspaceEntry> =>
+    request<WorkspaceEntry>(
+      `/api/projects/${pid}/workspace/rename`,
+      jsonInit("POST", { from_path: fromPath, to_path: toPath }),
+    ),
+  remove: (pid: string, path: string, confirm = false): Promise<{ deleted: string }> =>
+    request<{ deleted: string }>(
+      `/api/projects/${pid}/workspace/file?path=${encodeURIComponent(path)}${
+        confirm ? "&confirm=true" : ""
+      }`,
+      { method: "DELETE" },
+    ),
+  openFolder: (pid: string, sub = ""): Promise<OpenFolderResponse> =>
+    request<OpenFolderResponse>(
+      `/api/projects/${pid}/workspace/open-folder`,
+      jsonInit("POST", { sub }),
+    ),
 };

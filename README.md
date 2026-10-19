@@ -226,6 +226,26 @@ Linux/macOS: `./scripts/dev.sh` (остановка — Ctrl+C).
 - диагностика: `http://127.0.0.1:8000/api/health`
 - Swagger: `http://127.0.0.1:8000/api/docs`
 
+### Исследовательское рабочее пространство (RESEARCH)
+
+Раздел **RESEARCH** — документы проекта, отделённые от embedding-корпуса:
+блокноты `.ipynb`, Markdown-заметки с формулами LaTeX, данные и результаты
+экспериментов, экспортируемые документы. Всё хранится на диске в каталоге
+проекта `workspace/` (подкаталоги `notebooks/`, `notes/`, `datasets/`,
+`results/`, `exports/`, `latex/`) и **никогда не индексируется** в корпус
+автоматически.
+
+- Дерево документов слева повторяет визуальный язык дерева корпуса: фильтр,
+  бейджи типов (nb / md / tex / pdf), выделение.
+- Файловые операции: создание блокнота/заметки/папки, переименование,
+  удаление (папки — с подтверждением). Пути проверяются сервером
+  относительно корня workspace; текстовые файлы — UTF-8 до 8 МБ, запись
+  атомарная, при конфликте версий (файл изменён на диске) приложение
+  предлагает явный выбор вместо молчаливой перезаписи.
+- Кнопка **«🗀 Папка»** открывает каталог workspace в файловом менеджере
+  операционной системы (через локальный backend; если открыть не удалось,
+  показывается путь для копирования).
+
 ## Тесты и проверки
 
 Всё одной командой, из любого каталога (использует собственные окружения проекта):
@@ -277,12 +297,13 @@ backend/            Python/FastAPI: API, конфигурация, security-midd
     source_registry/ fragmentation/ storage/ jobs/   # корпус
     embedding_providers/ vector_store/               # эмбеддинги
     projection_methods/                              # PCA/UMAP + кэш координат
+    workspace/                                       # исследовательские документы проекта
     config.py       настройки из ESE_* переменных окружения
   tests/            pytest (+ fixture-проект с известными диапазонами строк)
 frontend/           React 19 + TypeScript (strict) + Vite
   src/api/          типизированный клиент (единственный канал к backend)
-  src/state/        zustand-store: ui / project / experiment / space
-  src/components/   TopBar, StatusBar, корпус, инспектор, эксперименты, space/ (3D/2D/4D)
+  src/state/        zustand-store: ui / project / experiment / space / research
+  src/components/   TopBar, StatusBar, корпус, инспектор, эксперименты, space/ (3D/2D/4D), research/
   src/space/        чистая математика выделения/отображения (без three.js)
 docs/               architecture.md, data-model.md, development.md
 scripts/            dev.bat / dev.ps1 / dev.sh — запуск одной командой

@@ -4,6 +4,7 @@ import { DiagnosticsPanel } from "./components/DiagnosticsPanel";
 import { ExperimentsPanel } from "./components/ExperimentsPanel";
 import { StartScreen } from "./components/StartScreen";
 import { RelationsSection } from "./components/relations/RelationsSection";
+import { ResearchSection } from "./components/research/ResearchSection";
 import { SpaceSection } from "./components/space/SpaceSection";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
@@ -41,6 +42,8 @@ export default function App() {
           <ExperimentsPanel />
         ) : activeSection === "relations" ? (
           <RelationsSection />
+        ) : activeSection === "research" ? (
+          <ResearchSection />
         ) : (
           <SpaceSection />
         )}
