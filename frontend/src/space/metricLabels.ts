@@ -6,7 +6,7 @@
 
 export const METRIC_LABELS: Record<string, string> = {
   neighbor_retention: "Сохранение соседей",
-  trustworthiness: "Trustworthiness (sklearn)",
+  trustworthiness: "Trustworthiness",
   relation_precision: "Согласие с известными связями",
   relation_coverage: "Покрытие известных связей",
 };

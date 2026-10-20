@@ -508,6 +508,56 @@ def test_clustering_api_projection_space(
     assert len(labels["ids"]) == 21
 
 
+def test_clustering_projection_outdated_marked_stale(
+    client: TestClient,
+    sample_project: Path,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    """Audit #7: labels over an outdated projection are never 'fresh'."""
+    pid, run_id = _embedded_project(client, sample_project)
+    job = client.post(
+        f"/api/projects/{pid}/projections/compute",
+        json={"embedding_run_id": run_id, "method": "pca", "components": [2]},
+    ).json()
+    wait_for_job(client, pid, job["id"])
+    proj_id = client.get(f"/api/projects/{pid}/projections").json()[0]["id"]
+
+    def cluster() -> dict[str, Any]:
+        job = client.post(
+            f"/api/projects/{pid}/clustering/compute",
+            json={
+                "embedding_run_id": run_id,
+                "space": "projection",
+                "projection_run_id": proj_id,
+                "params": {"eps": 0.5, "min_samples": 2},
+            },
+        ).json()
+        info = wait_for_job(client, pid, job["id"])
+        assert info["state"] == "done", info
+        return info
+
+    info = cluster()
+    assert not any("OUTDATED" in str(w) for w in info["warnings"])
+    assert client.get(f"/api/projects/{pid}/clustering").json()[0]["stale"] is False
+
+    # corpus change → reindex → re-embed: the projection is now outdated
+    utils = sample_project / "src" / "utils.js"
+    utils.write_text(
+        utils.read_text(encoding="utf-8") + "\nfunction addedLater() {}\n", encoding="utf-8"
+    )
+    job = client.post(f"/api/projects/{pid}/index").json()
+    assert wait_for_job(client, pid, job["id"])["state"] == "done"
+    job = client.post(
+        f"/api/projects/{pid}/embeddings/compute",
+        json={"model_id": FAKE_MODEL_ID, "mode": "raw_fragment"},
+    ).json()
+    assert wait_for_job(client, pid, job["id"])["state"] == "done"
+
+    info = cluster()
+    assert any("OUTDATED layout" in str(w) for w in info["warnings"])
+    assert client.get(f"/api/projects/{pid}/clustering").json()[0]["stale"] is True
+
+
 # ---------------------------------------------------------------------------
 # Manual groups
 # ---------------------------------------------------------------------------

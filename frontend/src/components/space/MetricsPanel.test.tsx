@@ -42,6 +42,43 @@ const RUN: MetricRunDTO = {
       n_pairs_considered: 0,
       explanation: "Доля топ-k соседей, приходящихся на ИЗВЕСТНЫЕ структурные связи…",
     },
+    relation_coverage: {
+      value: 0.25,
+      baseline: 0.05,
+      lift: 5.0,
+      k: 10,
+      n_sampled: null,
+      n_sampled_with_relations: 0,
+      n_known_pairs_embedded: 4,
+      n_pairs_considered: 8,
+      explanation: "Доля НАПРАВЛЕНИЙ известных структурных пар…",
+    },
+  },
+  per_kind: {
+    belongs_to: {
+      relation_precision: {
+        value: 0.4,
+        baseline: 0.1,
+        lift: 4.0,
+        k: 10,
+        n_sampled: null,
+        n_sampled_with_relations: 6,
+        n_known_pairs_embedded: 3,
+        n_pairs_considered: 6,
+        explanation: "…",
+      },
+      relation_coverage: {
+        value: 0.5,
+        baseline: 0.05,
+        lift: 10.0,
+        k: 10,
+        n_sampled: null,
+        n_sampled_with_relations: 6,
+        n_known_pairs_embedded: 3,
+        n_pairs_considered: 6,
+        explanation: "…",
+      },
+    },
   },
   warnings: ["projection metrics skipped: no projection run was given"],
   stale: true,
@@ -116,6 +153,24 @@ describe("MetricsPanel", () => {
     expect(screen.getByText(/Средняя доля k ближайших соседей/)).toBeTruthy();
     // honest warnings
     expect(screen.getByText(/projection metrics skipped/)).toBeTruthy();
+  });
+
+  it("shows baseline/lift and the per-kind relation table", async () => {
+    render(<MetricsPanel />);
+    expand();
+    await waitFor(() => expect(useAnalysisStore.getState().metricRuns).not.toBeNull());
+
+    // coverage block carries baseline and lift next to the value
+    fireEvent.click(screen.getByText("Покрытие известных связей"));
+    expect(screen.getByText(/baseline: 0.0500/)).toBeTruthy();
+    expect(screen.getByText(/lift: 5.00×/)).toBeTruthy();
+    // directed arcs wording
+    expect(screen.getByText(/направлений учтено: 8/)).toBeTruthy();
+
+    // per-kind breakdown is rendered with its own lifts
+    expect(screen.getByText(/По видам связей/)).toBeTruthy();
+    expect(screen.getByText("belongs_to")).toBeTruthy();
+    expect(screen.getByText("10.00×")).toBeTruthy();
   });
 
   it("computes with the explicit form payload (no hidden defaults)", async () => {

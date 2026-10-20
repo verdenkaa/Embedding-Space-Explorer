@@ -22,6 +22,11 @@ import { JobProgress } from "../corpus/JobProgress";
  * - the relation metrics carry the corpus-incompleteness caveat.
  */
 
+/** lift formatting: null stays an em dash (unknown ≠ 1.0). */
+function formatLift(lift: number | null): string {
+  return lift === null ? "—" : `${lift.toFixed(2)}×`;
+}
+
 export function MetricsPanel() {
   const current = useProjectStore((s) => s.current);
   const projections = useExperimentStore((s) => s.projections);
@@ -253,14 +258,57 @@ export function MetricsPanel() {
                           <>известных пар с векторами: {metric.n_known_pairs_embedded}; </>
                         )}
                         {metric.n_pairs_considered !== null && (
-                          <>пар учтено: {metric.n_pairs_considered}; </>
+                          <>направлений учтено: {metric.n_pairs_considered}; </>
                         )}
+                        {metric.baseline != null && <>baseline: {metric.baseline.toFixed(4)}; </>}
+                        {metric.lift != null && <>lift: {metric.lift.toFixed(2)}×; </>}
                         запуск {shownRun.id.slice(0, 8)}
                       </div>
                     </details>
                   );
                 })}
               </div>
+
+              {shownRun.per_kind && Object.keys(shownRun.per_kind).length > 0 && (
+                <div className="metrics-panel__per-kind">
+                  <div className="metric-block__label">
+                    По видам связей (та же выборка и топ-k; смешанное значение
+                    вытягивают почти тривиальные belongs_to — смотрите lift)
+                  </div>
+                  <table className="deps-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">вид</th>
+                        <th scope="col">согласие</th>
+                        <th scope="col">lift</th>
+                        <th scope="col">покрытие</th>
+                        <th scope="col">lift</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(shownRun.per_kind)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([kind, entries]) => (
+                          <tr key={kind}>
+                            <td className="mono">{kind}</td>
+                            <td className="mono">
+                              {formatMetricValue(entries.relation_precision?.value ?? null)}
+                            </td>
+                            <td className="mono">
+                              {formatLift(entries.relation_precision?.lift ?? null)}
+                            </td>
+                            <td className="mono">
+                              {formatMetricValue(entries.relation_coverage?.value ?? null)}
+                            </td>
+                            <td className="mono">
+                              {formatLift(entries.relation_coverage?.lift ?? null)}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               {shownRun.warnings.length > 0 && (
                 <ul className="metrics-panel__warnings" aria-label="Предупреждения метрик">

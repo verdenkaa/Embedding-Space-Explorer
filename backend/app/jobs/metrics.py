@@ -91,11 +91,13 @@ def make_metrics_runner(
                 )
             emb_npz = emb_run.npz_relpath
             proj_npz: str | None = None
+            proj_signature: str | None = None
             if projection_run_id is not None:
                 proj_row = session.get(ProjectionRunRow, projection_run_id)
                 if proj_row is None:
                     raise ValueError(f"projection run '{projection_run_id}' not found")
                 proj_npz = proj_row.npz_relpath
+                proj_signature = proj_row.source_signature
             relation_rows = session.execute(
                 select(
                     RelationRow.source_fragment_id,
@@ -116,6 +118,14 @@ def make_metrics_runner(
 
         coords: np.ndarray | None = None
         warnings: list[str] = []
+        if proj_signature is not None and proj_signature != signature:
+            # The coordinates come from a projection built over OLDER vectors:
+            # the run must never look fresh while describing an outdated layout.
+            warnings.append(
+                "the projection was built from older vectors than the current "
+                "embedding cache: these numbers describe an OUTDATED layout "
+                "(the run is marked stale — recompute the projection first)"
+            )
         if proj_npz is not None:
             proj_cache = ProjectionCache.load(project.project_dir / proj_npz)
             if proj_cache is None:
@@ -137,6 +147,13 @@ def make_metrics_runner(
             coords = proj_cache.coords[np.asarray([proj_index[f] for f in ids], dtype=np.int64)]
 
         pairs = relation_pairs_from_rows(relation_rows, relation_kinds)
+        # per-kind breakdown over the SAME top-k/sample: mixed numbers are
+        # dominated by trivial belongs_to pairs (audit #4)
+        kinds_present = sorted({str(row[4]) for row in relation_rows})
+        if relation_kinds:
+            allowed = set(relation_kinds)
+            kinds_present = [kd for kd in kinds_present if kd in allowed]
+        pairs_by_kind = {kd: relation_pairs_from_rows(relation_rows, [kd]) for kd in kinds_present}
 
         ctx.check_cancelled()
         ctx.progress(
@@ -155,6 +172,7 @@ def make_metrics_runner(
                 sample=sample,
                 seed=seed,
                 pairs=pairs,
+                pairs_by_kind=pairs_by_kind,
             )
         except MetricsInputError as exc:
             raise ValueError(str(exc)) from exc
@@ -186,6 +204,7 @@ def make_metrics_runner(
             result=result,
             n_vectors=len(ids),
             signature=signature,
+            projection_signature=proj_signature,
         )
 
         ctx.check_cancelled()
@@ -216,6 +235,7 @@ def _upsert_run(
     result: dict[str, object],
     n_vectors: int,
     signature: str,
+    projection_signature: str | None = None,
 ) -> None:
     now = _utc_now()
     with project.session_factory() as session:
@@ -232,6 +252,7 @@ def _upsert_run(
         row.result_json = json.dumps(result, ensure_ascii=False, default=str)
         row.n_vectors = n_vectors
         row.source_signature = signature
+        row.projection_signature = projection_signature
         row.versions_json = json.dumps(metric_versions(), sort_keys=True)
         row.updated_at = now
         session.commit()

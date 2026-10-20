@@ -27,6 +27,29 @@ from app.storage.projects_store import ProjectContext
 router = APIRouter(prefix="/api/projects/{project_id}", tags=["metrics"])
 
 
+def _is_stale(current: str | None, row: MetricRunRow) -> bool:
+    """A run is stale when CURRENT vectors differ from the ones it measured —
+    either the embedding cache (source_signature) or, for projection-based
+    numbers, the vectors the projection was built from (audit #7)."""
+    if current is None or current != row.source_signature:
+        return True
+    return row.projection_signature is not None and current != row.projection_signature
+
+
+def _metric_value(data: dict[str, Any]) -> MetricValueDTO:
+    return MetricValueDTO(
+        value=data.get("value"),
+        baseline=data.get("baseline"),
+        lift=data.get("lift"),
+        k=data.get("k"),
+        n_sampled=data.get("n_sampled"),
+        n_sampled_with_relations=data.get("n_sampled_with_relations"),
+        n_known_pairs_embedded=data.get("n_known_pairs_embedded"),
+        n_pairs_considered=data.get("n_pairs_considered"),
+        explanation=str(data.get("explanation", "")),
+    )
+
+
 def _parse_run(row: MetricRunRow, stale: bool) -> MetricRunDTO:
     result = json.loads(row.result_json) if row.result_json else {}
     params = json.loads(row.params_json) if row.params_json else {}
@@ -34,15 +57,16 @@ def _parse_run(row: MetricRunRow, stale: bool) -> MetricRunDTO:
     metrics: dict[str, MetricValueDTO] = {}
     for name, data in metrics_raw.items():
         if isinstance(data, dict):
-            metrics[str(name)] = MetricValueDTO(
-                value=data.get("value"),
-                k=data.get("k"),
-                n_sampled=data.get("n_sampled"),
-                n_sampled_with_relations=data.get("n_sampled_with_relations"),
-                n_known_pairs_embedded=data.get("n_known_pairs_embedded"),
-                n_pairs_considered=data.get("n_pairs_considered"),
-                explanation=str(data.get("explanation", "")),
-            )
+            metrics[str(name)] = _metric_value(data)
+    per_kind_raw: dict[str, Any] = result.get("per_kind") or {}
+    per_kind: dict[str, dict[str, MetricValueDTO]] = {}
+    for kind, entries in per_kind_raw.items():
+        if isinstance(entries, dict):
+            per_kind[str(kind)] = {
+                str(name): _metric_value(data)
+                for name, data in entries.items()
+                if isinstance(data, dict)
+            }
     kinds = params.get("relation_kinds")
     return MetricRunDTO(
         id=row.id,
@@ -54,6 +78,7 @@ def _parse_run(row: MetricRunRow, stale: bool) -> MetricRunDTO:
         relation_kinds=[str(x) for x in kinds] if isinstance(kinds, list) else None,
         n_vectors=row.n_vectors,
         metrics=metrics,
+        per_kind=per_kind,
         warnings=[str(w) for w in (result.get("warnings") or [])],
         stale=stale,
         versions=json.loads(row.versions_json) if row.versions_json else {},
@@ -145,8 +170,7 @@ def list_metric_runs(
                 ctx, row.embedding_run_id
             )
         current = signature_cache[row.embedding_run_id]
-        stale = current is None or current != row.source_signature
-        result.append(_parse_run(row, stale))
+        result.append(_parse_run(row, _is_stale(current, row)))
     result.sort(key=lambda r: (r.updated_at, r.id), reverse=True)
     return result
 
@@ -161,8 +185,7 @@ def get_metric_run(
     if row is None:
         raise ApiError(404, "metric_run_not_found", f"Metric run '{metric_id}' does not exist.")
     current = current_embedding_signature(ctx, row.embedding_run_id)
-    stale = current is None or current != row.source_signature
-    return _parse_run(row, stale)
+    return _parse_run(row, _is_stale(current, row))
 
 
 @router.delete("/metrics/{metric_id}")

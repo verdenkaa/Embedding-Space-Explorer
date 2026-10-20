@@ -181,7 +181,14 @@ def list_clustering_runs(
                 ctx, row.embedding_run_id
             )
         current = signature_cache[row.embedding_run_id]
-        stale = current is None or current != row.source_signature
+        # projection-based labels describe the projection's layout: stale when
+        # current vectors differ from the embedding cache OR from the vectors
+        # the projection was built from (audit #7)
+        stale = (
+            current is None
+            or current != row.source_signature
+            or (row.projection_signature is not None and current != row.projection_signature)
+        )
         labels = load_labels(ctx.project_dir / row.npz_relpath)
         raw_params = json.loads(row.params_json) if row.params_json else {}
         result.append(

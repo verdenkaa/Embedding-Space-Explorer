@@ -15,7 +15,7 @@ import {
 describe("metricLabels", () => {
   it("known metrics get Russian display names; unknown fall back to the id", () => {
     expect(metricLabel("neighbor_retention")).toBe("Сохранение соседей");
-    expect(metricLabel("trustworthiness")).toContain("sklearn");
+    expect(metricLabel("trustworthiness")).toBe("Trustworthiness");
     expect(metricLabel("relation_precision")).toContain("известными связями");
     expect(metricLabel("some_future_metric")).toBe("some_future_metric");
   });

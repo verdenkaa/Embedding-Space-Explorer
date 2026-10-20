@@ -71,6 +71,7 @@ def make_clustering_runner(
             raise ValueError("the embedding run has no vectors; compute embeddings first")
         signature = emb_cache.signature()
 
+        projection_signature: str | None = None
         if space == "projection":
             assert projection_run_id is not None  # validated at POST time
             with project.session_factory() as session:
@@ -83,8 +84,25 @@ def make_clustering_runner(
                     f"coordinate cache of projection '{projection_run_id}' is missing "
                     "or damaged; recompute the projection first"
                 )
+            projection_signature = proj_row.source_signature
             ids = list(proj_cache.ids)
             matrix = proj_cache.coords
+            if projection_signature != signature:
+                # Labels describe the projection's layout, not current vectors:
+                # never present that as fresh (audit #7).
+                ctx.warn(
+                    "the projection was built from older vectors than the current "
+                    "embedding cache: clusters describe an OUTDATED layout "
+                    "(the run is marked stale — recompute the projection first)"
+                )
+            emb_ids = set(emb_cache.ids)
+            covered = sum(1 for fid in ids if fid in emb_ids)
+            if covered < len(ids) or covered < len(emb_ids):
+                ctx.warn(
+                    f"clustering covers {len(ids)} projection points, of which "
+                    f"{covered} have current embeddings ({len(emb_ids)} embedded "
+                    "in total); labels exist only for the projection's points"
+                )
         else:
             ids = list(emb_cache.ids)
             matrix = emb_cache.vectors
@@ -119,6 +137,7 @@ def make_clustering_runner(
             n_clusters=n_clusters,
             noise=noise,
             signature=signature,
+            projection_signature=projection_signature,
         )
 
         ctx.check_cancelled()
@@ -174,6 +193,7 @@ def _upsert_run(
     n_clusters: int,
     noise: int,
     signature: str,
+    projection_signature: str | None = None,
 ) -> None:
     now = _utc_now()
     with project.session_factory() as session:
@@ -194,6 +214,7 @@ def _upsert_run(
         row.n_clusters = n_clusters
         row.noise = noise
         row.source_signature = signature
+        row.projection_signature = projection_signature
         row.versions_json = json.dumps(clustering_versions(algorithm), sort_keys=True)
         row.updated_at = now
         session.commit()

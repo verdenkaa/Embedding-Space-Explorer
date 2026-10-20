@@ -458,6 +458,94 @@ def test_metrics_api_flow(
     assert client.delete(f"/api/projects/{pid}/metrics/{run['id']}").status_code == 404
 
 
+def test_relation_metrics_per_kind_baseline_and_lift(
+    client: TestClient,
+    sample_project: Path,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    """Audit #4: per-kind breakdown + random-ranking baseline + lift."""
+    pid, run_id = _embedded_project(client, sample_project)
+    job = client.post(f"/api/projects/{pid}/relations/extract").json()
+    assert wait_for_job(client, pid, job["id"])["state"] == "done"
+
+    info = _compute_metrics(
+        client, pid, {"embedding_run_id": run_id, "k": 5, "sample": 15, "seed": 7}
+    )
+    assert info["state"] == "done", info
+    run = client.get(f"/api/projects/{pid}/metrics").json()[0]
+
+    # the fixture corpus yields belongs_to relations (methods → class)
+    per_kind = run["per_kind"]
+    assert "belongs_to" in per_kind
+    entry = per_kind["belongs_to"]
+    assert "relation_precision" in entry and "relation_coverage" in entry
+
+    coverage = run["metrics"]["relation_coverage"]
+    n = run["n_vectors"]
+    if coverage["value"] is not None:
+        # baseline = k/(N-1) exactly; lift = value/baseline
+        assert coverage["baseline"] == pytest.approx(coverage["k"] / (n - 1))
+        assert coverage["lift"] == pytest.approx(coverage["value"] / coverage["baseline"])
+    kind_cov = entry["relation_coverage"]
+    if kind_cov["value"] is not None:
+        assert kind_cov["baseline"] == pytest.approx(kind_cov["k"] / (n - 1))
+        assert kind_cov["lift"] == pytest.approx(kind_cov["value"] / kind_cov["baseline"])
+    precision = run["metrics"]["relation_precision"]
+    if precision["value"] is not None:
+        assert precision["baseline"] is not None and precision["baseline"] > 0
+        assert precision["lift"] == pytest.approx(precision["value"] / precision["baseline"])
+
+    # the explanation warns about trivial belongs_to agreement
+    assert (
+        "тривиальн" in precision["explanation"].lower() or "belongs_to" in precision["explanation"]
+    )
+
+
+def test_metrics_on_outdated_projection_marked_stale(
+    client: TestClient,
+    sample_project: Path,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    """Audit #7: numbers over an outdated projection are never 'fresh'."""
+    pid, run_id = _embedded_project(client, sample_project)
+    proj_id = _compute_projection(client, pid, run_id, 2)
+
+    # Fresh case: metrics over a current projection are not stale.
+    _compute_metrics(
+        client,
+        pid,
+        {"embedding_run_id": run_id, "projection_run_id": proj_id, "k": 5, "sample": 15, "seed": 7},
+    )
+    fresh = client.get(f"/api/projects/{pid}/metrics").json()[0]
+    assert fresh["stale"] is False
+
+    # Corpus change → reindex → re-embed: the embedding signature changes,
+    # the projection was built from the OLD vectors.
+    utils = sample_project / "src" / "utils.js"
+    utils.write_text(
+        utils.read_text(encoding="utf-8") + "\nfunction addedLater() {}\n", encoding="utf-8"
+    )
+    job = client.post(f"/api/projects/{pid}/index").json()
+    assert wait_for_job(client, pid, job["id"])["state"] == "done"
+    job = client.post(
+        f"/api/projects/{pid}/embeddings/compute",
+        json={"model_id": FAKE_MODEL_ID, "mode": "raw_fragment"},
+    ).json()
+    assert wait_for_job(client, pid, job["id"])["state"] == "done"
+
+    # Recomputing metrics over the OUTDATED projection is allowed (research
+    # tool), but the run is marked stale immediately and says why.
+    info = _compute_metrics(
+        client,
+        pid,
+        {"embedding_run_id": run_id, "projection_run_id": proj_id, "k": 5, "sample": 15, "seed": 7},
+    )
+    assert info["state"] == "done", info
+    run = client.get(f"/api/projects/{pid}/metrics").json()[0]
+    assert run["stale"] is True
+    assert any("OUTDATED layout" in str(w) for w in run["warnings"])
+
+
 def test_metrics_api_validation(
     client: TestClient,
     sample_project: Path,

@@ -607,6 +607,10 @@ export interface FragmentGroupDTO {
 export interface MetricValueDTO {
   /** null = not computed (no data) — never a fake 0.0 */
   value: number | null;
+  /** random-ranking null model (relation metrics): expected value by chance */
+  baseline?: number | null;
+  /** value / baseline (>1 — agreement better than chance) */
+  lift?: number | null;
   k: number | null;
   n_sampled: number | null;
   n_sampled_with_relations: number | null;
@@ -625,6 +629,9 @@ export interface MetricRunDTO {
   relation_kinds: string[] | null;
   n_vectors: number;
   metrics: Record<string, MetricValueDTO>;
+  /** relation metrics per relation kind over the SAME sample/top-k: the mixed
+   *  value is dominated by trivial belongs_to pairs */
+  per_kind?: Record<string, Record<string, MetricValueDTO>>;
   warnings: string[];
   stale: boolean;
   versions: Record<string, string>;

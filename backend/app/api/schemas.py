@@ -737,6 +737,10 @@ class MetricValueDTO(BaseModel):
     number)."""
 
     value: float | None = None
+    #: random-ranking baseline (relation metrics): the expected value by chance
+    baseline: float | None = None
+    #: value / baseline (>1 = the space agrees with relations better than chance)
+    lift: float | None = None
     k: int | None = None
     n_sampled: int | None = None
     n_sampled_with_relations: int | None = None
@@ -755,6 +759,9 @@ class MetricRunDTO(BaseModel):
     relation_kinds: list[str] | None = None
     n_vectors: int
     metrics: dict[str, MetricValueDTO]
+    #: relation metrics per relation kind over the SAME sample/top-k: the
+    #: mixed value is dominated by trivial belongs_to pairs (audit #4)
+    per_kind: dict[str, dict[str, MetricValueDTO]] = {}
     warnings: list[str]
     stale: bool
     versions: dict[str, str]

@@ -26,7 +26,7 @@ Definitions:
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 import numpy as np
 
@@ -49,7 +49,11 @@ METRIC_EXPLANATIONS: dict[str, str] = {
         "структурные связи фрагмента (усреднение по фрагментам, у которых есть "
         "хотя бы одна известная связь). ВАЖНО: отсутствие известной связи НЕ "
         "считается доказательством отсутствия связи (корпус связей неполон) — "
-        "это мера согласия с известными связями, а не классический precision."
+        "это мера согласия с известными связями, а не классический precision. "
+        "baseline — ожидаемое согласие при случайном ранжировании "
+        "(|known|/(N−1)); lift = value/baseline. Связи belongs_to почти "
+        "тривиальны (текст родителя содержит текст ребёнка), поэтому смотрите "
+        "разбивку по видам связей и lift, а не смешанное значение."
     ),
     "relation_coverage": (
         "Доля НАПРАВЛЕНИЙ известных структурных пар (оба конца с векторами), у "
@@ -57,8 +61,9 @@ METRIC_EXPLANATIONS: dict[str, str] = {
         "Связь трактуется симметрично: пара даёт по направлению на каждый её "
         "попавший в выборку конец (два направления, если оба конца в выборке) — "
         "топ-k окрестности несимметричны, каждое направление проверяется отдельно. "
-        "Низкое значение при малом числе известных пар — не вывод о геометрии, а "
-        "следствие неполноты корпуса."
+        "baseline — ожидаемая доля при случайном ранжировании (k/(N−1)); "
+        "lift = value/baseline. Низкое значение при малом числе известных пар — "
+        "не вывод о геометрии, а следствие неполноты корпуса."
     ),
 }
 
@@ -225,8 +230,21 @@ def relation_metrics(
     orig_topk: np.ndarray,
     idx: np.ndarray,
     pairs: set[frozenset[str]],
+    *,
+    n_population: int,
+    k: int,
 ) -> dict[str, object]:
-    """precision@k / coverage@k against KNOWN relations (incompleteness-aware)."""
+    """precision@k / coverage@k against KNOWN relations (incompleteness-aware).
+
+    Also returns the RANDOM-RANKING baseline and lift for both metrics
+    (audit #4): without a baseline a high agreement means nothing —
+    belongs_to pairs (parent text contains child text) agree almost
+    regardless of the embedding quality.
+
+        precision baseline = mean(|known_i| / (N-1)) over the same points
+        coverage  baseline = k / (N-1)
+        lift                 = value / baseline
+    """
     index_of = {fid: i for i, fid in enumerate(ids)}
     # per-fragment known partners (only pairs whose both ends have vectors)
     partners: dict[int, set[int]] = {}
@@ -242,6 +260,7 @@ def relation_metrics(
 
     # precision over sampled points that HAVE known partners
     per_point: list[float] = []
+    known_sizes: list[float] = []
     for row, self_i in enumerate(idx):
         known = partners.get(int(self_i))
         if not known:
@@ -250,6 +269,7 @@ def relation_metrics(
         if not neighbors:
             continue
         per_point.append(len(neighbors & known) / len(neighbors))
+        known_sizes.append(len(known))
     precision: float | None = float(np.mean(per_point)) if per_point else None
 
     # coverage over ARC DIRECTIONS whose SOURCE end was sampled: top-k
@@ -271,13 +291,57 @@ def relation_metrics(
                 covered += 1
     coverage: float | None = float(covered / considered) if considered else None
 
+    # random-ranking baselines
+    denom = n_population - 1
+    precision_baseline: float | None = None
+    if per_point and denom > 0:
+        precision_baseline = float(np.mean([s / denom for s in known_sizes]))
+    coverage_baseline: float | None = None
+    if considered and denom > 0:
+        coverage_baseline = k / denom
+
+    def lift(value: float | None, baseline: float | None) -> float | None:
+        if value is None or baseline is None or baseline <= 0:
+            return None
+        return value / baseline
+
     return {
-        "relation_precision": precision,
-        "relation_coverage": coverage,
-        "n_sampled_with_relations": len(per_point),
-        "n_known_pairs_embedded": len(embedded_pairs),
-        # arcs whose source was sampled (a pair with both ends sampled → 2)
-        "n_pairs_considered": considered,
+        "precision": precision,
+        "precision_baseline": precision_baseline,
+        "precision_lift": lift(precision, precision_baseline),
+        "coverage": coverage,
+        "coverage_baseline": coverage_baseline,
+        "coverage_lift": lift(coverage, coverage_baseline),
+        "counts": {
+            "n_sampled_with_relations": len(per_point),
+            "n_known_pairs_embedded": len(embedded_pairs),
+            # arcs whose source was sampled (a pair with both ends sampled → 2)
+            "n_pairs_considered": considered,
+        },
+    }
+
+
+def _relation_metric_entries(rel: dict[str, object], k_eff: int) -> dict[str, dict[str, object]]:
+    """Build the two relation metric blocks (value + baseline + lift + counts)."""
+    counts = rel["counts"]
+    assert isinstance(counts, dict)
+    return {
+        "relation_precision": {
+            "value": rel["precision"],
+            "baseline": rel["precision_baseline"],
+            "lift": rel["precision_lift"],
+            "k": k_eff,
+            "explanation": METRIC_EXPLANATIONS["relation_precision"],
+            **counts,
+        },
+        "relation_coverage": {
+            "value": rel["coverage"],
+            "baseline": rel["coverage_baseline"],
+            "lift": rel["coverage_lift"],
+            "k": k_eff,
+            "explanation": METRIC_EXPLANATIONS["relation_coverage"],
+            **counts,
+        },
     }
 
 
@@ -289,8 +353,13 @@ def compute_metric_bundle(
     sample: int,
     seed: int,
     pairs: set[frozenset[str]],
+    pairs_by_kind: Mapping[str, set[frozenset[str]]] | None = None,
 ) -> dict[str, object]:
     """Run every applicable metric; returns {"metrics": {...}, "warnings": [...]}.
+
+    `pairs_by_kind` (optional) adds a per-relation-kind breakdown of the
+    relation metrics over the SAME top-k/sample — mixed values are dominated
+    by trivial belongs_to pairs, per-kind numbers are what's interpretable.
 
     `coords` are projection coordinates aligned to `ids` (None → only the
     relation metrics are computed — projection quality needs a projection).
@@ -311,21 +380,10 @@ def compute_metric_bundle(
 
     metrics: dict[str, object] = {}
 
-    rel = relation_metrics(ids, orig, idx, pairs)
-    precision = rel.pop("relation_precision")
-    coverage = rel.pop("relation_coverage")
-    metrics["relation_precision"] = {
-        "value": precision,
-        "k": k_eff,
-        "explanation": METRIC_EXPLANATIONS["relation_precision"],
-        **rel,
-    }
-    metrics["relation_coverage"] = {
-        "value": coverage,
-        "k": k_eff,
-        "explanation": METRIC_EXPLANATIONS["relation_coverage"],
-        **rel,
-    }
+    rel = relation_metrics(ids, orig, idx, pairs, n_population=n, k=k_eff)
+    metrics.update(_relation_metric_entries(rel, k_eff))
+    precision = rel["precision"]
+    coverage = rel["coverage"]
     if precision is None:
         warnings.append(
             "relation_precision not computed: no sampled fragment has known "
@@ -367,8 +425,18 @@ def compute_metric_bundle(
             "(relation metrics are computed over the ORIGINAL space)"
         )
 
+    per_kind: dict[str, object] = {}
+    if pairs_by_kind:
+        for kind in sorted(pairs_by_kind):
+            kind_pairs = pairs_by_kind[kind]
+            if not kind_pairs:
+                continue
+            krel = relation_metrics(ids, orig, idx, kind_pairs, n_population=n, k=k_eff)
+            per_kind[kind] = _relation_metric_entries(krel, k_eff)
+
     return {
         "metrics": metrics,
+        "per_kind": per_kind,
         "warnings": warnings,
         "sample": {"n_vectors": n, "n_sampled": len(idx), "k": k_eff, "seed": seed},
     }
