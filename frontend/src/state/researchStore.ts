@@ -19,6 +19,7 @@ import type {
   WorkspaceEntryKind,
   WorkspaceFileContent,
 } from "../api/types";
+import { useMarkdownStore } from "./markdownStore";
 import { useNotebookStore } from "./notebookStore";
 import { useProjectStore } from "./projectStore";
 
@@ -89,6 +90,24 @@ function confirmLeaveDirtyNotebook(targetPath: string | null): boolean {
   );
 }
 
+/**
+ * Guard for switching away from a dirty Markdown note: notes FLUSH (silent
+ * save into their own project) instead of asking — product decision, mirrors
+ * the notebook's flush-on-project-switch. Only a failed flush (disk conflict
+ * / backend down) falls back to an honest confirm.
+ */
+async function flushDirtyNote(targetPath: string | null): Promise<boolean> {
+  const md = useMarkdownStore.getState();
+  if (!md.doc || !md.dirty) return true;
+  if (targetPath === md.doc.path) return true;
+  const saved = await md.save({ silent: true });
+  if (saved) return true;
+  return window.confirm(
+    `Не удалось сохранить заметку ${md.doc.path} (файл изменён на диске или backend недоступен). ` +
+      "Переключиться и потерять несохранённые изменения?",
+  );
+}
+
 const EMPTY: Pick<
   ResearchState,
   | "tree"
@@ -144,10 +163,13 @@ export const useResearchStore = create<ResearchState>()((set, get) => ({
     if (!pid) return;
     if (path === null) {
       if (!confirmLeaveDirtyNotebook(null)) return;
+      if (!(await flushDirtyNote(null))) return;
       set({ selectedPath: null, file: null });
       return;
     }
     if (!confirmLeaveDirtyNotebook(path)) return;
+    if (!(await flushDirtyNote(path))) return;
+    if (currentProjectId() !== pid) return; // project switched during the flush
     const entries = get().tree ?? [];
     const entry = entries.find((e) => e.path === path);
     if (entry?.kind === "dir") {
@@ -198,6 +220,24 @@ export const useResearchStore = create<ResearchState>()((set, get) => ({
       }
       nb.reset();
     }
+    const md = useMarkdownStore.getState();
+    if (md.doc && (md.doc.path === fromPath || md.doc.path.startsWith(`${fromPath}/`))) {
+      // Flush into the OLD path first: after the rename the content moves
+      // with the file, so a successful save loses nothing.
+      if (md.dirty) {
+        const saved = await md.save({ silent: true });
+        if (
+          !saved &&
+          !window.confirm(
+            `Не удалось сохранить заметку ${md.doc.path}. ` +
+              "Переименовать и потерять несохранённые изменения?",
+          )
+        ) {
+          return false;
+        }
+      }
+      md.reset();
+    }
     set({ busy: true, error: null });
     try {
       await workspaceApi.rename(pid, fromPath, toPath);
@@ -227,6 +267,18 @@ export const useResearchStore = create<ResearchState>()((set, get) => ({
         return false;
       }
       nb.reset();
+    }
+    const md = useMarkdownStore.getState();
+    if (md.doc && (md.doc.path === path || md.doc.path.startsWith(`${path}/`))) {
+      if (
+        md.dirty &&
+        !window.confirm(
+          `Заметка ${md.doc.path} имеет несохранённые изменения и будет удалена. Продолжить?`,
+        )
+      ) {
+        return false;
+      }
+      md.reset();
     }
     set({ busy: true, error: null });
     try {

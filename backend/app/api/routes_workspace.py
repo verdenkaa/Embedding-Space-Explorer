@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import FileResponse
 
 from app.api.deps import get_project
 from app.api.errors import ApiError
@@ -70,7 +71,7 @@ def _translate(exc: ws.WorkspaceError, action: str) -> ApiError:
         return ApiError(
             413,
             "workspace_file_too_large",
-            f"Файл больше {ws.MAX_TEXT_BYTES // (1024 * 1024)} МБ: {exc}",
+            f"Файл больше {exc.limit // (1024 * 1024)} МБ: {exc.path}",
         )
     return ApiError(500, "workspace_error", f"{action}: {exc}")
 
@@ -97,6 +98,35 @@ def get_file(
     except ws.WorkspaceError as exc:
         raise _translate(exc, "read") from None
     return WorkspaceFileContent(path=path, content=content, size=size, mtime=mtime)
+
+
+@router.get("/raw")
+def get_raw_file(
+    ctx: Annotated[ProjectContext, Depends(get_project)],
+    path: Annotated[str, Query(min_length=1, max_length=2048)],
+) -> FileResponse:
+    """Serve a workspace file as BINARY (images referenced by notes, PDFs).
+
+    The markdown note editor rewrites relative image sources to this route so
+    plots saved by notebooks (results/*.png) render inside the application.
+    Path safety is identical to the text endpoints (resolve_in_workspace).
+
+    Hardening: text/html is downgraded to text/plain (a workspace file must
+    never execute scripts on the application's origin) and nosniff is set.
+    """
+    try:
+        file_path, _size, media_type = ws.read_binary_meta(ctx, path)
+    except ws.WorkspaceError as exc:
+        raise _translate(exc, "raw") from None
+    if media_type in ("text/html", "application/xhtml+xml"):
+        media_type = "text/plain"
+    return FileResponse(
+        file_path,
+        media_type=media_type,
+        filename=file_path.name,
+        content_disposition_type="inline",
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.post("/file", response_model=WorkspaceEntryDTO, status_code=201)

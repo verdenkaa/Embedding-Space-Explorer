@@ -410,6 +410,12 @@ export const workspaceApi = {
       `/api/projects/${pid}/workspace/open-folder`,
       jsonInit("POST", { sub }),
     ),
+  /**
+   * URL (not a fetch) of the binary endpoint: <img src> for workspace files
+   * (plots in results/, images in datasets/). Same-origin, path-validated.
+   */
+  rawUrl: (pid: string, path: string): string =>
+    `/api/projects/${pid}/workspace/raw?path=${encodeURIComponent(path)}`,
 };
 
 /* ---------------------------------------------------------------------------

@@ -80,7 +80,7 @@ backend/
 | `metrics/` ✅ | neighbor retention (исходное cosine → проекция euclidean), trustworthiness (sklearn, честное k при малой выборке), precision/coverage по ИЗВЕСТНЫМ структурным связям с правилами неполноты корпуса (неизвестная пара ≠ негатив; нет данных → null + warning); детерминированная выборка (seed), каждое значение с пояснением |
 | `experiment_manager/` ✅ | сохранённые эксперименты: валидация ссылок при сохранении (400 со списком), снимок контекста (корпус, версии, устаревание, значения метрик), live-статус при открытии (missing/stale перечисляются, не подменяются); сравнение — из двух конфигов на клиенте |
 | `exporters/` ✅ | CSV (BOM для Excel)/JSON: точки проекции, связи с фильтрами, выделение, метрики, эксперимент (конфиг+снимок+live-статус); PNG сцен — клиентский захват живого canvas |
-| `workspace/` ✅ | исследовательское рабочее пространство проекта (`<project>/workspace/`: notebooks, notes, datasets, results, exports, latex): относительные пути с проверкой относительно корня (traversal/симлинки), атомарная запись UTF-8, optimistic-concurrency (`base_mtime` → 409), открытие папки в файловом менеджере ОС (только фиксированные подкаталоги); документы НЕ входят в embedding-корпус |
+| `workspace/` ✅ | исследовательское рабочее пространство проекта (`<project>/workspace/`: notebooks, notes, datasets, results, exports, latex): относительные пути с проверкой относительно корня (traversal/симлинки), атомарная запись UTF-8, optimistic-concurrency (`base_mtime` → 409), открытие папки в файловом менеджере ОС (только фиксированные подкаталоги); бинарная отдача `GET /raw` (изображения заметок, PDF: ≤32 МБ, inline, `text/html`→`text/plain` + nosniff); документы НЕ входят в embedding-корпус |
 | `notebooks/` ✅ | Jupyter-блокноты: формат `.ipynb` через `nbformat` (стандарт Jupyter, валидация с проблемами вместо падений, нормализация id ячеек при сохранении, неизвестные MIME-выводы сохраняются), KernelSessionManager — одно долгоживущее ядро ipykernel на (проект, блокнот): cwd = workspace, PYTHONPATH = backend (пакет `ese`), interrupt/restart, idle-TTL reap, лимит сессий, shutdown в lifespan; выполнение — поток на сессию + polling (как у jobs, без WebSocket), вывод ограничен (~2 МБ) |
 
 Правило границ: `api/` содержит только HTTP-слой и DTO; доменные модули не знают про
@@ -178,6 +178,11 @@ frontend/src/
   monaco/
     setup.ts            # loader.config(monaco) — без CDN; editor.api + 4 языка; тема ese-dark
     helpers.ts          # чистые функции: язык, декорации, бейджи kind (тестируются без monaco)
+  markdown/
+    renderMarkdown.ts   # общий Markdown+LaTeX→HTML (marked+KaTeX+DOMPurify): ячейки блокнота,
+                        # предпросмотр заметок; code-зоны защищены от математики, \$ не открывает формулу
+    ansi.ts             # ANSI-цвета traceback'ов → HTML
+    workspaceImages.ts  # относительные <img src> заметок → GET /workspace/raw (относительно каталога документа)
   space/
     selectionMath.ts    # чистая математика: fit (в т.ч. strided 4D→3D)/NDC-рамка/хит-тест/тики/
                         # canvas-маппинг/окно 4D-слоя/зум-панорама 2D (без three.js)
@@ -196,6 +201,9 @@ frontend/src/
     inspector/          # SourceInspector (Monaco read-only + locator-бар)
     analysis/           # NeighborsTab / RelationsTab / ClustersTab (левая панель SPACE) + AnalysisJobPoller
     relations/          # RelationsSection: браузер связей, извлечение, импорт ese-relations/v1, ручные
+    research/           # RESEARCH: WorkspacePanel+WorkspaceTree, DocumentHost, NotebookEditor
+                        # (+NotebookCell/CellOutputs/EseHelpDialog), MarkdownEditor+CrepeHost
+                        # (WYSIWYG Milkdown Crepe) — редакторы .ipynb и .md, диалоги, дерево
     space/              # SpaceSection (Allotment-компоновка), SliceControls (срез исходного пространства),
                         # ViewBar (переключатель 3D/2D/4D/3D+2D, селекторы проекций активного
                         # режима, удаление, переключатели окраски «тип/файл/кластер» и координатной
@@ -239,6 +247,12 @@ frontend/src/
   позиция/толщина + режим dim/only/off), раскраска (тип/файл/кластер + метки +
   подпись запуска), линии связей. Режимов взаимодействия нет: рамка включается
   удержанием Shift в самой сцене. Координаты — только с сервера.
+
+- `researchStore / notebookStore / markdownStore` — раздел RESEARCH: дерево документов
+  workspace и файловые операции (привязка к проекту, защита от stale-ответов); открытый
+  `.ipynb` + сессия ядра + выполнения ячеек (polling); открытая `.md`-заметка (4 режима
+  редактора, dirty честным сравнением с сохранённым текстом, конфликт `base_mtime`,
+  внешняя перечитка при фокусе окна, тихий flush в СВОЙ проект при переключении).
 
 `activeFragmentId`/`selectedFragmentIds` — точка синхронизации 3D-сцены, 2D-проекции,
 списка фрагментов и Monaco по **id фрагмента**.
@@ -286,6 +300,7 @@ CORPUS нет — её панели живут внутри SPACE.
 | sqlalchemy / tree-sitter | 2.1.4 / 0.26.0 (+ языки: python 0.25.0, javascript 0.25.0, typescript 0.23.2) | Windows-колёса cp312/abi3 проверены по PyPI |
 | react / vite / typescript | 19.3.1 / 8.3.4 / 5.9.3 | package-lock.json; TS7 пока не поддерживается typescript-eslint (<6.1.0), поэтому 5.9 |
 | monaco-editor / allotment | 0.57.0 / 1.20.6 | monaco — «slim»: editor.api + monarch-токенайзеры python/js/ts/md, без TS/JSON/CSS/HTML language-сервисов (read-only просмотр, экономия RAM/сборки) |
+| @milkdown/crepe | 7.22.3 ✅ | WYSIWYG-редактор заметок (ProseMirror + CodeMirror 6 + встроенный Latex/KaTeX + vue для table-nodeview); katex дедуплицирован с приложением (0.19.0); грузится ленивым chunk'ом — основной бандл не растёт |
 | torch / sentence-transformers | 2.14.1+cpu / 6.1.0 ✅ | torch только CPU (+extra-index-url download.pytorch.org); 8 ГБ RAM: batch size по умолчанию 16, прогресс и отмена между батчами |
 | scikit-learn / umap-learn | 1.9.1 / 0.5.12 ✅ | umap тянет numba 0.68.0 + llvmlite 0.50.0 + pynndescent 0.6.0; совместимость с numpy 2.4.6 проверена; первый импорт numba медленный (~10 с) — lazy |
 | three / @react-three/fiber / @react-three/drei | 0.186.1 / 9.8.2 / 10.7.9 ✅ | R3F 9 — линия для React 19 (peer >=19 <19.4); @types/three в devDependencies |

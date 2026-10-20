@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProjectInfo, WorkspaceEntry, WorkspaceTreeResponse } from "../api/types";
 import { mockFetch, mockResponse } from "../testUtils";
+import { useMarkdownStore } from "./markdownStore";
 import { useProjectStore } from "./projectStore";
 import { useResearchStore } from "./researchStore";
 
@@ -32,6 +33,7 @@ function setProject(project: ProjectInfo | null) {
 
 beforeEach(() => {
   useResearchStore.getState().reset();
+  useMarkdownStore.getState().reset();
   setProject(PROJECT);
   vi.unstubAllGlobals();
 });
@@ -216,5 +218,101 @@ describe("openFolder", () => {
     const s = useResearchStore.getState();
     expect(s.error?.code).toBe("open_folder_failed");
     expect(s.error?.hint).toContain("/data/projects/p1/workspace");
+  });
+});
+
+describe("dirty markdown note guards", () => {
+  function seedDirtyNote() {
+    useMarkdownStore.setState({
+      doc: {
+        path: "notes/a.md",
+        projectId: "p1",
+        content: "# edited",
+        savedContent: "# A",
+        savedMtime: 100,
+      },
+      dirty: true,
+    } as never);
+  }
+
+  it("selectPath flushes a dirty note before switching", async () => {
+    const { fetchMock, calls } = mockFetch({
+      "/api/projects/p1/workspace/tree": TREE,
+      "GET /api/projects/p1/workspace/file": { ...FILE_A, path: "notes/b.md", content: "# B" },
+      "PUT /api/projects/p1/workspace/file": {
+        path: "notes/a.md",
+        content: "# edited",
+        size: 8,
+        mtime: 200,
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    seedDirtyNote();
+    await useResearchStore.getState().loadTree();
+    await useResearchStore.getState().selectPath("notes/b.md");
+    const put = calls.find((c) => c.method === "PUT");
+    expect(put?.body).toMatchObject({
+      path: "notes/a.md",
+      content: "# edited",
+      base_mtime: 100,
+    });
+    expect(useResearchStore.getState().selectedPath).toBe("notes/b.md");
+  });
+
+  it("selectPath stays when the flush fails and the user cancels", async () => {
+    const { fetchMock } = mockFetch({
+      "/api/projects/p1/workspace/tree": TREE,
+      "GET /api/projects/p1/workspace/file": FILE_A,
+      "PUT /api/projects/p1/workspace/file": mockResponse(409, {
+        error: { code: "workspace_conflict", message: "изменён на диске" },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    seedDirtyNote();
+    const confirmMock = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await useResearchStore.getState().loadTree();
+    await useResearchStore.getState().selectPath("notes/b.md");
+    expect(useResearchStore.getState().selectedPath).toBeNull();
+    expect(useMarkdownStore.getState().dirty).toBe(true);
+    confirmMock.mockRestore();
+  });
+
+  it("rename saves the dirty note into the OLD path before renaming", async () => {
+    const { fetchMock, calls } = mockFetch({
+      "/api/projects/p1/workspace/tree": TREE,
+      "GET /api/projects/p1/workspace/file": FILE_A,
+      "PUT /api/projects/p1/workspace/file": { ...FILE_A, content: "# edited", mtime: 200 },
+      "POST /api/projects/p1/workspace/rename": entry("notes/b.md"),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    seedDirtyNote();
+    await useResearchStore.getState().loadTree();
+    const ok = await useResearchStore.getState().renamePath("notes/a.md", "notes/b.md");
+    expect(ok).toBe(true);
+    const putIndex = calls.findIndex((c) => c.method === "PUT");
+    const renameIndex = calls.findIndex((c) => c.url.includes("/workspace/rename"));
+    expect(putIndex).toBeGreaterThanOrEqual(0);
+    expect(renameIndex).toBeGreaterThan(putIndex);
+    expect(useMarkdownStore.getState().doc).toBeNull();
+  });
+
+  it("delete asks about a dirty note; cancel keeps everything", async () => {
+    const { fetchMock, calls } = mockFetch({
+      "/api/projects/p1/workspace/tree": TREE,
+      "DELETE /api/projects/p1/workspace/file": { deleted: "notes/a.md" },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    seedDirtyNote();
+    const confirmMock = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const aborted = await useResearchStore.getState().deletePath("notes/a.md");
+    expect(aborted).toBe(false);
+    expect(calls.find((c) => c.method === "DELETE")).toBeUndefined();
+    expect(useMarkdownStore.getState().doc).not.toBeNull();
+
+    confirmMock.mockReturnValue(true);
+    const ok = await useResearchStore.getState().deletePath("notes/a.md");
+    expect(ok).toBe(true);
+    expect(useMarkdownStore.getState().doc).toBeNull();
+    confirmMock.mockRestore();
   });
 });

@@ -121,6 +121,69 @@ def test_binary_file_rejected(client: TestClient, project: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Raw binary serving (images referenced by notes, stage 4)
+# ---------------------------------------------------------------------------
+
+_PNG_BYTES = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+def _write_raw(client: TestClient, project: str, rel: str, data: bytes) -> None:
+    tree = client.get(f"{base(client, project)}/tree").json()
+    target = Path(tree["root"]) / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+
+
+def test_raw_serves_binary_with_content_type(client: TestClient, project: str) -> None:
+    _write_raw(client, project, "results/plot.png", _PNG_BYTES)
+    response = client.get(f"{base(client, project)}/raw", params={"path": "results/plot.png"})
+    assert response.status_code == 200, response.text
+    assert response.content == _PNG_BYTES
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    # Inline, not attachment: browsers render it inside <img>.
+    assert "inline" in response.headers.get("content-disposition", "")
+
+
+def test_raw_downgrades_html_to_text(client: TestClient, project: str) -> None:
+    _write_raw(client, project, "notes/page.html", b"<script>alert(1)</script>")
+    response = client.get(f"{base(client, project)}/raw", params={"path": "notes/page.html"})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+
+
+def test_raw_missing_file_404(client: TestClient, project: str) -> None:
+    response = client.get(f"{base(client, project)}/raw", params={"path": "results/nope.png"})
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "workspace_not_found"
+
+
+def test_raw_directory_rejected(client: TestClient, project: str) -> None:
+    client.get(f"{base(client, project)}/tree")  # ensure skeleton
+    response = client.get(f"{base(client, project)}/raw", params={"path": "results"})
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize("bad", ["../secret.png", "/etc/passwd", "notes/../../x.png"])
+def test_raw_traversal_rejected(client: TestClient, project: str, bad: str) -> None:
+    response = client.get(f"{base(client, project)}/raw", params={"path": bad})
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "workspace_invalid_path"
+
+
+def test_raw_size_cap(client: TestClient, project: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    _write_raw(client, project, "results/big.png", b"x" * 64)
+    monkeypatch.setattr(ws, "MAX_RAW_BYTES", 32)
+    response = client.get(f"{base(client, project)}/raw", params={"path": "results/big.png"})
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "workspace_file_too_large"
+
+
+# ---------------------------------------------------------------------------
 # Optimistic concurrency (TZ §6.5)
 # ---------------------------------------------------------------------------
 

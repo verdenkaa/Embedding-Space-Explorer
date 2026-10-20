@@ -6,6 +6,7 @@ research documents never become part of the embedding corpus automatically.
 """
 
 from app.workspace.store import (
+    MAX_RAW_BYTES,
     WORKSPACE_DIRNAME,
     WORKSPACE_SUBDIRS,
     WorkspaceBinaryError,
@@ -20,6 +21,7 @@ from app.workspace.store import (
     ensure_workspace,
     list_tree,
     open_in_file_manager,
+    read_binary_meta,
     read_text,
     rename_path,
     resolve_in_workspace,
@@ -28,6 +30,7 @@ from app.workspace.store import (
 )
 
 __all__ = [
+    "MAX_RAW_BYTES",
     "WORKSPACE_DIRNAME",
     "WORKSPACE_SUBDIRS",
     "WorkspaceBinaryError",
@@ -42,6 +45,7 @@ __all__ = [
     "ensure_workspace",
     "list_tree",
     "open_in_file_manager",
+    "read_binary_meta",
     "read_text",
     "rename_path",
     "resolve_in_workspace",

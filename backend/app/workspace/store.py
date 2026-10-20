@@ -23,6 +23,7 @@ Design rules (TZ §3, §10):
 
 from __future__ import annotations
 
+import mimetypes
 import os
 import shutil
 import subprocess
@@ -48,6 +49,10 @@ WORKSPACE_SUBDIRS: tuple[str, ...] = (
 
 #: Same cap as the corpus content endpoint (routes_files._MAX_CONTENT_BYTES).
 MAX_TEXT_BYTES = 8 * 1024 * 1024
+
+#: Cap for BINARY serving (images referenced by notes, exported PDF previews).
+#: Larger than the text cap on purpose: binaries are streamed, not decoded.
+MAX_RAW_BYTES = 32 * 1024 * 1024
 
 #: Honest cap for the tree listing; a research workspace is not a mirror of /.
 MAX_TREE_ENTRIES = 5_000
@@ -77,7 +82,12 @@ class WorkspaceBinaryError(WorkspaceError):
 
 
 class WorkspaceTooLarge(WorkspaceError):
-    """The file exceeds MAX_TEXT_BYTES."""
+    """The file exceeds the serving cap (text or binary)."""
+
+    def __init__(self, path: str, limit: int = MAX_TEXT_BYTES) -> None:
+        super().__init__(f"{path} exceeds {limit} bytes")
+        self.path = path
+        self.limit = limit
 
 
 class WorkspaceConflict(WorkspaceError):
@@ -216,6 +226,28 @@ def read_text(ctx: ProjectContext, rel_path: str) -> tuple[str, float, int]:
     return content, path.stat().st_mtime, size
 
 
+def read_binary_meta(ctx: ProjectContext, rel_path: str) -> tuple[Path, int, str]:
+    """Locate a file for BINARY serving: (absolute path, size, media type).
+
+    Used by the raw endpoint that lets notes reference workspace files
+    (plots saved by notebooks into results/, exported PDFs). The path is
+    validated exactly like text reads; the content itself is streamed by
+    FileResponse, never decoded into memory here.
+
+    text/html is intentionally downgraded to text/plain by the route: an
+    HTML file inside the workspace must not become a script-running page
+    on the application's own origin.
+    """
+    path = resolve_in_workspace(ctx, rel_path)
+    if not path.is_file():
+        raise WorkspaceNotFound(rel_path)
+    size = path.stat().st_size
+    if size > MAX_RAW_BYTES:
+        raise WorkspaceTooLarge(rel_path, MAX_RAW_BYTES)
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return path, size, media_type
+
+
 def _write_atomic(path: Path, content: str) -> float:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -322,6 +354,7 @@ def open_in_file_manager(path: Path) -> tuple[bool, str | None]:
 
 
 __all__ = [
+    "MAX_RAW_BYTES",
     "MAX_TEXT_BYTES",
     "MAX_TREE_ENTRIES",
     "WORKSPACE_DIRNAME",
@@ -339,6 +372,7 @@ __all__ = [
     "ensure_workspace",
     "list_tree",
     "open_in_file_manager",
+    "read_binary_meta",
     "read_text",
     "rename_path",
     "resolve_in_workspace",

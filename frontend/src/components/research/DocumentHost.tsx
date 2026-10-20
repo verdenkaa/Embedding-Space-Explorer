@@ -1,5 +1,6 @@
 import { useProjectStore } from "../../state/projectStore";
 import { useResearchStore } from "../../state/researchStore";
+import { MarkdownEditor } from "./MarkdownEditor";
 import { NotebookEditor } from "./NotebookEditor";
 
 function formatMtime(mtime: number): string {
@@ -11,8 +12,8 @@ function formatMtime(mtime: number): string {
  * Right pane of the RESEARCH section: hosts the open document.
  *
  * .ipynb → the Notebook editor (kernel sessions, cells, outputs).
- * Other text files → read-only viewer for now; the Markdown note editor
- * mounts here in the next stage.
+ * .md    → the Markdown note editor (Crepe WYSIWYG + source/preview, KaTeX).
+ * Other text files → read-only viewer.
  */
 export function DocumentHost() {
   const projectId = useProjectStore((s) => s.current?.id ?? null);
@@ -25,6 +26,12 @@ export function DocumentHost() {
     // The notebook document is owned by notebookStore (not researchStore.file):
     // cells/outputs live in the .ipynb, never in the generic text buffer.
     return <NotebookEditor projectId={projectId} path={selectedPath} />;
+  }
+
+  if (selectedPath?.toLowerCase().endsWith(".md") && projectId) {
+    // Same ownership rule: the note document lives in markdownStore — the
+    // .md on disk is the source of truth, never the generic text buffer.
+    return <MarkdownEditor projectId={projectId} path={selectedPath} />;
   }
 
   if (!selectedPath) {

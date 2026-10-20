@@ -3949,3 +3949,133 @@ code,
   color: var(--color-text-faint);
   line-height: 1.5;
 }
+
+/* ============================================================
+   Markdown note editor (RESEARCH section, stage 4)
+   ============================================================ */
+
+.note-editor {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--color-bg);
+}
+
+/* toolbar: same visual language as .nb-toolbar (notebook editor) */
+
+.note-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.note-toolbar__path {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  font-weight: 600;
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-toolbar__dirty {
+  color: var(--color-warn);
+}
+
+.note-toolbar__spacer {
+  flex: 1;
+}
+
+.note-toolbar__notice {
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  max-width: 340px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.note-editor__body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.note-editor__body > * {
+  height: 100%;
+}
+
+.note-editor__source {
+  min-width: 0;
+}
+
+.note-editor__preview {
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4) 48px;
+}
+
+.note-editor__statusbar {
+  flex-shrink: 0;
+  padding: 2px var(--space-2);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Milkdown Crepe (WYSIWYG): scoped theme harmonization ----
+   The frame-dark theme ships its own CSS variables on .milkdown; they are
+   remapped to the app design tokens HERE ONLY (TZ §6.2: the editor's CSS
+   must not replace the global theme). All structural Crepe styles stay
+   scoped under .milkdown by the library itself. */
+
+.note-crepe {
+  overflow-y: auto;
+}
+
+.note-crepe .milkdown {
+  --crepe-color-background: var(--color-editor);
+  --crepe-color-on-background: var(--color-text);
+  --crepe-color-surface: var(--color-surface);
+  --crepe-color-surface-low: var(--color-surface-2);
+  --crepe-color-on-surface: var(--color-text);
+  --crepe-color-on-surface-variant: var(--color-text-dim);
+  --crepe-color-outline: var(--color-border-strong);
+  --crepe-color-primary: var(--color-accent);
+  --crepe-color-secondary: var(--color-surface-3);
+  --crepe-color-on-secondary: var(--color-text);
+  --crepe-color-inverse: var(--color-text);
+  --crepe-color-on-inverse: var(--color-bg);
+  --crepe-color-inline-code: var(--color-file-javascript);
+  --crepe-color-error: var(--color-error);
+  --crepe-color-hover: var(--color-hover);
+  --crepe-color-selected: var(--color-selection);
+  --crepe-color-inline-area: var(--color-surface-2);
+  --crepe-font-title: var(--font-ui);
+  --crepe-font-default: var(--font-ui);
+  --crepe-font-code: var(--font-mono);
+  --crepe-base-font-size: 14px;
+  min-height: 100%;
+}
+
+/* the frame theme uses page-like paddings (60/120); panels are narrower */
+
+.note-crepe .milkdown .ProseMirror {
+  padding: 16px 28px 48px;
+  max-width: 980px;
+}
+
+.note-crepe .milkdown .ProseMirror:focus {
+  outline: none;
+}
