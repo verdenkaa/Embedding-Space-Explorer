@@ -7,8 +7,15 @@ Rules:
   error (project not broken globally); older → backup file, then migrate
   (migrations are additive: v1 corpus, v2 embedding_runs, v3 projection_runs,
     v4 projection_presets, v5 relations/clustering/groups/slices,
-    v6 metric_runs/experiments;
+    v6 metric_runs/experiments,
+    v7 column-level additions: jobs.result_json, embedding_runs.truncated_count,
+       saved_slices.plane_offset, metric_runs/clustering_runs.projection_signature;
     the pre-migration .bak copy guards against surprises).
+
+`Base.metadata.create_all` only creates MISSING TABLES — it never adds
+columns to tables that already exist. Since v7 the upgrade path also runs
+idempotent `ALTER TABLE ... ADD COLUMN` statements (guarded by
+`PRAGMA table_info`), so old projects gain new columns without losing data.
 """
 
 from __future__ import annotations
@@ -21,7 +28,18 @@ from typing import Any
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-CURRENT_DB_SCHEMA = 6
+CURRENT_DB_SCHEMA = 7
+
+#: (table, column, column DDL) added in schema v7. Applied AFTER create_all,
+#: each guarded by existence checks — safe to re-run and safe on fresh
+#: databases (create_all already made the tables WITH these columns).
+_V7_ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("jobs", "result_json", "VARCHAR(65536)"),
+    ("embedding_runs", "truncated_count", "INTEGER NOT NULL DEFAULT 0"),
+    ("saved_slices", "plane_offset", "FLOAT"),
+    ("metric_runs", "projection_signature", "VARCHAR(64)"),
+    ("clustering_runs", "projection_signature", "VARCHAR(64)"),
+)
 
 
 class Base(DeclarativeBase):
@@ -67,6 +85,29 @@ def _read_schema_version(engine: Engine) -> int | None:
     return int(row[0]) if row else None
 
 
+def _migrate_added_columns(engine: Engine) -> list[str]:
+    """Idempotent column-level migration (v7+): ADD COLUMN where missing.
+
+    Returns the list of "table.column" actually added (for logging/tests).
+    Tables that do not exist are skipped — create_all makes them complete.
+    """
+    added: list[str] = []
+    with engine.begin() as conn:
+        for table, column, ddl in _V7_ADDED_COLUMNS:
+            table_exists = conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name=:t"),
+                {"t": table},
+            ).first()
+            if table_exists is None:
+                continue
+            cols = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+            if column in cols:
+                continue
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+            added.append(f"{table}.{column}")
+    return added
+
+
 def open_database(db_path: Path) -> tuple[Engine, sessionmaker[Session]]:
     """Open (creating if needed) a project database; enforce schema version."""
     is_new = not db_path.exists()
@@ -81,12 +122,14 @@ def open_database(db_path: Path) -> tuple[Engine, sessionmaker[Session]]:
         )
     if version is not None and version < CURRENT_DB_SCHEMA:
         # Backup before migrating, then apply ADDITIVE migrations:
-        # create_all only creates missing tables and never drops data.
+        # create_all only creates missing tables and never drops data;
+        # _migrate_added_columns extends tables that already existed.
         backup = db_path.with_suffix(f".db.bak-{int(time.time())}")
         shutil.copy2(db_path, backup)
         from app.storage import models
 
         Base.metadata.create_all(engine)
+        _migrate_added_columns(engine)
         with engine.begin() as conn:
             conn.execute(
                 text("UPDATE meta SET value = :v WHERE key = 'schema_version'"),

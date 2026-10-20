@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 from pathlib import Path
 
+from app.api.serialization import job_info_from_row
 from app.jobs.manager import JobContext, JobManager
 from app.storage.models import JobRow
 from app.storage.projects_store import ProjectContext, ProjectStore
@@ -133,6 +135,55 @@ def test_progress_is_persisted(tmp_path: Path, sample_project: Path) -> None:
             # The runner's return value becomes the final job message.
             assert row.message == "ok"
             assert row.warnings_json is not None and "sample warning" in row.warnings_json
+    finally:
+        manager.shutdown()
+        store.close_all()
+
+
+def test_structured_result_is_persisted_and_serialized(
+    tmp_path: Path, sample_project: Path
+) -> None:
+    """ctx.set_result lands in jobs.result_json and in the JobInfo DTO."""
+    store = ProjectStore(tmp_path / "data")
+    ctx = store.create_project("p", [str(sample_project)])
+    manager = JobManager(store)
+    try:
+
+        def runner(job: JobContext) -> str:
+            job.set_result({"projection_run_ids": ["abc123", "def456"]})
+            return "built 2 projections"
+
+        job_id = manager.submit(ctx, "test", runner)
+        assert _wait_state(ctx, job_id, "done") == "done"
+        with ctx.session_factory() as session:
+            row = session.get(JobRow, job_id)
+            assert row is not None
+            assert row.result_json is not None
+            assert json.loads(row.result_json) == {"projection_run_ids": ["abc123", "def456"]}
+            info = job_info_from_row(row)
+            assert info.result == {"projection_run_ids": ["abc123", "def456"]}
+            assert info.message == "built 2 projections"
+    finally:
+        manager.shutdown()
+        store.close_all()
+
+
+def test_failed_job_has_no_result(tmp_path: Path, sample_project: Path) -> None:
+    store = ProjectStore(tmp_path / "data")
+    ctx = store.create_project("p", [str(sample_project)])
+    manager = JobManager(store)
+    try:
+
+        def runner(job: JobContext) -> str:
+            job.set_result({"partial": True})
+            raise RuntimeError("boom")
+
+        job_id = manager.submit(ctx, "test", runner)
+        assert _wait_state(ctx, job_id, "failed") == "failed"
+        with ctx.session_factory() as session:
+            row = session.get(JobRow, job_id)
+            assert row is not None
+            assert row.result_json is None
     finally:
         manager.shutdown()
         store.close_all()

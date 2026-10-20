@@ -119,6 +119,8 @@ class JobInfo(BaseModel):
     message: str | None = None
     error: str | None = None
     warnings: list[str] = Field(default_factory=list)
+    #: structured result of a finished job (e.g. {"projection_run_ids": [...]})
+    result: dict[str, Any] | None = None
     created_at: str
     started_at: str | None = None
     finished_at: str | None = None

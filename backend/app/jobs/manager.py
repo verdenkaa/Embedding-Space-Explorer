@@ -39,6 +39,9 @@ class JobContext:
     project: ProjectContext
     _cancel_event: threading.Event
     warnings: list[str] = field(default_factory=list)
+    #: structured result set by the runner via `set_result` (persisted as
+    #: jobs.result_json when the job finishes; JSON-serializable dicts only)
+    result: dict[str, Any] | None = None
     _last_progress_write: float = 0.0
 
     def cancelled(self) -> bool:
@@ -47,6 +50,14 @@ class JobContext:
     def check_cancelled(self) -> None:
         if self._cancel_event.is_set():
             raise JobCancelledError(self.job_id)
+
+    def set_result(self, value: dict[str, Any]) -> None:
+        """Attach a structured result (e.g. ids of the runs the job created).
+
+        Clients must never have to GUESS which artifacts a job produced from
+        the human-readable message — they reference them by id.
+        """
+        self.result = value
 
     def progress(
         self, done: int, total: int, message: str | None = None, force: bool = False
@@ -174,10 +185,17 @@ class JobManager:
         ctx = JobContext(job_id=task.job_id, project=project, _cancel_event=task.cancel_event)
         try:
             message = task.runner(ctx)
-            self._finish(task, project, "done", message=message, warnings=ctx.warnings)
+            self._finish(
+                task, project, "done", message=message, warnings=ctx.warnings, result=ctx.result
+            )
         except JobCancelledError:
             self._finish(
-                task, project, "cancelled", message="cancelled by user", warnings=ctx.warnings
+                task,
+                project,
+                "cancelled",
+                message="cancelled by user",
+                warnings=ctx.warnings,
+                result=ctx.result,
             )
         except Exception as exc:
             # Log with traceback server-side; expose only a short repr to the
@@ -202,6 +220,7 @@ class JobManager:
         message: str | None = None,
         error: str | None = None,
         warnings: list[str] | None = None,
+        result: dict[str, Any] | None = None,
     ) -> None:
         with project.session_factory() as session:
             job = session.get(JobRow, task.job_id)
@@ -215,4 +234,6 @@ class JobManager:
                 job.error = error
             if warnings:
                 job.warnings_json = json.dumps(warnings[:500], ensure_ascii=False)
+            if result is not None:
+                job.result_json = json.dumps(result, ensure_ascii=False, default=str)[:65536]
             session.commit()

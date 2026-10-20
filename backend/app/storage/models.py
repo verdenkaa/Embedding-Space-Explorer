@@ -84,6 +84,10 @@ class JobRow(Base):
     error: Mapped[str | None] = mapped_column(String(4096), nullable=True)
     warnings_json: Mapped[str | None] = mapped_column(String(65536), nullable=True)
     params_json: Mapped[str | None] = mapped_column(String(65536), nullable=True)
+    #: structured result of a DONE job (e.g. {"projection_run_ids": [...]}):
+    #: lets clients reference produced artifacts exactly instead of guessing
+    #: from the human-readable message (schema v7)
+    result_json: Mapped[str | None] = mapped_column(String(65536), nullable=True)
     created_at: Mapped[str] = mapped_column(String(40))
     started_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
     finished_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
@@ -109,6 +113,10 @@ class EmbeddingRunRow(Base):
     params_json: Mapped[str] = mapped_column(String(2048))
     npz_relpath: Mapped[str] = mapped_column(String(512))
     count: Mapped[int] = mapped_column(Integer, default=0)
+    #: how many cached vectors were computed from text LONGER than the
+    #: model's max_seq_length (silently truncated by the tokenizer) — the
+    #: per-vector detail lives in the .npz cache (schema v7)
+    truncated_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[str] = mapped_column(String(40))
     updated_at: Mapped[str] = mapped_column(String(40))
 
@@ -233,6 +241,10 @@ class ClusteringRunRow(Base):
     n_clusters: Mapped[int] = mapped_column(Integer, default=0)
     noise: Mapped[int] = mapped_column(Integer, default=0)
     source_signature: Mapped[str] = mapped_column(String(64))
+    #: embedding signature the PROJECTION coordinates were built from (only
+    #: for space="projection"): labels describe that projection, so the run
+    #: is stale when current vectors differ from it too (schema v7)
+    projection_signature: Mapped[str | None] = mapped_column(String(64), nullable=True)
     versions_json: Mapped[str] = mapped_column(String(512))
     created_at: Mapped[str] = mapped_column(String(40))
     updated_at: Mapped[str] = mapped_column(String(40))
@@ -296,6 +308,11 @@ class SavedSliceRow(Base):
     #: signed offset of the plane point from the run centroid along n
     position: Mapped[float] = mapped_column(default=0.0)
     thickness: Mapped[float] = mapped_column(default=0.0)
+    #: ABSOLUTE plane coordinate at save time: dot(centroid_at_save, n) +
+    #: position. The centroid is data-dependent, so `position` alone does
+    #: NOT reproduce the plane after the corpus changes; this offset does
+    #: (schema v7; NULL for slices saved before v7 — treated as relative)
+    plane_offset: Mapped[float | None] = mapped_column(nullable=True)
     created_at: Mapped[str] = mapped_column(String(40))
 
 
@@ -326,6 +343,10 @@ class MetricRunRow(Base):
     result_json: Mapped[str] = mapped_column(String(262144))
     n_vectors: Mapped[int] = mapped_column(Integer, default=0)
     source_signature: Mapped[str] = mapped_column(String(64))
+    #: embedding signature the PROJECTION coordinates were built from (when a
+    #: projection run was given): the metrics describe that projection, so the
+    #: run is stale when current vectors differ from it too (schema v7)
+    projection_signature: Mapped[str | None] = mapped_column(String(64), nullable=True)
     versions_json: Mapped[str] = mapped_column(String(512))
     created_at: Mapped[str] = mapped_column(String(40))
     updated_at: Mapped[str] = mapped_column(String(40))
