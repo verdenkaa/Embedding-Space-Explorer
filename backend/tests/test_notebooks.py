@@ -308,12 +308,66 @@ def test_kernel_interrupt_stops_long_execution(client: TestClient, project: str)
 
     response = client.post(
         f"/api/projects/{project}/notebooks/sessions/{sid}/execute",
-        json={"code": "import time\ntime.sleep(60)"},
+        json={"code": "import time\nprint('STARTED', flush=True)\ntime.sleep(60)"},
+    )
+    assert response.status_code == 200, response.text
+    eid = str(response.json()["execution_id"])
+    exec_url = f"/api/projects/{project}/notebooks/sessions/{sid}/executions/{eid}"
+
+    # Deterministic sync instead of a fixed nap: wait until the kernel is
+    # INSIDE the cell (its marker reached iopub). A blind sleep lets the
+    # interrupt land while the kernel is still idle — where it is a no-op —
+    # and then sleep(60) outlives the poll deadline (startup race).
+    started = False
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        last = client.get(exec_url).json()
+        assert last["status"] == "running", last
+        if any(
+            o.get("output_type") == "stream" and "STARTED" in str(o.get("text", ""))
+            for o in last["outputs"]
+        ):
+            started = True
+            break
+        time.sleep(0.05)
+    assert started, "the kernel never entered the cell"
+
+    interrupt = client.post(f"/api/projects/{project}/notebooks/sessions/{sid}/interrupt")
+    assert interrupt.status_code == 200
+
+    deadline = time.monotonic() + 30
+    last = {}
+    while time.monotonic() < deadline:
+        last = client.get(exec_url).json()
+        if last["status"] != "running":
+            break
+        time.sleep(0.1)
+    assert last["status"] == "interrupted", last
+    assert any(
+        o["output_type"] == "error" and o["ename"] == "KeyboardInterrupt" for o in last["outputs"]
+    )
+
+    # The kernel survives an interrupt and keeps state semantics.
+    after = execute_and_wait(client, project, sid, "1 + 1")
+    assert after["status"] == "done"
+
+
+def test_kernel_interrupt_before_cell_start_is_not_lost(client: TestClient, project: str) -> None:
+    """Regression: "Stop right after Run" — the interrupt may reach the kernel
+    while it is still idle (before execute_input). ipykernel ignores a signal
+    in that window; the manager must REDELIVER it once the cell starts, so
+    the execution still ends as interrupted instead of running to the end."""
+    client.post(nb_url(client, project), json={"path": "notebooks/k4b.ipynb"})
+    sid = start_ready_session(client, project, "notebooks/k4b.ipynb")
+
+    response = client.post(
+        f"/api/projects/{project}/notebooks/sessions/{sid}/execute",
+        json={"code": "import time\ntime.sleep(20)"},
     )
     assert response.status_code == 200, response.text
     eid = str(response.json()["execution_id"])
 
-    time.sleep(0.5)
+    # no sync, no nap: fire the interrupt immediately (worst-case ordering)
     interrupt = client.post(f"/api/projects/{project}/notebooks/sessions/{sid}/interrupt")
     assert interrupt.status_code == 200
 
@@ -325,14 +379,11 @@ def test_kernel_interrupt_stops_long_execution(client: TestClient, project: str)
         ).json()
         if last["status"] != "running":
             break
-        time.sleep(0.1)
+        time.sleep(0.05)
     assert last["status"] == "interrupted", last
-    assert any(
-        o["output_type"] == "error" and o["ename"] == "KeyboardInterrupt" for o in last["outputs"]
-    )
 
-    # The kernel survives an interrupt and keeps state semantics.
-    after = execute_and_wait(client, project, sid, "1 + 1")
+    # the kernel survives and stays usable
+    after = execute_and_wait(client, project, sid, "2 + 2")
     assert after["status"] == "done"
 
 

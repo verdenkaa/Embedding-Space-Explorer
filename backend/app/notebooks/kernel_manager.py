@@ -237,6 +237,7 @@ class KernelSession:
     def _run_execution(self, execution: Execution) -> None:
         client = self._client
         interrupted = False
+        last_interrupt_send = 0.0
         try:
             msg_id = client.execute(execution.code, allow_stdin=False)
             while True:
@@ -248,6 +249,7 @@ class KernelSession:
                             execution.status = "aborted"
                             execution.finished_at = time.time()
                             return
+                        requested = self._interrupt_requested
                     km = self._km
                     try:
                         alive = km is None or bool(km.is_alive())
@@ -257,6 +259,17 @@ class KernelSession:
                         execution.status = "error"
                         execution.error = "kernel died during execution"
                         break
+                    # A single SIGINT can land while the kernel is still idle
+                    # (the "Stop right after Run" race — ipykernel ignores a
+                    # signal with no cell running) or in its dispatch window
+                    # (the run is torn down without any reply). Press Stop
+                    # repeatedly — throttled — until the interrupt takes
+                    # effect; each redelivery is harmless once it has.
+                    if requested and not interrupted:
+                        now = time.monotonic()
+                        if now - last_interrupt_send >= 0.5:
+                            last_interrupt_send = now
+                            self._send_interrupt()
                     continue
                 parent = message.get("parent_header", {}).get("msg_id")
                 if parent != msg_id:
@@ -306,16 +319,77 @@ class KernelSession:
                 elif kind == "status" and content.get("execution_state") == "idle":
                     break
             if execution.status == "running":
-                execution.status = "interrupted" if interrupted else "done"
+                with self.lock:
+                    requested = self._interrupt_requested
+                if not requested:
+                    execution.status = "interrupted" if interrupted else "done"
+                elif self._interrupt_took_effect(execution, client, msg_id, interrupted):
+                    execution.status = "interrupted"
+                else:
+                    # Stop was pressed AFTER the cell had already finished
+                    # naturally — "interrupted" would lie about the run.
+                    execution.status = "done"
         except Exception as exc:
             execution.status = "error"
             execution.error = f"{exc.__class__.__name__}: {exc}"
         finally:
             execution.finished_at = time.time()
 
+    def _interrupt_took_effect(
+        self, execution: Execution, client: Any, msg_id: str, ki_output_seen: bool
+    ) -> bool:
+        """Classify a finished execution when Stop was pressed during it.
+
+        Evidence, strongest first:
+        - a KeyboardInterrupt error output — the canonical path;
+        - a natural NON-KI error output — the cell ran and raised on its own;
+        - 'KeyboardInterrupt' printed on the stderr stream — some abort
+          windows inside ipykernel surface the signal this way with no
+          error reply;
+        - the SHELL execute_reply: ipykernel sends it right before the iopub
+          idle of a naturally completed cell (status ok), while a signal
+          inside the dispatch window tears the run down with NO reply at all.
+        """
+        if ki_output_seen:
+            return True
+        saw_stderr_ki = False
+        for output in execution.outputs:
+            if output.get("output_type") == "error":
+                if output.get("ename") != "KeyboardInterrupt":
+                    return False  # the cell raised on its own — a natural end
+            elif (
+                output.get("output_type") == "stream"
+                and output.get("name") == "stderr"
+                and "KeyboardInterrupt" in str(output.get("text", ""))
+            ):
+                saw_stderr_ki = True
+        if saw_stderr_ki:
+            return True
+        return self._execute_reply_status(client, msg_id) != "ok"
+
+    def _execute_reply_status(self, client: Any, msg_id: str) -> str | None:
+        """Shell-channel execute_reply status for `msg_id` (None = never sent).
+
+        By the time the iopub idle is observed, the reply of a naturally
+        completed cell is already queued, so a short drain is decisive.
+        """
+        deadline = time.monotonic() + 1.0
+        while True:
+            try:
+                reply = client.get_shell_msg(timeout=max(0.05, deadline - time.monotonic()))
+            except Empty:
+                return None
+            if reply.get("parent_header", {}).get("msg_id") != msg_id:
+                continue
+            return str(reply.get("content", {}).get("status", ""))
+
     def interrupt(self) -> None:
         with self.lock:
             self._interrupt_requested = True
+        self._send_interrupt()
+
+    def _send_interrupt(self) -> None:
+        with self.lock:
             km = self._km
         if km is not None:
             try:
