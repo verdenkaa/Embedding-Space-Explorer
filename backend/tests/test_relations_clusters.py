@@ -686,3 +686,81 @@ def test_db_migration_v4_to_v5_keeps_existing_data(settings: Settings) -> None:
         assert table in tables
     backups = list(ctx.project_dir.glob("project.db.bak-*"))
     assert len(backups) == 1
+
+
+# ---------------------------------------------------------------------------
+# belongs_to parent resolution (audit #9): overloads and chunked parents
+# ---------------------------------------------------------------------------
+
+
+def test_belongs_to_resolves_overloads_and_chunked_parents(tmp_path: Path) -> None:
+    from app.relation_providers.extract import extract_relations
+    from app.storage.models import FileRow, FragmentRow
+
+    src = tmp_path / "mod.py"
+    src.write_text("# no imports here\n", encoding="utf-8")
+    file_row = FileRow(
+        id="f1",
+        root=str(tmp_path),
+        rel_path="mod.py",
+        abs_path=str(src),
+        size=1,
+        mtime=0.0,
+        content_hash=None,
+        language="python",
+        status="indexed",
+    )
+
+    def frag(
+        fid: str,
+        symbol: str,
+        parent: str | None,
+        s: int,
+        e: int,
+        kind: str = "method",
+        ordinal: int = 0,
+    ) -> FragmentRow:
+        return FragmentRow(
+            id=fid,
+            file_id="f1",
+            kind=kind,
+            name=symbol.split(".")[-1],
+            symbol_path=symbol,
+            parent_symbol_path=parent,
+            start_line=s,
+            end_line=e,
+            start_offset=0,
+            end_offset=0,
+            content_hash="h",
+            method="tree-sitter-python",
+            language="python",
+            ordinal=ordinal,
+        )
+
+    # (a) namesake overloads: the child sits inside the FIRST-listed one —
+    # a flat "last wins" dict links it to the wrong sibling
+    ov_a = frag("ovA", "Cls.m", "Cls", 10, 20, ordinal=0)
+    ov_b = frag("ovB", "Cls.m", "Cls", 30, 40, ordinal=1)
+    inner = frag("ch1", "Cls.m.inner", "Cls.m", 12, 18)
+    # (b) oversized parent exists ONLY as chunks: its children used to lose
+    # belongs_to entirely (no fragment has the bare symbol_path)
+    part0 = frag("p0", "Big#part0", None, 1, 200, kind="chunk")
+    part1 = frag("p1", "Big#part1", None, 190, 390, kind="chunk")
+    big_child = frag("ch2", "Big.method", "Big", 250, 260)
+    # (c) sanity: an ordinary class → method
+    cls = frag("cls1", "Cls", None, 5, 45, kind="class")
+    other = frag("m1", "Cls.other", "Cls", 42, 44)
+
+    frags = [ov_a, ov_b, inner, part0, part1, big_child, cls, other]
+    relations, summary = extract_relations([file_row], {"f1": frags})
+    belongs = {
+        (r.source_fragment_id, r.target_fragment_id) for r in relations if r.kind == "belongs_to"
+    }
+    assert ("ch1", "ovA") in belongs  # the CONTAINING overload, not the last
+    assert ("ch2", "p1") in belongs  # chunked parent resolved by line coverage
+    assert ("ovA", "cls1") in belongs
+    assert ("ovB", "cls1") in belongs
+    assert ("m1", "cls1") in belongs
+    assert summary.belongs_to == len(belongs)
+    # chunk fragments themselves have no parent_symbol_path — no invented links
+    assert not any(s == "p0" or s == "p1" for s, _ in belongs)

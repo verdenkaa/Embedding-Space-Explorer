@@ -339,7 +339,11 @@ class SpaceHandle:
     def neighbors(
         self, fragment_id: str, k: int = 10, metric: str = "cosine"
     ) -> list[dict[str, Any]]:
-        """Точные k ближайших соседей фрагмента (тот же расчёт, что в UI)."""
+        """Точные k ближайших ЖИВЫХ соседей фрагмента (тот же расчёт, что в UI).
+
+        Векторы удалённых фрагментов пропускаются, а список добирается из
+        следующих кандидатов — поведение совпадает с REST API (audit #10).
+        """
         cache = self._npz()
         index = cache.index_of(fragment_id)
         if index is None:
@@ -347,33 +351,36 @@ class SpaceHandle:
                 f"фрагмент '{fragment_id}' не имеет вектора в пространстве '{self.id}'"
             )
         try:
-            hits = knn(cache.vectors, index, k, metric)
+            hits = knn(cache.vectors, index, k + max(8, k // 2), metric)
         except NeighborSearchError as exc:
             raise ProjectError(str(exc)) from exc
         neighbor_ids = [cache.ids[hit.index] for hit in hits]
         meta = {m["id"]: m for m in self._fragment_meta_by_ids(neighbor_ids)}
         out: list[dict[str, Any]] = []
-        for rank, (hit, fid) in enumerate(zip(hits, neighbor_ids, strict=True)):
+        for hit, fid in zip(hits, neighbor_ids, strict=True):
+            if fid not in meta:
+                continue  # фрагмент удалён после расчёта векторов
+            if len(out) >= k:
+                break
             item: dict[str, Any] = {
-                "rank": rank + 1,
+                "rank": len(out) + 1,
                 "fragment_id": fid,
                 "score": float(hit.score),
                 "distance": float(hit.distance),
             }
-            if fid in meta:
-                item.update(
-                    {
-                        key: meta[fid][key]
-                        for key in (
-                            "rel_path",
-                            "kind",
-                            "name",
-                            "symbol_path",
-                            "start_line",
-                            "end_line",
-                        )
-                    }
-                )
+            item.update(
+                {
+                    key: meta[fid][key]
+                    for key in (
+                        "rel_path",
+                        "kind",
+                        "name",
+                        "symbol_path",
+                        "start_line",
+                        "end_line",
+                    )
+                }
+            )
             out.append(item)
         return out
 

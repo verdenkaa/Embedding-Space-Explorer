@@ -16,6 +16,9 @@ Deeper relations (calls, tested_by, …) arrive through corpus import.
 
 from __future__ import annotations
 
+import re
+from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -113,15 +116,27 @@ def extract_relations(
                 )
             )
 
-    # belongs_to: fragment → parent fragment (same file, by symbol_path)
+    # belongs_to: fragment → parent fragment (same file, by symbol_path).
+    # Several fragments may share a symbol_path (overloads/namesakes differ
+    # only by ordinal) and an oversized parent exists ONLY as line chunks
+    # "<symbol>#part<k>" — a flat {path: id} dict was "last wins" and linked
+    # children to an arbitrary sibling, while children of chunked parents
+    # lost belongs_to entirely (audit #9).
     for file_row in files:
         frags = fragments_by_file.get(file_row.id, [])
-        by_symbol = {f.symbol_path: f.id for f in frags}
+        by_symbol: dict[str, list[FragmentRow]] = defaultdict(list)
+        for f in frags:
+            by_symbol[f.symbol_path].append(f)
+            chunk_match = _CHUNK_SUFFIX.match(f.symbol_path)
+            if chunk_match:
+                # index the chunk under its base symbol too, so children of
+                # a chunked parent can find their enclosing part
+                by_symbol[chunk_match.group(1)].append(f)
         for frag in frags:
             parent = frag.parent_symbol_path
             if not parent:
                 continue
-            parent_id = by_symbol.get(parent)
+            parent_id = _resolve_parent(by_symbol.get(parent, ()), frag)
             if parent_id is None or parent_id == frag.id:
                 continue
             summary.belongs_to += 1
@@ -250,6 +265,37 @@ def _unquote(raw: str) -> str:
     if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ("'", '"', "`"):
         return raw[1:-1]
     return raw
+
+
+#: chunk parts produced by `chunk_line_range` for an oversized symbol
+_CHUNK_SUFFIX = re.compile(r"^(.+)#part\d+$")
+
+
+def _resolve_parent(candidates: Sequence[FragmentRow], child: FragmentRow) -> str | None:
+    """The parent fragment the child ACTUALLY belongs to.
+
+    Candidates share the parent symbol_path (overloads/namesakes) or are
+    line chunks of it. The candidate whose line range CONTAINS the child
+    wins; among several containing ones (chunks overlap) the smallest, then
+    the earliest, then the lexicographically smallest id — deterministic.
+    When nothing contains the child (e.g. it straddles a chunk boundary) the
+    closest candidate by start line is used, never an arbitrary "last one".
+    """
+    if not candidates:
+        return None
+    containing = [
+        c
+        for c in candidates
+        if c.id != child.id and c.start_line <= child.start_line and child.end_line <= c.end_line
+    ]
+    if containing:
+        best = min(
+            containing,
+            key=lambda c: (c.end_line - c.start_line, c.start_line, c.id),
+        )
+        return best.id
+    best = min(candidates, key=lambda c: (abs(c.start_line - child.start_line), c.id))
+    return best.id if best.id != child.id else None
 
 
 def _enclosing_fragment(frags: list[FragmentRow], line: int) -> str | None:

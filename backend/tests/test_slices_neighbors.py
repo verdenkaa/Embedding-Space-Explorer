@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from app.api.schemas import ComputeSliceRequest, SliceNormalDTO
+from app.config import Settings
 from app.neighbor_search.search import NeighborSearchError, knn
 from app.slice_engine.engine import SliceParamsError, compute_slice, resolve_normal
 from fastapi.testclient import TestClient
@@ -350,3 +351,46 @@ def test_neighbors_requires_embeddings(client: TestClient, sample_project: Path)
     error = response.json()["error"]
     assert error["code"] == "no_embedding_run"
     assert "EXPERIMENTS" in str(error["hint"])
+
+
+def test_neighbors_refill_and_report_stale_vectors(
+    client: TestClient,
+    settings: Settings,
+    sample_project: Path,
+    fake_provider_factory: dict[str, FakeProvider],
+) -> None:
+    """Audit #10: a vector whose fragment row is gone must never silently
+    shorten the list — the answer is refilled and the drop is reported."""
+    import sqlite3
+
+    pid, _run_id = _embedded_project(client, sample_project)
+    fragments = client.get(f"/api/projects/{pid}/fragments?limit=5").json()["items"]
+    target = fragments[0]
+
+    first = client.post(
+        f"/api/projects/{pid}/neighbors",
+        json={"fragment_id": target["id"], "k": 5, "metric": "cosine"},
+    ).json()
+    assert first["dropped_stale"] == 0
+    assert len(first["neighbors"]) == 5
+    victim = first["neighbors"][0]["fragment_id"]
+
+    # delete the fragment ROW behind the cache's back (the vector survives —
+    # exactly the transient state the audit describes; a reindex would prune it)
+    db_path = settings.data_dir / "projects" / pid / "project.db"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("DELETE FROM fragments WHERE id = ?", (victim,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    second = client.post(
+        f"/api/projects/{pid}/neighbors",
+        json={"fragment_id": target["id"], "k": 5, "metric": "cosine"},
+    ).json()
+    assert second["dropped_stale"] >= 1
+    assert len(second["neighbors"]) == 5  # refilled from the margin
+    assert all(n["fragment_id"] != victim for n in second["neighbors"])
+    # the note tells the user what happened — never a silent short list
+    assert "Исключено устаревших векторов" in second["note"]

@@ -584,6 +584,11 @@ class NeighborsResponse(BaseModel):
     k: int
     total_vectors: int
     neighbors: list[NeighborDTO]
+    #: candidate vectors skipped because their fragment row no longer exists
+    #: (deleted after the vectors were computed; reindex prunes them) — the
+    #: list is refilled from the next candidates, and the drop is REPORTED,
+    #: never silent (audit #10)
+    dropped_stale: int = 0
     #: honest note: computed over the ORIGINAL embeddings, never projections
     note: str
 

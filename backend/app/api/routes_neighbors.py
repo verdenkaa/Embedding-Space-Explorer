@@ -73,8 +73,13 @@ def find_neighbors(
             "Compute (or recompute) embeddings to cover the fragment.",
         )
 
+    # Vectors can outlive their fragment rows (a fragment deleted after the
+    # vectors were computed; the next reindex prunes it). Ask for k + margin
+    # candidates so the answer can be refilled to k LIVE neighbors, and
+    # report the drops instead of silently returning a short list (audit #10).
+    margin = max(8, payload.k // 2)
     try:
-        hits = knn(cache.vectors, query_index, payload.k, payload.metric)
+        hits = knn(cache.vectors, query_index, payload.k + margin, payload.metric)
     except NeighborSearchError as exc:
         raise ApiError(400, "invalid_neighbor_params", str(exc)) from None
 
@@ -92,11 +97,15 @@ def find_neighbors(
                 meta[frag.id] = (frag, rel_path)
 
     neighbors: list[NeighborDTO] = []
+    dropped_stale = 0
     for hit in hits:
         fragment_id = cache.ids[hit.index]
         entry = meta.get(fragment_id)
         if entry is None:
-            continue  # fragment deleted since the vectors were computed
+            dropped_stale += 1  # fragment deleted since the vectors were computed
+            continue
+        if len(neighbors) >= payload.k:
+            break  # refilled to k live neighbors; the margin is no longer needed
         frag, rel_path = entry
         neighbors.append(
             NeighborDTO(
@@ -113,6 +122,15 @@ def find_neighbors(
             )
         )
 
+    note = (
+        f"Соседи и сходство посчитаны по ИСХОДНЫМ эмбеддингам запуска "
+        f"(метрика {payload.metric}), а не по координатам проекции."
+    )
+    if dropped_stale:
+        note += (
+            f" Исключено устаревших векторов: {dropped_stale} "
+            "(их фрагменты удалены — переиндексируйте корпус и пересчитайте эмбеддинги)."
+        )
     return NeighborsResponse(
         fragment_id=payload.fragment_id,
         embedding_run_id=run_id,
@@ -120,8 +138,6 @@ def find_neighbors(
         k=payload.k,
         total_vectors=len(cache),
         neighbors=neighbors,
-        note=(
-            f"Соседи и сходство посчитаны по ИСХОДНЫМ эмбеддингам запуска "
-            f"(метрика {payload.metric}), а не по координатам проекции."
-        ),
+        dropped_stale=dropped_stale,
+        note=note,
     )

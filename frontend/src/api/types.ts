@@ -477,6 +477,8 @@ export interface NeighborsResponse {
   k: number;
   total_vectors: number;
   neighbors: NeighborDTO[];
+  /** candidate vectors skipped: their fragments were deleted (audit #10) */
+  dropped_stale?: number;
   note: string;
 }
 
