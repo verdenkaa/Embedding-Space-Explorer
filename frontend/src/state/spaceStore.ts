@@ -102,6 +102,13 @@ export interface SliceOverlay {
   /** Explicit normal vector when the overlay was applied from one (saved
    *  slices); null for axis/pca specs re-resolved by the backend. */
   vector: number[] | null;
+  /** ABSOLUTE plane coordinate dot(x, n) of this overlay (audit #6):
+   *  persist it and the layer is reproducible after the corpus changes. */
+  planeOffset: number | null;
+  /** How far the effective position moved from the SAVED relative one
+   *  (centroid drift); null when the overlay was not applied from an
+   *  absolute anchor. */
+  drift: number | null;
   /** Saved-slice row this overlay came from (experiments restore by it);
    *  null for ad-hoc axis/pca specs. */
   savedSliceId: string | null;

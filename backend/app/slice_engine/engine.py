@@ -11,6 +11,14 @@ never a clipping plane. For a plane point `p` and unit normal `n`:
 vectors), so `position` is a coordinate along the normal in the vectors' own
 units and the slider range comes from the data itself.
 
+The centroid is DATA-DEPENDENT: after the corpus changes, the same relative
+`position` describes a DIFFERENT plane. Saved slices therefore persist the
+ABSOLUTE plane coordinate `plane_offset = dot(x, n)` on the plane; passing
+it back re-bases the membership onto the current centroid
+(`position_used = plane_offset - dot(centroid, n)`) and the drift between
+the saved relative position and the effective one is reported, never
+silent (audit #6).
+
 MVP normal specifications:
 - "axis":   a basis vector e_i of the ORIGINAL space (an embedding dimension);
 - "pca":    the i-th principal direction of the run's vectors (deterministic
@@ -98,10 +106,18 @@ class SliceResult:
     centroid: np.ndarray
     #: (N,) signed coordinate along the normal: u(x) = dot(x - centroid, n)
     u: np.ndarray
-    #: (N,) bool: |u - position| <= thickness / 2
+    #: (N,) bool: |u - position_used| <= thickness / 2
     in_layer: np.ndarray
+    #: the RELATIVE position as requested (slider units)
     position: float
     thickness: float
+    #: dot(centroid, n) — the data-dependent zero point of `position`
+    centroid_offset: float
+    #: effective relative position used for membership (= plane_offset -
+    #: centroid_offset when an absolute plane was given, else `position`)
+    position_used: float
+    #: ABSOLUTE plane coordinate: the plane is {x : dot(x, n) = plane_offset}
+    plane_offset: float
 
     @property
     def in_layer_count(self) -> int:
@@ -113,11 +129,19 @@ def compute_slice(
     normal: np.ndarray,
     position: float,
     thickness: float,
+    *,
+    plane_offset: float | None = None,
 ) -> SliceResult:
     """Select the layer around plane p = centroid + position·n.
 
     Pure math over float64 for stable geometry; boundaries are inclusive
     (|d| <= t/2) exactly as the spec defines.
+
+    `plane_offset` (absolute plane coordinate dot(x, n), as persisted with
+    saved slices) OVERRIDES the relative `position` for membership and makes
+    the selection reproducible across corpus changes: the effective position
+    is re-based onto the CURRENT centroid, and `position_used` tells the
+    caller where the slider equivalent landed.
     """
     data = np.asarray(vectors, dtype=np.float64)
     if data.ndim != 2 or data.shape[0] == 0:
@@ -133,9 +157,13 @@ def compute_slice(
         raise SliceParamsError("thickness must not be negative")
 
     centroid = data.mean(axis=0)
+    centroid_offset = float(centroid @ n)
+    position_used = (
+        float(plane_offset) - centroid_offset if plane_offset is not None else float(position)
+    )
     u = (data - centroid) @ n
     half = float(thickness) / 2.0
-    in_layer = np.abs(u - float(position)) <= half
+    in_layer = np.abs(u - position_used) <= half
     return SliceResult(
         normal=n,
         centroid=centroid,
@@ -143,4 +171,7 @@ def compute_slice(
         in_layer=in_layer,
         position=float(position),
         thickness=float(thickness),
+        centroid_offset=centroid_offset,
+        position_used=position_used,
+        plane_offset=centroid_offset + position_used,
     )

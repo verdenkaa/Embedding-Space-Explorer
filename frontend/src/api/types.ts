@@ -403,6 +403,9 @@ export interface ComputeSliceRequest {
   normal: SliceNormal;
   position: number;
   thickness: number;
+  /** absolute plane coordinate dot(x, n) of a saved slice (reproducible
+   *  membership across corpus changes); null for live slider computes */
+  plane_offset?: number | null;
 }
 
 export interface SliceComputeResponse {
@@ -410,8 +413,17 @@ export interface SliceComputeResponse {
   normal_kind: SliceNormalKind;
   normal_index: number | null;
   dim: number;
+  /** EFFECTIVE relative position membership was computed with (re-based
+   *  onto the current centroid when plane_offset was given) */
   position: number;
   thickness: number;
+  /** dot(centroid, n) of the CURRENT vectors */
+  centroid_offset: number;
+  /** absolute plane coordinate dot(x, n) — persist to reproduce the plane */
+  plane_offset: number;
+  /** position_used − requested position when plane_offset was given; null
+   *  for plain computes — the centroid drift is never silent */
+  drift?: number | null;
   total: number;
   in_layer: number;
   u_min: number;
@@ -441,6 +453,8 @@ export interface SavedSliceDTO {
   vector: number[];
   position: number;
   thickness: number;
+  /** absolute plane coordinate at save time; null for pre-v7 slices */
+  plane_offset?: number | null;
   created_at: string;
 }
 
@@ -666,6 +680,8 @@ export interface ExperimentSliceDTO {
   normal_vector?: number[] | null;
   position?: number | null;
   thickness?: number | null;
+  /** absolute plane anchor of the inline definition (see SliceComputeResponse) */
+  plane_offset?: number | null;
 }
 
 export interface ExperimentProjectionsDTO {

@@ -117,6 +117,7 @@ interface AnalysisState {
     vector?: number[] | null,
     position?: number,
     thickness?: number,
+    planeOffset?: number | null,
   ) => Promise<void>;
   saveSlice: (name: string) => Promise<void>;
   deleteSavedSlice: (id: string) => Promise<void>;
@@ -369,7 +370,7 @@ export const useAnalysisStore = create<AnalysisState>()((set, get) => ({
     }
   },
 
-  computeSlice: async (embeddingRunId, kind, index, vector, position, thickness) => {
+  computeSlice: async (embeddingRunId, kind, index, vector, position, thickness, planeOffset) => {
     const project = useProjectStore.getState().current;
     if (!project) return;
     set({ sliceLoading: true, error: null });
@@ -381,8 +382,12 @@ export const useAnalysisStore = create<AnalysisState>()((set, get) => ({
         // served range (the u array is here anyway — no second round-trip)
         position: position ?? 0,
         thickness: thickness ?? 0,
+        plane_offset: planeOffset ?? null,
       });
-      const pos = position ?? (body.u_min + body.u_max) / 2;
+      // With an absolute anchor the backend re-bases the position onto the
+      // CURRENT centroid — the served effective position is the truth.
+      const pos =
+        planeOffset != null ? body.position : (position ?? (body.u_min + body.u_max) / 2);
       const thick = thickness ?? Math.max((body.u_max - body.u_min) * 0.1, 1e-9);
       const uById = new Map<string, number>();
       body.ids.forEach((id, i) => uById.set(id, body.u[i]));
@@ -398,6 +403,8 @@ export const useAnalysisStore = create<AnalysisState>()((set, get) => ({
         uById,
         note: body.note,
         vector: vector ?? null,
+        planeOffset: body.plane_offset ?? null,
+        drift: body.drift ?? null,
         savedSliceId: null,
       });
       set({ sliceLoading: false });
@@ -444,6 +451,8 @@ export const useAnalysisStore = create<AnalysisState>()((set, get) => ({
     const saved = get().savedSlices?.find((s) => s.id === id);
     if (!saved) return;
     // apply the RESOLVED vector (reproducibility) with saved position/thickness
+    // AND the saved absolute plane anchor — pre-v7 rows have none (null) and
+    // fall back to the relative position (drift possible, honestly reported)
     await get().computeSlice(
       saved.embedding_run_id,
       "vector",
@@ -451,6 +460,7 @@ export const useAnalysisStore = create<AnalysisState>()((set, get) => ({
       saved.vector,
       saved.position,
       saved.thickness,
+      saved.plane_offset ?? null,
     );
     const overlay = useSpaceStore.getState().sliceOverlay;
     if (overlay) {

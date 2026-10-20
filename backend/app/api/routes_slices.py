@@ -8,8 +8,12 @@ carries the coordinate along the normal for EVERY fragment so each view can
 mask the layer over whichever projection is active. Honesty: the selection
 happens in the original space; the DISPLAY always goes through a projection
 and the UI must say so — the response carries the note, and saved slices
-persist the RESOLVED unit normal (exact D-dim vector) so a saved slice stays
-reproducible even if the data changes.
+persist the RESOLVED unit normal (exact D-dim vector) AND the ABSOLUTE plane
+coordinate `plane_offset = dot(x, n)` — the relative `position` is measured
+from the run's centroid, which is data-dependent, so without the absolute
+anchor the same saved slice would silently select a different hyperplane
+after the corpus changes (audit #6). Applying a saved slice reports the
+centroid drift instead of hiding it.
 """
 
 from __future__ import annotations
@@ -81,23 +85,35 @@ def compute_slice_endpoint(
         normal = resolve_normal(
             payload.normal.kind, payload.normal.index, payload.normal.vector, cache.vectors
         )
-        result = compute_slice(cache.vectors, normal, payload.position, payload.thickness)
+        result = compute_slice(
+            cache.vectors,
+            normal,
+            payload.position,
+            payload.thickness,
+            plane_offset=payload.plane_offset,
+        )
     except SliceParamsError as exc:
         raise ApiError(400, "invalid_slice_params", str(exc)) from None
 
     # Serve rounded coordinates and derive membership from the ROUNDED values
     # so the client mask (built from this response) can never disagree with
-    # the reported count at a boundary.
+    # the reported count at a boundary. Membership uses the EFFECTIVE
+    # position (re-based onto the current centroid when a saved absolute
+    # plane_offset was given).
     u_rounded = [round(float(x), 6) for x in result.u]
     half = payload.thickness / 2.0
-    in_layer = sum(1 for x in u_rounded if abs(x - payload.position) <= half)
+    in_layer = sum(1 for x in u_rounded if abs(x - result.position_used) <= half)
+    drift = result.position_used - payload.position if payload.plane_offset is not None else None
     return SliceComputeResponse(
         embedding_run_id=payload.embedding_run_id,
         normal_kind=payload.normal.kind,
         normal_index=payload.normal.index,
         dim=int(cache.dim),
-        position=payload.position,
+        position=result.position_used,
         thickness=payload.thickness,
+        centroid_offset=result.centroid_offset,
+        plane_offset=result.plane_offset,
+        drift=drift,
         total=len(u_rounded),
         in_layer=in_layer,
         u_min=min(u_rounded) if u_rounded else 0.0,
@@ -129,6 +145,7 @@ def list_saved_slices(
             vector=json.loads(row.normal_json),
             position=row.position,
             thickness=row.thickness,
+            plane_offset=row.plane_offset,
             created_at=row.created_at,
         )
         for row in rows
@@ -140,12 +157,17 @@ def save_slice(
     ctx: Annotated[ProjectContext, Depends(get_project)],
     payload: CreateSliceRequest,
 ) -> SavedSliceDTO:
-    """Persist a slice definition with its RESOLVED unit normal (reproducible)."""
+    """Persist a slice definition with its RESOLVED unit normal AND the
+    absolute plane coordinate (reproducible across corpus changes)."""
     cache, _ = _load_run_vectors(ctx, payload.embedding_run_id)
     try:
         normal = resolve_normal(
             payload.normal.kind, payload.normal.index, payload.normal.vector, cache.vectors
         )
+        # anchor the plane in absolute coordinates: the centroid is
+        # data-dependent, `position` alone would drift with the corpus
+        probe = compute_slice(cache.vectors, normal, payload.position, payload.thickness)
+        plane_offset = probe.plane_offset
     except SliceParamsError as exc:
         raise ApiError(400, "invalid_slice_params", str(exc)) from None
 
@@ -173,6 +195,7 @@ def save_slice(
             dim=int(cache.dim),
             position=payload.position,
             thickness=payload.thickness,
+            plane_offset=plane_offset,
             created_at=_utc_now(),
         )
         session.add(row)
@@ -187,6 +210,7 @@ def save_slice(
         vector=json.loads(row.normal_json),
         position=row.position,
         thickness=row.thickness,
+        plane_offset=row.plane_offset,
         created_at=row.created_at,
     )
 

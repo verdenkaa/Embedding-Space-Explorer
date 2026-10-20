@@ -235,11 +235,64 @@ def test_saved_slices_roundtrip(
     assert via_vector["in_layer"] == via_spec["in_layer"]
     np.testing.assert_allclose(via_vector["u"], via_spec["u"], atol=1e-5)
 
+    # Audit #6: the save persists the ABSOLUTE plane coordinate; a plain
+    # compute echoes it (so the client can save without recomputation) and
+    # reports no drift.
+    assert isinstance(saved["plane_offset"], float)
+    assert via_vector["drift"] is None
+    assert via_vector["plane_offset"] == pytest.approx(
+        via_vector["centroid_offset"] + 0.1, abs=1e-6
+    )
+    assert saved["plane_offset"] == pytest.approx(via_vector["plane_offset"], abs=1e-6)
+
+    # Applying the saved anchor over unchanged data: drift == 0 and the
+    # membership matches the relative computation exactly.
+    anchored = client.post(
+        f"/api/projects/{pid}/slices/compute",
+        json={
+            "embedding_run_id": run_id,
+            "normal": {"kind": "vector", "vector": vector},
+            "position": saved["position"],
+            "thickness": saved["thickness"],
+            "plane_offset": saved["plane_offset"],
+        },
+    ).json()
+    assert anchored["drift"] == pytest.approx(0.0, abs=1e-6)
+    assert anchored["position"] == pytest.approx(saved["position"], abs=1e-6)
+    assert anchored["in_layer"] == via_vector["in_layer"]
+
     listed = client.get(f"/api/projects/{pid}/slices").json()
     assert [s["name"] for s in listed] == ["PC2 layer"]
+    assert listed[0]["plane_offset"] == pytest.approx(saved["plane_offset"], abs=1e-9)
     deleted = client.delete(f"/api/projects/{pid}/slices/{saved['id']}")
     assert deleted.status_code == 200
     assert client.delete(f"/api/projects/{pid}/slices/{saved['id']}").status_code == 404
+
+
+def test_saved_plane_offset_is_absolute_and_reproducible() -> None:
+    """Audit #6: the absolute plane coordinate survives a centroid drift."""
+    n = np.array([1.0, 0.0])
+    v1 = np.array([[1.0, 0.0], [2.0, 0.0], [3.0, 0.0]])
+    r1 = compute_slice(v1, n, position=0.0, thickness=1.0)
+    assert r1.centroid_offset == pytest.approx(2.0)
+    assert r1.plane_offset == pytest.approx(2.0)
+    assert r1.position_used == pytest.approx(0.0)
+    assert r1.in_layer.tolist() == [False, True, False]
+
+    # corpus change: an outlier drags the centroid to x=4 — the SAME relative
+    # position now describes a DIFFERENT plane and selects nothing
+    v2 = np.array([[1.0, 0.0], [2.0, 0.0], [3.0, 0.0], [10.0, 7.0]])
+    relative = compute_slice(v2, n, position=0.0, thickness=1.0)
+    assert relative.centroid_offset == pytest.approx(4.0)
+    assert relative.in_layer.tolist() == [False, False, False, False]
+
+    # the absolute anchor keeps the selection identical and re-bases the
+    # effective position onto the new centroid (the drift becomes visible)
+    absolute = compute_slice(v2, n, position=0.0, thickness=1.0, plane_offset=r1.plane_offset)
+    assert absolute.plane_offset == pytest.approx(2.0)
+    assert absolute.position_used == pytest.approx(-2.0)
+    assert absolute.in_layer[:3].tolist() == r1.in_layer.tolist()
+    assert absolute.in_layer[3] == np.False_
 
 
 def test_slice_request_schema_bounds() -> None:

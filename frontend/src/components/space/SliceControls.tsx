@@ -297,6 +297,15 @@ export function SliceControls() {
           </div>
           <p className="slice-panel__note">
             {overlay.note}
+            {overlay.drift !== null && Math.abs(overlay.drift) > 1e-9 && (
+              <span className="slice-panel__warn">
+                {" "}
+                Центроид данных сместился: сохранённая плоскость воспроизведена
+                по абсолютной координате, позиция слоя пересчитана на{" "}
+                {overlay.drift > 0 ? "+" : ""}
+                {overlay.drift.toFixed(4)} относительно сохранённой.
+              </span>
+            )}
             {mismatchedViews > 0 && (
               <span className="slice-panel__warn">
                 {" "}

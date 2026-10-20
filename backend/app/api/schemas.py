@@ -504,6 +504,10 @@ class ComputeSliceRequest(BaseModel):
     position: float = 0.0
     #: layer thickness t (|d(x)| <= t/2 membership), raw units
     thickness: float = Field(0.0, ge=0.0)
+    #: ABSOLUTE plane coordinate dot(x, n) of a saved slice: membership is
+    #: computed against it (reproducible across corpus changes), `position`
+    #: then only serves to report the drift (audit #6)
+    plane_offset: float | None = None
 
 
 class SliceComputeResponse(BaseModel):
@@ -511,8 +515,18 @@ class SliceComputeResponse(BaseModel):
     normal_kind: str
     normal_index: int | None = None
     dim: int
+    #: EFFECTIVE relative position (what membership was computed with — the
+    #: client mask formula |u - position| <= t/2 always matches in_layer)
     position: float
     thickness: float
+    #: dot(centroid, n) of the CURRENT vectors — the zero point of `position`
+    centroid_offset: float
+    #: absolute plane coordinate dot(x, n) — persist this to reproduce the
+    #: plane after the corpus changes
+    plane_offset: float
+    #: position_used - requested position when plane_offset was given (how
+    #: far the centroid drifted since saving); null for plain computes
+    drift: float | None = None
     total: int
     in_layer: int
     #: range of the coordinate along the normal (slider bounds for the UI)
@@ -543,8 +557,12 @@ class SavedSliceDTO(BaseModel):
     dim: int
     #: resolved unit normal at save time (reproducibility)
     vector: list[float]
+    #: relative position at save time (slider units, centroid of that time)
     position: float
     thickness: float
+    #: ABSOLUTE plane coordinate dot(x, n) at save time — the reproducible
+    #: anchor; null for slices saved before schema v7 (relative-only)
+    plane_offset: float | None = None
     created_at: str
 
 
@@ -789,6 +807,9 @@ class ExperimentSliceDTO(BaseModel):
     normal_vector: list[float] | None = None
     position: float | None = None
     thickness: float | None = None
+    #: absolute plane anchor of the inline definition (audit #6): without it
+    #: a restored inline slice would sit on a centroid-relative position
+    plane_offset: float | None = None
 
 
 class ExperimentProjectionsDTO(BaseModel):

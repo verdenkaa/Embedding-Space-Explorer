@@ -98,6 +98,7 @@ export const useSavedExperimentsStore = create<SavedExperimentsState>()((set, ge
             normal_vector: overlay.vector,
             position: overlay.position,
             thickness: overlay.thickness,
+            plane_offset: overlay.planeOffset,
           }
       : null;
 
@@ -256,6 +257,7 @@ export async function applyExperiment(exp: ExperimentDTO): Promise<OpenReport> {
           slice.normal_vector ?? undefined,
           slice.position ?? undefined,
           slice.thickness ?? undefined,
+          slice.plane_offset ?? null,
         );
         applied.push("срез");
       }

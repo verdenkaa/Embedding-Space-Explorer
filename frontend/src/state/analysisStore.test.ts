@@ -301,6 +301,9 @@ describe("analysisStore: slice overlay", () => {
     dim: 8,
     position: 0,
     thickness: 0,
+    centroid_offset: 0,
+    plane_offset: 0,
+    drift: null,
     total: 3,
     in_layer: 0,
     u_min: -4,
@@ -356,6 +359,7 @@ describe("analysisStore: slice overlay", () => {
       vector: [0.5, 0.5, 0.5, 0.5, 0, 0, 0, 0],
       position: 0.25,
       thickness: 0.1,
+      plane_offset: 0.25,
       created_at: "",
     };
     const { fetchMock, calls } = mockFetch({
@@ -384,10 +388,45 @@ describe("analysisStore: slice overlay", () => {
     expect((applyPost?.body as { normal: { kind: string; vector?: number[] } }).normal.kind).toBe(
       "vector",
     );
+    // the saved ABSOLUTE anchor travels with the apply request (audit #6)
+    expect((applyPost?.body as { plane_offset?: number | null }).plane_offset).toBe(0.25);
     const overlay = useSpaceStore.getState().sliceOverlay;
-    expect(overlay?.position).toBe(0.25);
+    // with an anchor the backend re-bases the position onto the current
+    // centroid — the SERVED effective position wins over the saved relative
+    expect(overlay?.position).toBe(SLICE_BODY.position);
+    expect(overlay?.planeOffset).toBe(SLICE_BODY.plane_offset);
     // the human-readable intent is restored for the panel
     expect(overlay?.normalKind).toBe("pca");
     expect(overlay?.normalIndex).toBe(0);
+  });
+
+  it("applying a saved slice over drifted data surfaces the centroid drift", async () => {
+    const saved: SavedSliceDTO = {
+      id: "s2",
+      name: "слоо",
+      embedding_run_id: "emb1",
+      normal_kind: "pca",
+      normal_index: 0,
+      dim: 8,
+      vector: [1, 0, 0, 0, 0, 0, 0, 0],
+      position: 0.25,
+      thickness: 0.1,
+      plane_offset: 0.25,
+      created_at: "",
+    };
+    // the centroid moved since saving: the backend re-based the position
+    const drifted = { ...SLICE_BODY, position: 0.1, drift: -0.15, plane_offset: 0.25 };
+    const { fetchMock } = mockFetch({
+      "POST /api/projects/p1/slices/compute": drifted,
+      "/api/projects/p1/slices": [saved],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    useAnalysisStore.setState({ savedSlices: [saved] });
+    await useAnalysisStore.getState().applySavedSlice("s2");
+    const overlay = useSpaceStore.getState().sliceOverlay;
+    expect(overlay?.position).toBe(0.1); // effective, not the saved 0.25
+    expect(overlay?.drift).toBe(-0.15); // visible, never silent
+    expect(overlay?.planeOffset).toBe(0.25);
   });
 });

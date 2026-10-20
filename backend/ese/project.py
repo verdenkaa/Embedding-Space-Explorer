@@ -652,6 +652,7 @@ class ProjectHandle:
                     "dim": r.dim,
                     "position": r.position,
                     "thickness": r.thickness,
+                    "plane_offset": r.plane_offset,
                     "created_at": r.created_at,
                 }
                 for r in rows

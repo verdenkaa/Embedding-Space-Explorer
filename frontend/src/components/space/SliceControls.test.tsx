@@ -92,6 +92,9 @@ const SLICE_BODY = {
   dim: 384,
   position: 0,
   thickness: 0,
+  centroid_offset: 0,
+  plane_offset: 0,
+  drift: null,
   total: 2,
   in_layer: 0,
   u_min: -2,
@@ -189,5 +192,25 @@ describe("SliceControls", () => {
     await waitFor(() => {
       expect(screen.getByText(/ИСХОДНОМ D-мерном пространстве/)).toBeTruthy();
     });
+  });
+
+  it("centroid drift of an anchored slice is reported, never silent", async () => {
+    render(<SliceControls />);
+    fireEvent.click(screen.getByRole("button", { name: /Срез/ }));
+    await waitFor(() => {
+      expect(useSpaceStore.getState().sliceOverlay).not.toBeNull();
+    });
+    // no drift by default
+    expect(screen.queryByText(/Центроид данных сместился/)).toBeNull();
+
+    const current = useSpaceStore.getState().sliceOverlay;
+    expect(current).not.toBeNull();
+    useSpaceStore
+      .getState()
+      .setSliceOverlay({ ...(current as NonNullable<typeof current>), drift: -0.0312 });
+    await waitFor(() => {
+      expect(screen.getByText(/Центроид данных сместился/)).toBeTruthy();
+    });
+    expect(screen.getByText(/-0.0312/)).toBeTruthy();
   });
 });
