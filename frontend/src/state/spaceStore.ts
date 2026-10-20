@@ -48,6 +48,9 @@ export interface PointCloud {
   coords: Float32Array;
   /** Component count of `coords` per point (2, 3 or 4). */
   stride: number;
+  /** Points EXCLUDED at build time: coords missing/NaN (damaged cache).
+   *  Never rendered as fake zeros — surfaced as a warning instead. */
+  invalidCount: number;
   /** Raw coords of the first min(n,3) axes centered+scaled into [-1,1]
    *  (view-only, count × displayStride). */
   display: Float32Array;
@@ -145,6 +148,8 @@ interface SpaceState {
   loading2d: boolean;
   loading4d: boolean;
   error: SpaceError | null;
+  /** Points excluded while building the shown cloud(s) — damaged cache (audit #15). */
+  dataWarning: string | null;
   /** Fragment under the cursor (shared by all views for sync highlight). */
   hoveredId: string | null;
   /** Tooltip anchor in container pixels (per view). */
@@ -207,16 +212,27 @@ function toError(err: unknown): SpaceError {
   return { code: "unknown_error", message: err instanceof Error ? err.message : String(err) };
 }
 
-/** Build the render-ready cloud from the served DTO (pure, unit-tested). */
+/** Build the render-ready cloud from the served DTO (pure, unit-tested).
+ *
+ * Audit #15: a point whose coords are missing or not finite (damaged cache,
+ * dimension mismatch) is EXCLUDED and counted — the old `?? 0` turned it
+ * into a fake point at the scene center, indistinguishable from a real one.
+ * The count travels on the cloud and becomes a visible warning.
+ */
 export function buildCloud(points: ProjectionPoints, projection: ProjectionRunDTO): PointCloud {
   const n = points.n_components;
-  const count = points.points.length;
+  const validPoints = points.points.filter(
+    (point: ProjectionPoint) =>
+      point.coords.length === n && point.coords.every((v) => Number.isFinite(v)),
+  );
+  const invalidCount = points.points.length - validPoints.length;
+  const count = validPoints.length;
   const coords = new Float32Array(count * n);
   const metas: PointMeta[] = new Array(count);
   const indexById = new Map<string, number>();
-  points.points.forEach((point: ProjectionPoint, i: number) => {
+  validPoints.forEach((point: ProjectionPoint, i: number) => {
     for (let a = 0; a < n; a++) {
-      coords[i * n + a] = point.coords[a] ?? 0;
+      coords[i * n + a] = point.coords[a];
     }
     metas[i] = {
       fragmentId: point.fragment_id,
@@ -240,11 +256,20 @@ export function buildCloud(points: ProjectionPoints, projection: ProjectionRunDT
     metas,
     coords,
     stride: n,
+    invalidCount,
     display: applyFitStrided(coords, fit, n, displayStride),
     displayStride,
     fit,
     indexById,
   };
+}
+
+/** Honest warning when the served coordinates were partially unusable. */
+export function invalidPointsWarning(clouds: PointCloud[]): string | null {
+  const bad = clouds.reduce((sum, c) => sum + c.invalidCount, 0);
+  return bad > 0
+    ? `Из облака исключено точек: ${bad} — их координаты отсутствуют или нечисловые (кэш проекции повреждён; пересчитайте проекцию).`
+    : null;
 }
 
 /**
@@ -305,6 +330,7 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
   loading2d: false,
   loading4d: false,
   error: null,
+  dataWarning: null,
   hoveredId: null,
   hoverScreen: null,
   pointSize: 4,
@@ -353,6 +379,7 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
             ? { cloud3d: cloud, loading3d: false, error: null }
             : { cloud4d: cloud, loading4d: false, error: null },
       );
+      set({ dataWarning: invalidPointsWarning([cloud]) });
     } catch (err) {
       set({ [KIND_STATE[kind].loading]: false, error: toError(err) } as Partial<SpaceState>);
     }
@@ -380,7 +407,12 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
         const points = await api.getProjectionPoints(project.id, id);
         clouds.push(buildCloud(points, projection));
       }
-      set({ clouds2d: clouds, loading2d: false, error: null });
+      set({
+        clouds2d: clouds,
+        loading2d: false,
+        error: null,
+        dataWarning: invalidPointsWarning(clouds),
+      });
     } catch (err) {
       set({ loading2d: false, error: toError(err) });
     }
@@ -488,6 +520,7 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
                 ? { cloud3d: cloud, loading3d: false, error: null }
                 : { cloud4d: cloud, loading4d: false, error: null },
           );
+          set({ dataWarning: invalidPointsWarning([cloud]) });
         } catch (err) {
           set({ [KIND_STATE[kind].loading]: false, error: toError(err) } as Partial<SpaceState>);
         }
@@ -529,6 +562,7 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
       loading2d: false,
       loading4d: false,
       error: null,
+      dataWarning: null,
       hoveredId: null,
       hoverScreen: null,
       slice4d: { ...DEFAULT_SLICE_4D },

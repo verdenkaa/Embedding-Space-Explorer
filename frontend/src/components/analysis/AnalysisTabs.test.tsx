@@ -186,7 +186,9 @@ describe("NeighborsTab", () => {
 
     expect(screen.getByText(/ИСХОДНЫМ эмбеддингам/)).toBeTruthy();
     expect(screen.getByText("Beta")).toBeTruthy();
-    expect(screen.getByText("80.0%")).toBeTruthy(); // cosine score as percent
+    // cosine similarity is a RAW value, never a fake percent (audit #16)
+    expect(screen.getByText("0.800 cos")).toBeTruthy();
+    expect(screen.queryByText("80.0%")).toBeNull();
 
     fireEvent.click(screen.getByText("Beta"));
     await waitFor(() => {

@@ -39,6 +39,7 @@ export function SpaceSection() {
   const loadProjections = useExperimentStore((s) => s.loadProjections);
   const loadPresets = useExperimentStore((s) => s.loadPresets);
   const viewMode = useSpaceStore((s) => s.viewMode);
+  const dataWarning = useSpaceStore((s) => s.dataWarning);
   const setActiveProjection = useSpaceStore((s) => s.setActiveProjection);
   const reset = useSpaceStore((s) => s.reset);
   const resetAnalysis = useAnalysisStore((s) => s.reset);
@@ -84,6 +85,11 @@ export function SpaceSection() {
       <JobPoller />
       <ExperimentJobPoller />
       <AnalysisJobPoller />
+      {dataWarning && (
+        <div className="workspace-error" role="status">
+          <span>{dataWarning}</span>
+        </div>
+      )}
       {error && (
         <div className="workspace-error" role="alert">
           <span>{error.message}</span>

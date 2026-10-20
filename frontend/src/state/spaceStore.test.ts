@@ -13,6 +13,7 @@ import { useProjectStore } from "./projectStore";
 import {
   DEFAULT_SLICE_4D,
   buildCloud,
+  invalidPointsWarning,
   pickActiveProjections,
   useSpaceStore,
 } from "./spaceStore";
@@ -121,6 +122,48 @@ describe("buildCloud", () => {
     // raw coordinates are untouched (projections belong to the backend)
     expect(cloud.coords).not.toBe(cloud.display);
   });
+});
+
+it("excludes points with damaged coords and counts them (audit #15)", () => {
+  const dto = pointsDTO();
+  dto.points = [
+    { ...dto.points[0], coords: [-2, 0] }, // short: 2 of 3 components
+    { ...dto.points[1], coords: [2, Number.NaN, -0.5] }, // NaN coordinate
+  ];
+  const cloud = buildCloud(dto, run({}));
+  expect(cloud.invalidCount).toBe(2);
+  expect(cloud.metas).toHaveLength(0);
+  expect(cloud.coords).toHaveLength(0);
+  expect(cloud.indexById.size).toBe(0);
+  expect(invalidPointsWarning([cloud])).toMatch(/исключено точек: 2/);
+});
+
+it("valid points build without a warning; mixed input keeps the valid ones", () => {
+  const clean = buildCloud(pointsDTO(), run({}));
+  expect(clean.invalidCount).toBe(0);
+  expect(invalidPointsWarning([clean])).toBeNull();
+
+  const dto = pointsDTO();
+  dto.points = [{ ...dto.points[0], coords: [1] }, dto.points[1]];
+  const cloud = buildCloud(dto, run({}));
+  expect(cloud.invalidCount).toBe(1);
+  expect(cloud.metas).toHaveLength(1);
+  // indexById points at the SURVIVING row (indices stay consistent)
+  expect(cloud.indexById.get("fragB")).toBe(0);
+  expect(invalidPointsWarning([cloud, clean])).toMatch(/исключено точек: 1/);
+});
+
+it("setActiveProjection surfaces the exclusion warning as dataWarning", async () => {
+  const dto = pointsDTO();
+  dto.points = [{ ...dto.points[0], coords: [1] }, dto.points[1]];
+  const { fetchMock } = mockFetch({
+    "/api/projects/p1/projections": [run({})],
+    "/api/projects/p1/projections/proj3d/points": dto,
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  await useSpaceStore.getState().setActiveProjection("3d", "proj3d");
+  expect(useSpaceStore.getState().cloud3d?.invalidCount).toBe(1);
+  expect(useSpaceStore.getState().dataWarning).toMatch(/исключено точек: 1/);
 });
 
 describe("pickActiveProjections", () => {

@@ -124,9 +124,19 @@ export function NeighborsTab() {
                       {n.rel_path}:{n.start_line}–{n.end_line}
                     </span>
                   </span>
-                  <span className="neighbors-list__score mono" title={`distance ${n.distance}`}>
+                  <span
+                    className="neighbors-list__score mono"
+                    title={
+                      current.metric === "cosine"
+                        ? `косинусное сходство ${n.score} (не процент; distance ${n.distance})`
+                        : `distance ${n.distance}`
+                    }
+                  >
+                    {/* cosine similarity is NOT a share: it can be negative and
+                        lives in a narrow band for sentence models — the raw
+                        value is honest, "62%" invented a scale (audit #16) */}
                     {current.metric === "cosine"
-                      ? `${(n.score * 100).toFixed(1)}%`
+                      ? `${n.score.toFixed(3)} cos`
                       : n.distance.toFixed(3)}
                   </span>
                 </button>
