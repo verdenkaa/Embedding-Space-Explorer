@@ -61,7 +61,11 @@ def metric_versions() -> dict[str, str]:
     import contextlib
     from importlib import metadata
 
-    versions: dict[str, str] = {"numpy": np.__version__}
+    # metric_formulas v2: trustworthiness ranks over the FULL population
+    # (queries from the sample, cosine in the original space) and
+    # relation_coverage counts directed arcs — values are NOT comparable
+    # with v1 runs, so the formula set is part of the recorded versions.
+    versions: dict[str, str] = {"numpy": np.__version__, "metric_formulas": "2"}
     for dist in ("scikit-learn",):
         with contextlib.suppress(metadata.PackageNotFoundError):
             versions[dist] = metadata.version(dist)

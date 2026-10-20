@@ -191,8 +191,13 @@ def test_relation_precision_and_coverage_on_constructed_pairs() -> None:
     terms += [(1.0 if 0 in topk[r].tolist() else 0.0) / 3.0 for r in partner_rows]
     assert precision["value"] == pytest.approx(sum(terms) / len(terms))
     assert precision["n_sampled_with_relations"] == 4  # v000 + 3 partners
-    assert coverage["value"] == pytest.approx(1.0)  # every known pair is recovered
     assert coverage["n_known_pairs_embedded"] == 3
+    # Directed arcs (audit #5): both ends sampled → 2 arcs per pair.
+    # v000→partner hits by construction; partner→v000 hits only when v000
+    # is in that partner's own top-3 (top-k neighborhoods are directional).
+    back_hits = sum(1 for r in partner_rows if 0 in topk[r].tolist())
+    assert coverage["n_pairs_considered"] == 6
+    assert coverage["value"] == pytest.approx((3 + back_hits) / 6)
     # Corpus incompleteness: the other 11 points contribute NOTHING to the
     # precision denominator (unknown ≠ negative).
     assert "neighbor_retention" not in metrics  # no projection → honestly skipped
@@ -254,6 +259,122 @@ def test_determinism_of_the_whole_bundle() -> None:
         vectors=vectors, coords=coords, ids=ids, k=5, sample=20, seed=42, pairs=set()
     )
     assert a == b  # same inputs + seed → identical numbers
+
+
+def test_trustworthiness_matches_sklearn_on_full_population() -> None:
+    """Sample == population → the rank-based formula equals sklearn's value."""
+    from sklearn.manifold import trustworthiness as sk_trustworthiness
+
+    ids, vectors = _synthetic(n=30, dim=6, seed=11)
+    vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+    rng = np.random.default_rng(12)
+    coords = rng.normal(size=(len(ids), 3)).astype(np.float32)
+    idx = np.arange(len(ids), dtype=np.int64)  # every point is a query
+
+    from app.metrics.compute import trustworthiness
+
+    value, k_used = trustworthiness(vectors, coords, idx, k=5)
+    assert k_used == 5
+    # sklearn ranks by euclidean over RAW vectors; on unit vectors that order
+    # is identical to cosine — the values must coincide exactly.
+    expected = sk_trustworthiness(vectors, coords, n_neighbors=5, metric="euclidean")
+    assert value == pytest.approx(float(expected), abs=1e-9)
+
+
+def test_trustworthiness_sees_whole_population_not_just_sample() -> None:
+    """Audit #3: false neighbors are ranked over the FULL population.
+
+    Construction: within the SAMPLE, projection top-1 == original top-1 for
+    every query (the old sklearn-on-sample value is exactly 1.0). But the
+    population contains non-sampled points that are genuinely nearer to q
+    in the original space while the projection throws them far away — the
+    full-population rank sees b/q as FALSE neighbors and penalizes them.
+    """
+    from app.metrics.compute import trustworthiness
+    from sklearn.manifold import trustworthiness as sk_trustworthiness
+
+    def unit(*vals: float) -> np.ndarray:
+        v = np.array(vals, dtype=np.float32)
+        return v / np.linalg.norm(v)
+
+    q = unit(1, 0, 0, 0)
+    b = unit(0.2, 0.98, 0, 0)  # original cos to q: 0.2
+    x1 = unit(0, 0, 1, 0)
+    x2 = unit(0, 0, 0.99, 0.141)  # original cos to x1: 0.99
+    # four non-sampled points, all nearly identical to q in the original
+    # space (cos ~0.999) — they outrank b in q's full-population ordering
+    a1 = unit(0.999, 0.045, 0, 0)
+    a2 = unit(0.999, 0, 0.045, 0)
+    a3 = unit(0.999, 0, 0, 0.045)
+    a4 = unit(0.9985, 0.055, 0, 0)
+    vectors = np.vstack([q, b, x1, x2, a1, a2, a3, a4]).astype(np.float32)
+    coords = np.array(
+        [
+            [0.0, 0.0],  # q
+            [0.1, 0.0],  # b: q's projection top-1
+            [50.0, 50.0],  # x1
+            [51.0, 51.0],  # x2: each other's projection top-1
+            [90.0, 10.0],  # a1: original-near, projection-far
+            [95.0, 12.0],  # a2
+            [100.0, 14.0],  # a3
+            [105.0, 16.0],  # a4
+        ],
+        dtype=np.float32,
+    )
+    idx = np.array([0, 1, 2, 3], dtype=np.int64)  # the a-points are NOT sampled
+
+    value, k_used = trustworthiness(vectors, coords, idx, k=1)
+    assert k_used == 1
+    # q's false neighbor b ranks 5th of 7 in the full population (four
+    # a-points are nearer); b's false neighbor q ranks 3rd (a1 and a4 are
+    # nearer to b than q is). T = 1 - 2·((5-1) + (3-1)) / (4·1·(2·8-3-1))
+    assert value == pytest.approx(1.0 - 12.0 / 48.0, abs=1e-6)
+
+    # the OLD behavior (sklearn restricted to the sample) saw no false
+    # neighbor at all — that is exactly the incomparable number we removed
+    old = sk_trustworthiness(vectors[idx], coords[idx], n_neighbors=1)
+    assert float(old) == pytest.approx(1.0)
+
+
+def test_relation_coverage_counts_both_directions() -> None:
+    """Audit #5: a pair with both ends sampled contributes TWO arcs."""
+    # A's nearest is B; B's nearest is C (even closer to B than A is).
+    a_vec = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+    b_vec = np.array([1.0, 0.2, 0.0], dtype=np.float32)
+    c_vec = np.array([1.0, 0.25, 0.0], dtype=np.float32)
+    d_vec = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+    vectors = np.vstack([a_vec, b_vec, c_vec, d_vec])
+    vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+    ids = ["vA", "vB", "vC", "vD"]
+    pairs = {frozenset(("vA", "vB"))}
+
+    bundle = compute_metric_bundle(
+        vectors=vectors, coords=None, ids=ids, k=1, sample=4, seed=1, pairs=pairs
+    )
+    metrics = bundle["metrics"]
+    assert isinstance(metrics, dict)
+    coverage = metrics["relation_coverage"]
+    assert isinstance(coverage, dict)
+    # arc A→B: B is A's top-1 → covered. arc B→A: B's top-1 is C → missed.
+    # The old code checked ONE arbitrary direction (by sorted id order).
+    assert coverage["n_pairs_considered"] == 2
+    assert coverage["value"] == pytest.approx(0.5)
+
+
+def test_topk_ties_match_knn_order() -> None:
+    """Audit #8: duplicate vectors → metrics and UI pick the SAME neighbors."""
+    from app.neighbor_search.search import knn
+
+    rng = np.random.default_rng(7)
+    base = rng.normal(size=(6, 5)).astype(np.float32)
+    # rows 2,3,4 are exact duplicates; row 5 duplicates row 0
+    vectors = np.vstack([base[0], base[1], base[2], base[2], base[2], base[0]])
+    vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+
+    idx = np.array([0], dtype=np.int64)
+    topk = original_topk(vectors, idx, k=4)[0].tolist()
+    knn_order = [hit.index for hit in knn(vectors, 0, 4, "cosine")]
+    assert topk == knn_order
 
 
 # ---------------------------------------------------------------------------

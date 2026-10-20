@@ -6,17 +6,22 @@ Definitions:
   neighbors (cosine over embeddings) that remain within the projection's
   k nearest neighbors (euclidean over projection coordinates). 1.0 = the map
   kept every original neighbor close; 0.0 = none kept.
-- trustworthiness@k     — sklearn.manifold.trustworthiness on the sample:
+- trustworthiness@k     — rank-based, over the FULL population: queries are
+  the sampled rows (the same population as retention), but neighbor ranks
+  span ALL N points (original = cosine, projection = euclidean).
   1 − normalized penalty for FALSE neighbors (points close in the
-  projection but far in the original space).
+  projection but far in the original space). Formula identical to
+  sklearn.manifold.trustworthiness; sklearn itself would rank only WITHIN
+  the sample — a different, incomparable task at sample < N.
 - relation_precision@k  — among sampled fragments that HAVE known structural
   relations, the mean share of their original-space top-k neighbors that are
   among those known relations. NOT a classical precision: unknown pairs are
   treated as UNKNOWN (corpus incompleteness), never as negatives.
-- relation_coverage@k   — share of known relation pairs (both ends embedded)
-  whose target appears in the source's original-space top-k (checked in both
-  directions — the relation semantics are treated as symmetric here, which
-  is documented in the explanation).
+- relation_coverage@k   — share of known relation ARC directions (both ends
+  embedded) whose target appears in the source's original-space top-k.
+  Relations are treated as symmetric: every pair contributes one arc per
+  sampled endpoint (two arcs when both ends are sampled) — top-k
+  neighborhoods are directional, so each direction is checked on its own.
 """
 
 from __future__ import annotations
@@ -33,9 +38,11 @@ METRIC_EXPLANATIONS: dict[str, str] = {
         "локальная сохранность (нелинейная проекция искажает глобальные расстояния)."
     ),
     "trustworthiness": (
-        "sklearn.manifold.trustworthiness на выборке: 1 минус нормированный штраф "
-        "за «ложных соседей» — точки, ставшие близкими в проекции, но далёкими в "
-        "исходном пространстве. 1.0 — ложных соседей нет."
+        "1 минус нормированный штраф за «ложных соседей» — точки, попавшие в топ-k "
+        "проекции (euclidean), но далёкие в топ-k ИСХОДНОГО пространства (cosine). "
+        "Запросы — точки выборки, ранги и соседи — среди ВСЕХ N точек (та же "
+        "популяция, что у neighbor_retention; формула sklearn, но без её сужения "
+        "до выборки). 1.0 — ложных соседей нет."
     ),
     "relation_precision": (
         "Доля топ-k соседей ИСХОДНОГО пространства, приходящихся на ИЗВЕСТНЫЕ "
@@ -45,10 +52,13 @@ METRIC_EXPLANATIONS: dict[str, str] = {
         "это мера согласия с известными связями, а не классический precision."
     ),
     "relation_coverage": (
-        "Доля известных структурных пар (оба конца с векторами), у которых цель "
-        "попала в топ-k соседей источника в ИСХОДНОМ пространстве (проверено в "
-        "обе стороны: связь трактуется симметрично). Низкое значение при малом "
-        "числе известных пар — не вывод о геометрии, а следствие неполноты корпуса."
+        "Доля НАПРАВЛЕНИЙ известных структурных пар (оба конца с векторами), у "
+        "которых цель попала в топ-k соседей источника в ИСХОДНОМ пространстве. "
+        "Связь трактуется симметрично: пара даёт по направлению на каждый её "
+        "попавший в выборку конец (два направления, если оба конца в выборке) — "
+        "топ-k окрестности несимметричны, каждое направление проверяется отдельно. "
+        "Низкое значение при малом числе известных пар — не вывод о геометрии, а "
+        "следствие неполноты корпуса."
     ),
 }
 
@@ -68,14 +78,21 @@ def sample_indices(n: int, sample: int, seed: int) -> np.ndarray:
 
 
 def _topk_excluding_self(similarity_or_negdist: np.ndarray, self_index: int, k: int) -> np.ndarray:
-    """Indices of the k best rows of a score vector (higher = closer), self excluded."""
+    """Indices of the k best rows of a score vector (higher = closer), self excluded.
+
+    Ties are broken by ASCENDING POSITION (stable full argsort) — exactly the
+    rule neighbor_search.knn uses, so metric neighborhoods and UI neighbors
+    never disagree at the k boundary (duplicate fragments → identical scores
+    are common). argpartition was faster but picked among boundary ties
+    arbitrarily.
+    """
     scores = similarity_or_negdist.copy()
     scores[self_index] = -np.inf
     k_eff = int(min(k, scores.shape[0] - 1))
     if k_eff <= 0:
         return np.empty(0, dtype=np.int64)
-    part = np.argpartition(scores, -k_eff)[-k_eff:]
-    return part[np.argsort(scores[part], kind="stable")]
+    # descending by score, stable by position: negate, then stable ascending
+    return np.argsort(-scores, kind="stable")[:k_eff]
 
 
 def original_topk(vectors: np.ndarray, idx: np.ndarray, k: int) -> np.ndarray:
@@ -127,26 +144,60 @@ def neighbor_retention(orig_topk: np.ndarray, proj_topk: np.ndarray) -> float:
 def trustworthiness(
     vectors: np.ndarray, coords: np.ndarray, idx: np.ndarray, k: int
 ) -> tuple[float, int]:
-    """sklearn trustworthiness on the sampled rows; returns (value, k_used).
+    """Rank-based trustworthiness over the FULL population; (value, k_used).
 
-    sklearn requires n_neighbors < n_samples / 2 — on small samples k is
-    reduced and the ACTUAL k used is returned, so the stored result never
-    lies about its parameters.
+    Queries are the sampled rows — the same population neighbor_retention
+    uses — but ranks and neighborhoods span ALL N points: original space =
+    cosine over embeddings, projection = euclidean over coordinates. sklearn's
+    own implementation would rank only WITHIN the sample (a different task at
+    sample < N, incomparable with retention), so the formula is implemented
+    here directly, matching sklearn value-for-value when the sample IS the
+    whole population (cross-checked in tests):
+
+        T(k) = 1 − 2 / (S·k·(2N−3k−1)) · Σ_{i∈S} Σ_{j∈U_i} (r_orig(i,j) − k)
+
+    U_i — points in the projection's top-k but not in the original top-k;
+    r_orig — 1-based original-space rank, self excluded, ties by ascending
+    position (the deterministic order used everywhere in this module).
+    k is capped so the normalizer stays positive: k ≤ (2N−2)/3; the ACTUAL
+    k used is returned, so the stored result never lies about its parameters.
     """
-    from sklearn.manifold import trustworthiness as sk_trustworthiness
-
-    n = len(idx)
-    if n < 4:
+    data = np.asarray(vectors, dtype=np.float32)
+    n = int(data.shape[0])
+    s = len(idx)
+    if s < 4:
         raise MetricsInputError("trustworthiness needs at least 4 sampled points")
-    k_used = int(max(1, min(k, (n - 1) // 2)))
-    value = float(
-        sk_trustworthiness(
-            np.asarray(vectors, dtype=np.float32)[idx],
-            np.asarray(coords, dtype=np.float32)[idx],
-            n_neighbors=k_used,
+    k_used = int(max(1, min(k, max(1, min((2 * n - 2) // 3, n - 1)))))
+
+    orig = original_topk(vectors, idx, k_used)  # (S, k) cosine, against all N
+    proj = projection_topk(coords, idx, k_used)  # (S, k) euclidean, against all N
+
+    norms = np.linalg.norm(data, axis=1, keepdims=True)
+    safe = np.where(norms == 0, 1.0, norms)
+    unit = data / safe
+    sims = unit[idx] @ unit.T  # (S, N) cosine; self excluded from ranks below
+    sims[np.arange(s), idx] = -np.inf
+    positions = np.arange(n, dtype=np.int64)
+
+    penalty = 0.0
+    for row in range(s):
+        orig_set = {int(j) for j in orig[row] if j >= 0}
+        false_nn = np.asarray(
+            [int(j) for j in proj[row] if j >= 0 and int(j) not in orig_set], dtype=np.int64
         )
-    )
-    return value, k_used
+        if false_nn.size == 0:
+            continue
+        sims_row = sims[row]
+        target = sims_row[false_nn][:, None]  # (m, 1)
+        # rank = 1 + #{strictly closer} + #{equal score at an earlier position}
+        greater = (sims_row[None, :] > target).sum(axis=1)
+        equal_before = (
+            (sims_row[None, :] == target) & (positions[None, :] < false_nn[:, None])
+        ).sum(axis=1)
+        penalty += float(np.sum(greater + equal_before + 1 - k_used))
+
+    normalizer = s * k_used * (2 * n - 3 * k_used - 1)
+    return 1.0 - 2.0 * penalty / float(normalizer), k_used
 
 
 def relation_pairs_from_rows(
@@ -201,7 +252,10 @@ def relation_metrics(
         per_point.append(len(neighbors & known) / len(neighbors))
     precision: float | None = float(np.mean(per_point)) if per_point else None
 
-    # coverage over known pairs where the SOURCE end was sampled
+    # coverage over ARC DIRECTIONS whose SOURCE end was sampled: top-k
+    # neighborhoods are directional, so a pair with both ends in the sample
+    # contributes two arcs and each is checked on its own (the old code
+    # checked an arbitrary single direction chosen by id sort order)
     sampled = {int(i) for i in idx}
     topk_of_sampled = {
         int(self_i): {int(j) for j in orig_topk[row] if j >= 0} for row, self_i in enumerate(idx)
@@ -209,15 +263,12 @@ def relation_metrics(
     considered = 0
     covered = 0
     for ia, ib in embedded_pairs:
-        hit = False
-        if ia in sampled:
+        for src, dst in ((ia, ib), (ib, ia)):
+            if src not in sampled:
+                continue
             considered += 1
-            hit = ib in topk_of_sampled[ia]
-        elif ib in sampled:
-            considered += 1
-            hit = ia in topk_of_sampled[ib]
-        if hit:
-            covered += 1
+            if dst in topk_of_sampled[src]:
+                covered += 1
     coverage: float | None = float(covered / considered) if considered else None
 
     return {
@@ -225,6 +276,7 @@ def relation_metrics(
         "relation_coverage": coverage,
         "n_sampled_with_relations": len(per_point),
         "n_known_pairs_embedded": len(embedded_pairs),
+        # arcs whose source was sampled (a pair with both ends sampled → 2)
         "n_pairs_considered": considered,
     }
 
@@ -290,6 +342,7 @@ def compute_metric_bundle(
             "value": neighbor_retention(orig, proj),
             "k": k_eff,
             "n_sampled": len(idx),
+            "n_population": n,
             "explanation": METRIC_EXPLANATIONS["neighbor_retention"],
         }
         try:
@@ -298,12 +351,13 @@ def compute_metric_bundle(
                 "value": trust_value,
                 "k": trust_k,
                 "n_sampled": len(idx),
+                "n_population": n,
                 "explanation": METRIC_EXPLANATIONS["trustworthiness"],
             }
             if trust_k != k_eff:
                 warnings.append(
                     f"trustworthiness computed with k={trust_k} "
-                    f"(sklearn requires k < n_sampled/2, sample={len(idx)})"
+                    f"(the normalizer requires k <= (2N-2)/3, N={n})"
                 )
         except (MetricsInputError, ValueError) as exc:
             warnings.append(f"trustworthiness not computed: {exc}")
