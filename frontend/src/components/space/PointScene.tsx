@@ -19,7 +19,13 @@ import {
   kindColor,
 } from "../../space/palette";
 import { toFragmentRef } from "../../space/fragmentRef";
-import { indicesInNdcRect, marqueeExceedsSlop, normalizeRect } from "../../space/selectionMath";
+import { marqueeNdc } from "../../space/marqueeMath";
+import {
+  indicesInNdcRect,
+  marqueeExceedsSlop,
+  normalizeRect,
+  pickClosestToRay,
+} from "../../space/selectionMath";
 import { AXIS_HALF, FLOOR_Y, gridLabels3D } from "../../space/gridMath";
 import type { FitTransform } from "../../space/selectionMath";
 import { useProjectStore } from "../../state/projectStore";
@@ -379,7 +385,10 @@ function SceneContents({
         geometry={geometry}
         onPointerMove={(e) => {
           e.stopPropagation();
-          const slot = e.intersections[0]?.index;
+          // the point closest to the RAY (three sorts hits by distance from
+          // the camera — intersections[0] would be a foreground point that
+          // merely shares the threshold tube, not the one under the cursor)
+          const slot = pickClosestToRay(e.intersections)?.index;
           onHover(slot === undefined ? null : visible[slot], e);
         }}
         onPointerOut={() => onHover(null)}
@@ -388,7 +397,7 @@ function SceneContents({
           // R3F fires click even after an orbit drag: e.delta is the pointer
           // travel in px — a real pick requires a near-stationary click.
           if (e.delta > DRAG_SLOP_PX) return;
-          const slot = e.intersections[0]?.index;
+          const slot = pickClosestToRay(e.intersections)?.index;
           if (slot !== undefined) {
             onPick(visible[slot], e.nativeEvent.ctrlKey || e.nativeEvent.metaKey);
           }
@@ -638,18 +647,10 @@ export function PointScene({
         x1: toNdcX(rect.x1),
         y1: toNdcY(rect.y1),
       });
-      const v = new THREE.Vector3();
-      const ndc = new Float32Array(visible.length * 2);
-      visible.forEach((orig, slot) => {
-        v.set(
-          cloud.display[orig * 3],
-          cloud.display[orig * 3 + 1],
-          cloud.display[orig * 3 + 2],
-        );
-        v.project(camera);
-        ndc[slot * 2] = v.x;
-        ndc[slot * 2 + 1] = v.y;
-      });
+      // points behind the camera must never be selected: the perspective
+      // divide mirrors them into the NDC range (see marqueeMath)
+      camera.updateMatrixWorld();
+      const ndc = marqueeNdc(cloud.display, visible, camera);
       const slots = indicesInNdcRect(ndc, ndcRect);
       const picked = slots.map((slot) => cloud.metas[visible[slot]].fragmentId);
       if (additive) {
@@ -775,7 +776,7 @@ export function PointScene({
       <div className="point-scene__toolbar" role="toolbar" aria-label="Инструменты сцены">
         <span
           className="point-scene__mode-hint"
-          title="Без модификаторов — вращение камеры; удерживайте Shift и тяните, чтобы выделить область; Ctrl добавляет точки/области к выделению; Esc снимает выделение"
+          title="Без модификаторов — вращение камеры; удерживайте Shift и тяните, чтобы выделить область (рамка выбирает точки насквозь, включая закрытые другими); Ctrl добавляет точки/области к выделению; Esc снимает выделение"
         >
           Shift — область · Ctrl — точка
         </span>

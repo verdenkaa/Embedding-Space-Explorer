@@ -117,7 +117,9 @@ export function normalizeRect(rect: Rect): Rect {
 
 /**
  * Indices of points whose NDC position falls inside the (normalized) rect.
- * `ndc` holds interleaved x,y per point in NDC space.
+ * `ndc` holds interleaved x,y per point in NDC space. NaN entries (points
+ * behind the camera, see marqueeMath.ts) fail every comparison and are
+ * therefore excluded — an explicit guard keeps the contract visible.
  */
 export function indicesInNdcRect(ndc: Float32Array, rect: Rect): number[] {
   const r = normalizeRect(rect);
@@ -125,11 +127,45 @@ export function indicesInNdcRect(ndc: Float32Array, rect: Rect): number[] {
   for (let i = 0; i < ndc.length; i += 2) {
     const x = ndc[i];
     const y = ndc[i + 1];
+    if (Number.isNaN(x) || Number.isNaN(y)) continue;
     if (x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) {
       hits.push(i / 2);
     }
   }
   return hits;
+}
+
+/**
+ * Structural match for a three.js raycaster hit on Points. `distanceToRay`
+ * is the PERPENDICULAR distance to the pick ray — it exists at runtime for
+ * Points intersections but is missing from the @types/three Intersection
+ * type, hence the local shape.
+ */
+export interface RayHitLike {
+  index?: number;
+  distanceToRay?: number;
+}
+
+/**
+ * The hit closest to the RAY, not to the camera (audit fix #12).
+ * three.js sorts Points intersections by distance ALONG the ray, so
+ * `intersections[0]` is the foremost point inside the threshold tube — on a
+ * dense cloud a foreground point steals hover/click from the point actually
+ * under the cursor. Hits without `distanceToRay` rank last; when NO hit
+ * carries it, the first hit wins (the previous behavior).
+ */
+export function pickClosestToRay<T extends RayHitLike>(hits: readonly T[]): T | undefined {
+  if (hits.length === 0) return undefined;
+  let best = hits[0];
+  let bestDist = best.distanceToRay ?? Number.POSITIVE_INFINITY;
+  for (let i = 1; i < hits.length; i++) {
+    const d = hits[i].distanceToRay ?? Number.POSITIVE_INFINITY;
+    if (d < bestDist) {
+      bestDist = d;
+      best = hits[i];
+    }
+  }
+  return best;
 }
 
 /* ------------------------------------------------------------------ */

@@ -27,6 +27,7 @@ import {
   marqueeExceedsSlop,
   normalizeRect,
   panBounds,
+  pickClosestToRay,
   zoomBoundsAt,
   zoomLevel,
   type Padding,
@@ -82,6 +83,13 @@ describe("rectangles & NDC selection", () => {
     // points: (0,0) inside, (0.5,0.5) on border, (-0.9,0) outside
     const ndc = new Float32Array([0, 0, 0.5, 0.5, -0.9, 0]);
     expect(indicesInNdcRect(ndc, { x0: -0.5, y0: -0.5, x1: 0.5, y1: 0.5 })).toEqual([0, 1]);
+  });
+
+  it("indicesInNdcRect excludes NaN entries (points behind the camera)", () => {
+    const nan = Number.NaN;
+    // point 0: NaN although a mirrored projection would sit at (0,0)
+    const ndc = new Float32Array([nan, nan, 0.1, 0.1]);
+    expect(indicesInNdcRect(ndc, { x0: -0.5, y0: -0.5, x1: 0.5, y1: 0.5 })).toEqual([1]);
   });
 
   it("indicesInDataRect works in data space (2D marquee)", () => {
@@ -374,5 +382,32 @@ describe("cluster palette", () => {
       { kind: "кластер 0", color: "#123456", count: 2 },
       { kind: "шум", color: "#8fa0ae", count: 1 },
     ]);
+  });
+});
+
+describe("pickClosestToRay (audit #12)", () => {
+  it("picks the hit closest to the RAY, not to the camera", () => {
+    // three.js sorts by distance along the ray: the foreground point comes
+    // first even though the cursor is almost exactly over the far one
+    const hits = [
+      { index: 7, distanceToRay: 0.043, distance: 1.2 },
+      { index: 3, distanceToRay: 0.002, distance: 4.8 },
+    ];
+    expect(pickClosestToRay(hits)?.index).toBe(3);
+  });
+
+  it("hits without distanceToRay rank last", () => {
+    const hits = [{ index: 1 }, { index: 2, distanceToRay: 0.9 }];
+    expect(pickClosestToRay(hits)?.index).toBe(2);
+    expect(pickClosestToRay([{ index: 1 }])?.index).toBe(1);
+  });
+
+  it("returns undefined for no hits; first wins on exact ties", () => {
+    expect(pickClosestToRay([])).toBeUndefined();
+    const hits = [
+      { index: 5, distanceToRay: 0.01 },
+      { index: 6, distanceToRay: 0.01 },
+    ];
+    expect(pickClosestToRay(hits)?.index).toBe(5);
   });
 });
