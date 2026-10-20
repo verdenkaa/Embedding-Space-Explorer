@@ -216,6 +216,8 @@ def make_embed_runner(model_id: str, mode: str, batch_size: int) -> JobRunner:
             # Keep partial results on cancellation/failure (checkpointing).
             _finalize_run(project, fingerprint, cache)
 
+        ctx.set_result({"embedding_run_id": fingerprint})
+
         if pruned:
             ctx.warn(f"pruned {pruned} stale/deleted vectors before computing")
         n_trunc = cache.truncated_count

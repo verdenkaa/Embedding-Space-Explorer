@@ -331,8 +331,16 @@ def test_projection_flow_pca(
     assert info["state"] == "done", info
     assert "PCA-3D" in str(info["message"]) and "PCA-2D" in str(info["message"])
 
+    # The job names the runs it produced BY ID (clients must never guess
+    # from the inventory order — same-second builds tie-break arbitrarily).
+    result = info["result"]
+    assert isinstance(result, dict)
+    built_ids = result["projection_run_ids"]
+    assert isinstance(built_ids, list) and len(built_ids) == 2
+
     inventory = client.get(f"/api/projects/{pid}/projections").json()
     assert len(inventory) == 2
+    assert {r["id"] for r in inventory} == set(built_ids)
     by_nc = {r["n_components"]: r for r in inventory}
     assert set(by_nc) == {2, 3}
     for run in inventory:

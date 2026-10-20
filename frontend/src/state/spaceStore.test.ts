@@ -428,6 +428,54 @@ describe("applyBuiltProjections", () => {
     });
     expect(useSpaceStore.getState().viewMode).toBe("4d");
   });
+
+  it("single: the job's own run ids win over the inventory order (audit #14)", async () => {
+    // Two same-shape siblings (e.g. PCA-3D whiten off/on built within one
+    // second): the inventory order between them is an arbitrary hash
+    // tie-break — the FIRST match is the wrong run; the ids the job
+    // reported select the right one exactly.
+    const wrong = run({ id: "a-first-by-sort", params: { whiten: true } });
+    const built = run({ id: "z-built-by-job", params: { whiten: false } });
+    const { fetchMock } = mockFetch({
+      "/api/projects/p1/projections/z-built-by-job/points": pointsDTO({
+        projection_id: "z-built-by-job",
+      }),
+      "/api/projects/p1/projections": [wrong, built],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    useSpaceStore
+      .getState()
+      .applyBuiltProjections(
+        [wrong, built],
+        { mode: "single", components: [3], embeddingRunId: "emb1" },
+        ["z-built-by-job"],
+      );
+
+    await vi.waitFor(() => {
+      expect(useSpaceStore.getState().cloud3d?.projection.id).toBe("z-built-by-job");
+    });
+  });
+
+  it("single: without job ids falls back to the first matching run", async () => {
+    const first = run({ id: "p-first" });
+    const second = run({ id: "p-second" });
+    const { fetchMock } = mockFetch({
+      "/api/projects/p1/projections/p-first/points": pointsDTO({ projection_id: "p-first" }),
+      "/api/projects/p1/projections": [first, second],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    useSpaceStore.getState().applyBuiltProjections([first, second], {
+      mode: "single",
+      components: [3],
+      embeddingRunId: "emb1",
+    });
+
+    await vi.waitFor(() => {
+      expect(useSpaceStore.getState().cloud3d?.projection.id).toBe("p-first");
+    });
+  });
 });
 
 describe("slice4d state", () => {

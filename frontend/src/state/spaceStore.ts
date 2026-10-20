@@ -185,7 +185,11 @@ interface SpaceState {
   ) => void;
   setRelationLines: (enabled: boolean) => void;
   /** Point the views at what a finished build produced (and show it). */
-  applyBuiltProjections: (projections: ProjectionRunDTO[], pending: PendingBuild) => void;
+  applyBuiltProjections: (
+    projections: ProjectionRunDTO[],
+    pending: PendingBuild,
+    builtRunIds?: string[],
+  ) => void;
   reset: () => void;
 }
 
@@ -424,7 +428,7 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
     }),
   setRelationLines: (enabled) => set({ relationLines: enabled }),
 
-  applyBuiltProjections: (projections, pending) => {
+  applyBuiltProjections: (projections, pending, builtRunIds) => {
     if (pending.mode === "multi2d") {
       const ids: string[] = [];
       for (const axisPair of pending.sets) {
@@ -451,17 +455,19 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
       return;
     }
 
-    // single build: show the freshest run per built component count
-    // (inventory is sorted by updated_at desc → first match is the new one).
-    // The run metadata is already known here — only the coordinates are
-    // fetched (no redundant inventory round-trip).
+    // Single build: show the runs THE JOB ITSELF produced, referenced by id
+    // (jobs.result_json). Guessing "the first matching inventory run" is
+    // unreliable: the inventory is sorted by (updated_at, id) with SECOND
+    // precision — two builds within one second (e.g. whiten on/off) are
+    // ordered by an arbitrary hash tie-break. The find-by-shape below is
+    // kept only as a fallback for jobs finished before the backend started
+    // returning ids. The run metadata is already known here — only the
+    // coordinates are fetched (no redundant inventory round-trip).
     const project = useProjectStore.getState().current;
     const built = pending.components;
-    for (const n of built) {
-      const run = projections.find(
-        (p) => p.n_components === n && p.cache_ok && p.embedding_run_id === pending.embeddingRunId,
-      );
-      if (!run || !project) continue;
+    const showRun = (run: ProjectionRunDTO): void => {
+      if (!project) return;
+      const n = run.n_components;
       const kind: CloudKind = n === 3 ? "3d" : n === 2 ? "2d" : "4d";
       void (async () => {
         set({ [KIND_STATE[kind].loading]: true, error: null } as Partial<SpaceState>);
@@ -479,6 +485,21 @@ export const useSpaceStore = create<SpaceState>()((set, get) => ({
           set({ [KIND_STATE[kind].loading]: false, error: toError(err) } as Partial<SpaceState>);
         }
       })();
+    };
+    const byId =
+      builtRunIds
+        ?.map((rid) => projections.find((p) => p.id === rid && p.cache_ok))
+        .filter((p): p is ProjectionRunDTO => p !== undefined) ?? [];
+    if (byId.length > 0) {
+      for (const run of byId) showRun(run);
+    } else {
+      for (const n of built) {
+        const run = projections.find(
+          (p) =>
+            p.n_components === n && p.cache_ok && p.embedding_run_id === pending.embeddingRunId,
+        );
+        if (run) showRun(run);
+      }
     }
     // make sure the result is actually on screen
     const mode = get().viewMode;

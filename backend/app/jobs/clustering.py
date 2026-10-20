@@ -119,6 +119,7 @@ def make_clustering_runner(
         )
         rel_path = f"cache/clustering/{fingerprint}.npz"
         _save_labels(project.project_dir / rel_path, ids, labels)
+        ctx.set_result({"clustering_run_id": fingerprint})
 
         assigned = labels[labels >= 0]
         n_clusters = int(assigned.max()) + 1 if assigned.size else 0

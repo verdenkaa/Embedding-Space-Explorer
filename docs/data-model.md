@@ -162,8 +162,14 @@ fragment_id = sha1(rel_path \n kind \n symbol_path \n ordinal \n content_hash)[:
 ### jobs
 Фоновые задачи: `id`, `kind` (index | …), `state` (queued/running/done/failed/
 cancelled), `progress_done/total`, `message`, `error`, `warnings_json`
-(≤500 шт.), `params_json`, таймстемпы. Ошибки в логах и в `error` не содержат
-содержимого исходников — только класс и короткое сообщение.
+(≤500 шт.), `params_json`, `result_json`, таймстемпы. Ошибки в логах и в
+`error` не содержат содержимого исходников — только класс и короткое
+сообщение. `result_json` (v7) — СТРУКТУРИРОВАННЫЙ результат задачи:
+запуски, которые задача создала (`projection_run_ids`, `embedding_run_id`,
+`clustering_run_id`, `metric_run_id`) — клиент ссылается на артефакты по id
+из результата и никогда не угадывает их по порядку инвентаря (сортировка
+`(updated_at, id)` с точностью до секунды для двух сборок за одну секунду
+даёт произвольный порядок).
 
 ### meta
 `schema_version` (внутренняя версия БД; сейчас 7). При открытии БД: версия выше

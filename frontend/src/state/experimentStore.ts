@@ -407,8 +407,16 @@ export const useExperimentStore = create<ExperimentState>()((set, get) => ({
         const pending = get().pendingBuild;
         if (job.state === "done") {
           if (job.kind === "projection" && pending && projections) {
-            // show what the build produced (single/multi/4D) right away
-            useSpaceStore.getState().applyBuiltProjections(projections, pending);
+            // show what the build produced (single/multi/4D) right away —
+            // referencing the runs by the ids the job reported (never by
+            // guessing from the inventory order)
+            const rawIds = (job.result as { projection_run_ids?: unknown } | null)?.[
+              "projection_run_ids"
+            ];
+            const builtRunIds = Array.isArray(rawIds)
+              ? rawIds.filter((x): x is string => typeof x === "string")
+              : undefined;
+            useSpaceStore.getState().applyBuiltProjections(projections, pending, builtRunIds);
           } else if (job.kind === "projection" || job.kind === "embed") {
             // no pending descriptor (job from before a reload): refresh what
             // is on screen so staleness badges/points stay honest

@@ -90,6 +90,7 @@ def make_projection_runner(
         vectors = vectors_cache.vectors
         started = time.monotonic()
         made: list[str] = []
+        made_ids: list[str] = []
         for stage, (n_components, spec_params) in enumerate(specs):
             ctx.check_cancelled()
             normalized = method.validate_params(spec_params)
@@ -136,8 +137,13 @@ def make_projection_runner(
                 signature=signature,
             )
             made.append(label)
+            made_ids.append(fingerprint)
             ctx.progress(stage + 1, len(specs), f"{label} ready", force=True)
 
+        # The client must reference the runs this job produced BY ID — never
+        # guess them from the inventory order (same-second builds are ordered
+        # by an arbitrary hash tie-break).
+        ctx.set_result({"projection_run_ids": made_ids})
         ctx.check_cancelled()
         elapsed = round(time.monotonic() - started, 1)
         return (

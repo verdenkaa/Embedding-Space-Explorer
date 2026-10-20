@@ -401,7 +401,10 @@ def test_metrics_api_flow(
             "seed": 7,
         },
     )
-    assert "metrics over" in str(info.get("result") or info.get("message") or "")
+    assert "metrics over" in str(info.get("message") or "")
+    # the job also names the run it produced (structured result, v7)
+    result = info.get("result")
+    assert isinstance(result, dict) and isinstance(result.get("metric_run_id"), str)
 
     runs = client.get(f"/api/projects/{pid}/metrics").json()
     assert len(runs) == 1

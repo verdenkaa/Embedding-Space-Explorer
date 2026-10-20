@@ -206,6 +206,7 @@ def make_metrics_runner(
             signature=signature,
             projection_signature=proj_signature,
         )
+        ctx.set_result({"metric_run_id": fingerprint})
 
         ctx.check_cancelled()
         ctx.progress(3, 3, "metrics ready", force=True)
