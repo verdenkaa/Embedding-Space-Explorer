@@ -266,6 +266,14 @@ export function ExperimentsPanel() {
                           (пропущено {cov.missing}, устарело {cov.stale})
                         </span>
                       )}
+                      {(run.truncated_count ?? 0) > 0 && (
+                        <span
+                          className="badge badge--warn"
+                          title={`${run.truncated_count} векторов посчитаны из текста, УСЕЧЁННОГО токенайзером до лимита модели (${String(run.params["max_seq_length"] ?? "?")} токенов): они описывают только начало фрагментов`}
+                        >
+                          усечено {run.truncated_count}
+                        </span>
+                      )}
                     </td>
                     <td className="mono">{run.updated_at}</td>
                     <td>

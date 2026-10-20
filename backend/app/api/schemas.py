@@ -312,6 +312,8 @@ class EmbeddingRunDTO(BaseModel):
     template_preview: str
     params: dict[str, int | bool | str]
     count: int
+    #: vectors computed from text the tokenizer TRUNCATED to the model limit
+    truncated_count: int = 0
     coverage: CoverageDTO
     created_at: str
     updated_at: str

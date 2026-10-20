@@ -87,12 +87,24 @@ class FakeProvider(EmbeddingProvider):
         self._downloaded = downloaded
         self._slow = slow
         self.encode_calls = 0
+        #: token limit for truncation-statistics tests; None = provider does
+        #: not report limits (like a runtime without tokenizer introspection)
+        self.max_seq_tokens: int | None = None
 
     def info(self) -> ModelInfo:
         return self._info
 
     def is_downloaded(self) -> bool:
         return self._downloaded
+
+    def max_seq_length(self) -> int | None:
+        return self.max_seq_tokens
+
+    def count_tokens(self, texts: Sequence[str]) -> list[int] | None:
+        if self.max_seq_tokens is None:
+            return None
+        # word count as a deterministic stand-in for a real tokenizer
+        return [len(t.split()) for t in texts]
 
     def download(self, progress_message: Callable[[str], None] | None = None) -> None:
         if progress_message:

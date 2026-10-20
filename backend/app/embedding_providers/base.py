@@ -74,6 +74,24 @@ class EmbeddingProvider:
         """
         raise NotImplementedError
 
+    def max_seq_length(self) -> int | None:
+        """Token limit the model applies to ONE input text (None = unknown).
+
+        Runtimes like sentence-transformers SILENTLY truncate longer inputs,
+        so the vector of an over-long fragment describes only its beginning.
+        Callers must know the limit to measure and report truncation instead
+        of pretending the whole fragment was embedded.
+        """
+        return None
+
+    def count_tokens(self, texts: Sequence[str]) -> list[int] | None:
+        """Token counts per text INCLUDING special tokens.
+
+        None when the provider cannot count (no tokenizer introspection);
+        implementations process in batches and never keep padded matrices.
+        """
+        return None
+
 
 def params_fingerprint(model_id: str, mode: str, template: str, params: dict[str, object]) -> str:
     """Stable fingerprint of everything that influences resulting vectors."""

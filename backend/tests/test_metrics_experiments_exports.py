@@ -666,7 +666,7 @@ def test_export_metric_run_json(
 def test_db_migration_v5_to_v6_keeps_existing_data(settings: Settings) -> None:
     from datetime import UTC, datetime
 
-    from app.storage.db import open_database
+    from app.storage.db import CURRENT_DB_SCHEMA, open_database
     from app.storage.models import MetricRunRow, RelationRow
     from sqlalchemy import text
 
@@ -705,10 +705,12 @@ def test_db_migration_v5_to_v6_keeps_existing_data(settings: Settings) -> None:
         version = session.execute(
             text("SELECT value FROM meta WHERE key='schema_version'")
         ).scalar_one()
-        assert str(version) == "6"
-        # The new tables exist and are usable.
+        assert int(version) == CURRENT_DB_SCHEMA
+        # The new tables exist and are usable (recreated WITH current columns).
         assert session.execute(text("SELECT COUNT(*) FROM metric_runs")).scalar_one() == 0
         assert session.execute(text("SELECT COUNT(*) FROM experiments")).scalar_one() == 0
         assert session.get(MetricRunRow, "nothing") is None
+        cols = {row[1] for row in session.execute(text("PRAGMA table_info(metric_runs)"))}
+        assert "projection_signature" in cols
     engine.dispose()
     store.close_all()

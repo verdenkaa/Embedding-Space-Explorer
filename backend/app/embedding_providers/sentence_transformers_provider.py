@@ -134,6 +134,37 @@ class SentenceTransformerProvider(EmbeddingProvider):
             cancel_check()
         return result
 
+    # -- token statistics (truncation honesty) --------------------------------
+
+    def max_seq_length(self) -> int | None:
+        try:
+            model = self._load()
+        except (ProviderLoadError, ModelNotDownloadedError, RuntimeError, OSError):
+            return None  # not loadable right now — "unknown", never a guess
+        msl = getattr(model, "max_seq_length", None)
+        return int(msl) if isinstance(msl, int) else None
+
+    def count_tokens(self, texts: Sequence[str]) -> list[int] | None:
+        """Exact token counts (special tokens included), batched.
+
+        `truncation=False` is essential: we measure what the model WOULD see,
+        and compare against max_seq_length ourselves.
+        """
+        try:
+            model = self._load()
+            tokenizer = model.tokenizer
+        except (ProviderLoadError, ModelNotDownloadedError, RuntimeError, OSError, AttributeError):
+            return None
+        counts: list[int] = []
+        try:
+            for start in range(0, len(texts), 256):
+                batch = list(texts[start : start + 256])
+                encoded = tokenizer(batch, add_special_tokens=True, truncation=False)
+                counts.extend(len(ids) for ids in encoded["input_ids"])
+        except Exception:  # pragma: no cover - tokenizer quirks: unknown, not a guess
+            return None
+        return counts
+
 
 def set_hf_offline_flags(offline: bool) -> None:
     """Force huggingface_hub offline mode after the first download."""

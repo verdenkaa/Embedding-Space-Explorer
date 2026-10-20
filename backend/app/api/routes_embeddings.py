@@ -184,6 +184,7 @@ def list_embedding_runs(
                 template_preview=render_template_preview(run.mode),
                 params=params,
                 count=run.count,
+                truncated_count=run.truncated_count,
                 coverage=CoverageDTO(
                     fragments_total=total,
                     embedded=embedded,

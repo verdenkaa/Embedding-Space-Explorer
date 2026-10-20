@@ -482,3 +482,137 @@ def test_real_model_encode(tmp_path: Path) -> None:
     # Identical texts -> identical vectors; cosine in [-1, 1].
     np.testing.assert_allclose(vectors[0], vectors[2], atol=1e-6)
     assert abs(float(vectors[0] @ vectors[1])) <= 1.0 + 1e-6
+
+
+# ---------------------------------------------------------------------------
+# Truncation honesty (audit fix #1) and stale-file guard (audit fix #2)
+# ---------------------------------------------------------------------------
+
+
+def _compute(client: TestClient, pid: str, mode: str = MODE_RAW) -> dict[str, object]:
+    job = client.post(
+        f"/api/projects/{pid}/embeddings/compute",
+        json={"model_id": FAKE_MODEL_ID, "mode": mode},
+    ).json()
+    return wait_for_job(client, pid, job["id"], timeout=60)
+
+
+def test_run_identity_includes_token_limit_and_runtime() -> None:
+    """max_seq_length / runtime version influence vectors → part of the key."""
+    from app.jobs.embedding import run_params
+
+    base = params_fingerprint("m", MODE_RAW, CONTEXT_TEMPLATE, run_params(128, "6.1.0"))
+    assert base == params_fingerprint("m", MODE_RAW, CONTEXT_TEMPLATE, run_params(128, "6.1.0"))
+    assert base != params_fingerprint("m", MODE_RAW, CONTEXT_TEMPLATE, run_params(256, "6.1.0"))
+    assert base != params_fingerprint("m", MODE_RAW, CONTEXT_TEMPLATE, run_params(128, "6.2.0"))
+    assert base != params_fingerprint("m", MODE_RAW, CONTEXT_TEMPLATE, run_params(None, "6.1.0"))
+
+
+def test_truncation_is_measured_and_reported(
+    client: TestClient, sample_project: Path, fake_provider_factory: dict[str, FakeProvider]
+) -> None:
+    provider = FakeProvider(ModelInfo(FAKE_MODEL_ID, "all-MiniLM-L6-v2", FAKE_DIM, 1, "fake"))
+    provider.max_seq_tokens = 3  # word-count "tokens": fixture fragments are longer
+    fake_provider_factory[FAKE_MODEL_ID] = provider
+
+    pid = create_indexed_project(client, sample_project)
+    info = _compute(client, pid)
+    assert info["state"] == "done", info
+    raw_warnings = info["warnings"]
+    assert isinstance(raw_warnings, list)
+    warnings = [str(w) for w in raw_warnings]
+    assert any("TRUNCATED" in w for w in warnings), warnings
+
+    runs = client.get(f"/api/projects/{pid}/embeddings").json()
+    assert len(runs) == 1
+    assert runs[0]["truncated_count"] > 0
+    assert runs[0]["params"]["max_seq_length"] == 3
+
+    # A different token limit is a DIFFERENT run (never mixed in one cache).
+    provider.max_seq_tokens = 1000
+    info = _compute(client, pid)
+    assert info["state"] == "done", info
+    runs = client.get(f"/api/projects/{pid}/embeddings").json()
+    assert len(runs) == 2
+    assert runs[0]["id"] != runs[1]["id"]
+    fresh = next(r for r in runs if r["params"]["max_seq_length"] == 1000)
+    assert fresh["truncated_count"] == 0
+
+
+def test_no_token_stats_means_unknown_not_zero(
+    client: TestClient, sample_project: Path, fake_provider_factory: dict[str, FakeProvider]
+) -> None:
+    """A provider without tokenizer introspection reports no stats (honest 0)."""
+    pid = create_indexed_project(client, sample_project)
+    info = _compute(client, pid)
+    assert info["state"] == "done", info
+    runs = client.get(f"/api/projects/{pid}/embeddings").json()
+    assert runs[0]["truncated_count"] == 0
+    assert runs[0]["params"]["max_seq_length"] == "unknown"
+
+
+def test_embed_skips_files_changed_since_indexing(
+    client: TestClient, sample_project: Path, fake_provider_factory: dict[str, FakeProvider]
+) -> None:
+    pid = create_indexed_project(client, sample_project)
+    info = _compute(client, pid)
+    assert info["state"] == "done" and "embedded 21 vectors" in str(info["message"])
+
+    # Modify the file WITHOUT reindexing: line numbers in the DB now point at
+    # foreign text. The guard must skip instead of embedding the new text
+    # under the old fragment identity.
+    target = sample_project / "src" / "calculator.py"
+    lines = target.read_text(encoding="utf-8").splitlines(keepends=True)
+    lines.insert(1, "# injected line shifts every fragment below\n")
+    target.write_text("".join(lines), encoding="utf-8")
+
+    info = _compute(client, pid)
+    assert info["state"] == "done", info
+    raw_warnings = info["warnings"]
+    assert isinstance(raw_warnings, list)
+    warnings = [str(w) for w in raw_warnings]
+    assert any("changed since indexing" in w for w in warnings), warnings
+    assert "embedded 0 vectors" in str(info["message"])
+
+    # The cache still holds the ORIGINAL vectors (consistent with the DB).
+    runs = client.get(f"/api/projects/{pid}/embeddings").json()
+    assert runs[0]["coverage"]["embedded"] == 21
+    assert runs[0]["coverage"]["stale"] == 0
+
+    # After reindexing the line numbers match again. The comment changed no
+    # fragment CONTENT (ids embed content_hash, not lines) — so the original
+    # vectors are legitimately reused, with no guard warnings.
+    job = client.post(f"/api/projects/{pid}/index").json()
+    info = wait_for_job(client, pid, job["id"])
+    assert info["state"] == "done"
+    info = _compute(client, pid)
+    assert info["state"] == "done", info
+    raw_warnings = info["warnings"]
+    assert isinstance(raw_warnings, list)
+    assert not any("changed since indexing" in str(w) for w in raw_warnings)
+    assert "21 reused" in str(info["message"])
+
+    # Phase B: change fragment CONTENT itself — guard fires again pre-reindex,
+    # and after reindex the changed fragment is embedded under its NEW id.
+    text_now = target.read_text(encoding="utf-8")
+    target.write_text(
+        text_now.replace("return round(a + b,", "return round(a + b + 0,"), encoding="utf-8"
+    )
+    info = _compute(client, pid)
+    assert info["state"] == "done", info
+    raw_warnings = info["warnings"]
+    assert isinstance(raw_warnings, list)
+    assert any("changed since indexing" in str(w) for w in raw_warnings)
+
+    job = client.post(f"/api/projects/{pid}/index").json()
+    info = wait_for_job(client, pid, job["id"])
+    assert info["state"] == "done"
+    info = _compute(client, pid)
+    assert info["state"] == "done", info
+    raw_warnings = info["warnings"]
+    assert isinstance(raw_warnings, list)
+    assert not any("changed since indexing" in str(w) for w in raw_warnings)
+    assert "embedded 0 vectors" not in str(info["message"])  # the new id is embedded
+    runs = client.get(f"/api/projects/{pid}/embeddings").json()
+    assert runs[0]["coverage"]["embedded"] == runs[0]["coverage"]["fragments_total"]
+    assert runs[0]["coverage"]["stale"] == 0

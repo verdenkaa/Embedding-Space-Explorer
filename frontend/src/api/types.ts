@@ -102,6 +102,8 @@ export interface JobInfo {
   message: string | null;
   error: string | null;
   warnings: string[];
+  /** structured result of a finished job (e.g. { projection_run_ids: [...] }) */
+  result?: Record<string, unknown> | null;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
@@ -257,6 +259,8 @@ export interface EmbeddingRunDTO {
   template_preview: string;
   params: Record<string, string | number | boolean>;
   count: number;
+  /** vectors computed from text the tokenizer TRUNCATED to the model limit */
+  truncated_count?: number;
   coverage: CoverageDTO;
   created_at: string;
   updated_at: string;

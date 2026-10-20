@@ -164,6 +164,31 @@ describe("ExperimentsPanel", () => {
     expect(screen.getByRole("button", { name: "Пересчитать" })).toBeTruthy();
   });
 
+  it("runs table flags truncated vectors", async () => {
+    const truncatedRun: EmbeddingRunDTO = {
+      ...RUN,
+      truncated_count: 7,
+      params: { ...RUN.params, max_seq_length: 128 },
+    };
+    const { fetchMock } = mockFetch(routes([truncatedRun]));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ExperimentsPanel />);
+
+    const badge = await screen.findByText("усечено 7");
+    expect(badge.className).toContain("badge--warn");
+    expect(badge.getAttribute("title")).toContain("УСЕЧЁННОГО");
+    expect(badge.getAttribute("title")).toContain("128");
+  });
+
+  it("runs table shows no truncation badge when count is zero", async () => {
+    const { fetchMock } = mockFetch(routes([{ ...RUN, truncated_count: 0 }]));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ExperimentsPanel />);
+
+    expect(await screen.findByText("20/21")).toBeTruthy();
+    expect(screen.queryByText(/усечено/)).toBeNull();
+  });
+
   it("asks to open a project when none is active", () => {
     useProjectStore.setState({ current: null });
     render(<ExperimentsPanel />);
