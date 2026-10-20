@@ -209,6 +209,45 @@ export function computeBounds2D(coords: Float32Array, count: number): PlotBounds
   return { minX: minX - padX, maxX: maxX + padX, minY: minY - padY, maxY: maxY + padY };
 }
 
+/**
+ * Expand `bounds` so ONE data unit has the same pixel length on both axes
+ * ("equal aspect"): the axis with the coarser density (data per pixel) keeps
+ * its span, the other is symmetrically expanded around its center.
+ *
+ * Independent per-axis stretching (the plain computeBounds2D fit) inflates
+ * the low-variance axis — PC2 of a PCA or an unscaled raw axis — so distances
+ * and cluster SHAPES on the 2D map disagree with the 3D scene, which uses a
+ * uniform fit (audit #13). Equal aspect is the default for pca/raw_axes;
+ * UMAP axes are arbitrary up to distortion anyway.
+ */
+export function equalizeAspect(bounds: PlotBounds, plotW: number, plotH: number): PlotBounds {
+  const w = Math.max(1, plotW);
+  const h = Math.max(1, plotH);
+  const spanX = bounds.maxX - bounds.minX;
+  const spanY = bounds.maxY - bounds.minY;
+  // data units per pixel; the coarser axis dictates the common scale
+  const s = Math.max(spanX / w, spanY / h);
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cy = (bounds.minY + bounds.maxY) / 2;
+  const halfX = (s * w) / 2;
+  const halfY = (s * h) / 2;
+  return { minX: cx - halfX, maxX: cx + halfX, minY: cy - halfY, maxY: cy + halfY };
+}
+
+/**
+ * Ratio of the axis scales (X units/px ÷ Y units/px) of the CURRENT bounds:
+ * 1 = equal aspect; >1 = the X axis is compressed relative to Y. Shown in
+ * the plot header so an unequal-aspect view is never silent.
+ */
+export function aspectRatio(bounds: PlotBounds, plotW: number, plotH: number): number {
+  const w = Math.max(1, plotW);
+  const h = Math.max(1, plotH);
+  const spanX = bounds.maxX - bounds.minX;
+  const spanY = bounds.maxY - bounds.minY;
+  if (spanX <= 0 || spanY <= 0) return 1;
+  return (spanX / w) / (spanY / h);
+}
+
 export interface PlotGeometry {
   width: number;
   height: number;

@@ -4,9 +4,11 @@ import { COLORS, clusterColor, kindColor, pathColor } from "../../space/palette"
 import { cloudSliceMask, type CloudSliceMask } from "../../space/sliceMath";
 import {
   DEFAULT_PADDING,
+  aspectRatio,
   canvasToData,
   computeBounds2D,
   dataToCanvas,
+  equalizeAspect,
   formatTick,
   hitTest2D,
   indicesInDataRect,
@@ -166,9 +168,20 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
   const dragRef = useRef<{ x: number; y: number; mode: "pan" | "marquee"; moved: boolean } | null>(
     null,
   );
+  /** null = follow the method default (1:1 for pca/raw_axes, free for umap). */
+  const [aspectLocked, setAspectLocked] = useState<boolean | null>(null);
 
   const count = cloud.points.count;
-  const fitBounds = useMemo(() => computeBounds2D(cloud.coords, count), [cloud, count]);
+  const equalOn = aspectLocked ?? cloud.projection.method !== "umap";
+  const plotW = Math.max(1, size.w - PADDING.left - PADDING.right);
+  const plotH = Math.max(1, size.h - PADDING.top - PADDING.bottom);
+  // Auto-fit with EQUAL AXIS SCALE by default (audit #13): independent
+  // stretching inflates the low-variance axis (PC2 / raw dims) and the 2D
+  // shapes disagree with the uniform-scale 3D scene.
+  const fitBounds = useMemo(() => {
+    const raw = computeBounds2D(cloud.coords, count);
+    return equalOn ? equalizeAspect(raw, plotW, plotH) : raw;
+  }, [cloud, count, equalOn, plotW, plotH]);
   const fitRef = useRef(fitBounds);
   useEffect(() => {
     fitRef.current = fitBounds;
@@ -177,6 +190,11 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
   useEffect(() => {
     setView(null);
   }, [cloud]);
+  // Switching the aspect mode invalidates the zoom window (its spans were
+  // equalized for the old mode) — reset to the new auto-fit.
+  useEffect(() => {
+    setView(null);
+  }, [equalOn]);
 
   const bounds = view ?? fitBounds;
   const geom = useMemo<PlotGeometry>(
@@ -618,6 +636,27 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
           <span className="badge badge--warn">−{cloud.points.dropped_orphans} удалённых</span>
         )}
         <span className="plot2d__spacer" />
+        <button
+          type="button"
+          className="btn btn--small"
+          aria-pressed={equalOn}
+          onClick={() => setAspectLocked(!equalOn)}
+          title={
+            equalOn
+              ? "Пропорции осей 1:1 — единица по X равна единице по Y (как в 3D). Нажмите, чтобы растягивать оси независимо."
+              : "Оси растянуты НЕЗАВИСИМО — расстояния и форма кластеров искажены. Нажмите, чтобы вернуть пропорции 1:1."
+          }
+        >
+          1:1
+        </button>
+        {!equalOn && (
+          <span
+            className="badge badge--warn"
+            title="Отношение масштабов осей (X ед./пикс ÷ Y ед./пикс); 1.00 = равные пропорции"
+          >
+            оси ×{aspectRatio(bounds, plotW, plotH).toFixed(2)}
+          </span>
+        )}
         <span className="mono plot2d__zoom" title="Масштаб относительно автоподгонки">
           {Math.round(zoom * 100)}%
         </span>

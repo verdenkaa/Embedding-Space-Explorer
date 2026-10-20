@@ -14,6 +14,7 @@ import {
   DEFAULT_PADDING,
   computeBounds2D,
   dataToCanvas,
+  equalizeAspect,
   type PlotGeometry,
 } from "../../space/selectionMath";
 import { useProjectStore } from "../../state/projectStore";
@@ -91,10 +92,14 @@ function pointsDTO(overrides: Partial<ProjectionPoints> = {}): ProjectionPoints 
   };
 }
 
-/** Pixel position of point i exactly as the component computes it. */
+/** Pixel position of point i exactly as the component computes it.
+ *  The component fits pca/raw_axes with EQUAL axis scale by default
+ *  (audit #13) — the test mirrors that through the same pure helper. */
 function pixelOf(i: number, dto: ProjectionPoints): { cx: number; cy: number } {
   const coords = new Float32Array(dto.points.flatMap((p) => p.coords));
-  const bounds = computeBounds2D(coords, dto.points.length);
+  const plotW = WIDTH - DEFAULT_PADDING.left - DEFAULT_PADDING.right;
+  const plotH = HEIGHT - DEFAULT_PADDING.top - DEFAULT_PADDING.bottom;
+  const bounds = equalizeAspect(computeBounds2D(coords, dto.points.length), plotW, plotH);
   const geom: PlotGeometry = { width: WIDTH, height: HEIGHT, padding: DEFAULT_PADDING, bounds };
   return dataToCanvas(dto.points[i].coords[0], dto.points[i].coords[1], geom);
 }
@@ -421,5 +426,35 @@ describe("Projection2D camera and multi-plot", () => {
     expect(screen.getByText(/оси: dim 0 \/ dim 2/)).toBeTruthy();
     // each plot has its own zoom reset
     expect(screen.getAllByRole("button", { name: "⌂" })).toHaveLength(2);
+  });
+
+  it("pca defaults to equal axis scale (1:1), no ratio badge", () => {
+    seedClouds();
+    render(<Projection2D />);
+    const toggle = screen.getByRole("button", { name: "1:1" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText(/оси ×/)).toBeNull();
+  });
+
+  it("umap defaults to independent axes and SHOWS the scale-ratio badge", () => {
+    const dto = pointsDTO({ method: "umap", method_display_name: "UMAP" });
+    seedClouds(dto, { ...RUN, method: "umap", method_display_name: "UMAP" });
+    render(<Projection2D />);
+    const toggle = screen.getByRole("button", { name: "1:1" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    // the unequal-aspect view is never silent: the ratio badge is visible
+    expect(screen.getByText(/оси ×/)).toBeTruthy();
+  });
+
+  it("the 1:1 toggle flips the mode and stays honest about distortion", () => {
+    seedClouds();
+    render(<Projection2D />);
+    const toggle = screen.getByRole("button", { name: "1:1" });
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByText(/оси ×/)).toBeTruthy();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText(/оси ×/)).toBeNull();
   });
 });

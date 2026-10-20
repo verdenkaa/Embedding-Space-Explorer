@@ -12,12 +12,14 @@ import {
   MIN_ZOOM,
   applyFit,
   applyFitStrided,
+  aspectRatio,
   axisExtent,
   canvasToData,
   computeBounds2D,
   computeFit,
   computeFitStrided,
   dataToCanvas,
+  equalizeAspect,
   formatTick,
   hitTest2D,
   indicesInDataRect,
@@ -409,5 +411,35 @@ describe("pickClosestToRay (audit #12)", () => {
       { index: 6, distanceToRay: 0.01 },
     ];
     expect(pickClosestToRay(hits)?.index).toBe(5);
+  });
+});
+
+describe("equalizeAspect / aspectRatio (audit #13)", () => {
+  it("expands the finer axis to the common scale, keeping centers", () => {
+    const bounds = { minX: 0, maxX: 10, minY: 0, maxY: 2 };
+    const eq = equalizeAspect(bounds, 100, 100);
+    // X is coarser (0.1 data/px vs 0.02) → Y expands to span 10 around 1
+    expect(eq.maxX - eq.minX).toBeCloseTo(10);
+    expect(eq.maxY - eq.minY).toBeCloseTo(10);
+    expect((eq.minY + eq.maxY) / 2).toBeCloseTo(1);
+    expect((eq.minX + eq.maxX) / 2).toBeCloseTo(5);
+    expect(aspectRatio(eq, 100, 100)).toBeCloseTo(1);
+  });
+
+  it("works for non-square plots (spans follow the pixel sizes)", () => {
+    const bounds = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
+    const eq = equalizeAspect(bounds, 200, 100);
+    // Y is coarser (0.02/px vs 0.01/px) → X expands to 0.02·200 = 4
+    expect(eq.maxX - eq.minX).toBeCloseTo(4);
+    expect(eq.maxY - eq.minY).toBeCloseTo(2);
+    expect(aspectRatio(eq, 200, 100)).toBeCloseTo(1);
+  });
+
+  it("aspectRatio reports the X:Y scale relation (1 = equal)", () => {
+    const bounds = { minX: 0, maxX: 10, minY: 0, maxY: 10 };
+    expect(aspectRatio(bounds, 100, 200)).toBeCloseTo(2); // X coarser ×2
+    expect(aspectRatio(bounds, 200, 100)).toBeCloseTo(0.5);
+    // degenerate spans never divide by zero
+    expect(aspectRatio({ minX: 1, maxX: 1, minY: 0, maxY: 1 }, 100, 100)).toBe(1);
   });
 });
