@@ -372,6 +372,10 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
     }
     for (let i = 0; i < count; i++) {
       if (isVisible && !isVisible(i)) continue;
+      // dim mode: out-of-layer points were already painted gray by the
+      // context pass above — repainting them bright here made the whole
+      // mode invisible (every point ended up at full category color)
+      if (sliceMasks && sliceDisplay === "dim" && !sliceMasks.mask[i]) continue;
       const cx = pixels[i * 2];
       const cy = pixels[i * 2 + 1];
       if (cx < plotL - r || cx > plotR + r || cy < plotT - r || cy > plotB + r) continue;
@@ -386,6 +390,7 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
       const i = cloud.indexById.get(id);
       if (i === undefined) continue;
       if (isVisible && !isVisible(i)) continue;
+      if (sliceMasks && sliceDisplay === "dim" && !sliceMasks.mask[i]) continue;
       ctx.strokeStyle = COLORS.selected;
       ctx.beginPath();
       ctx.arc(pixels[i * 2], pixels[i * 2 + 1], r + 2.5, 0, Math.PI * 2);
@@ -598,6 +603,18 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
     projection.axis_labels.length >= 2
       ? `${projection.axis_labels[0]} / ${projection.axis_labels[1]}`
       : null;
+  /* axis_info is method-dependent (backend contract): PCA sends explained
+     variance ratios (0..1), raw_axes sends the σ of the ORIGINAL coordinates
+     (NOT a share — multiplying it by 100 and calling it "% дисперсии" was a
+     category error), UMAP sends null. Label each honestly. */
+  const axisInfoLabel =
+    axisInfo && axisInfo.length >= 2
+      ? projection.method === "pca"
+        ? ` (${Math.round(axisInfo[0] * 100)}% / ${Math.round(axisInfo[1] * 100)}% дисперсии)`
+        : projection.method === "raw_axes"
+          ? ` (σ: ${axisInfo[0].toFixed(2)} / ${axisInfo[1].toFixed(2)})`
+          : ""
+      : "";
 
   return (
     <div
@@ -609,11 +626,18 @@ export function Plot2D({ cloud }: { cloud: PointCloud }) {
           {projection.method_display_name} · {count} точ.
         </span>
         {axesLabel && (
-          <span className="mono plot2d__axes">
+          <span
+            className="mono plot2d__axes"
+            title={
+              projection.method === "raw_axes"
+                ? "σ — стандартные отклонения исходных координат по осям (масштаб, НЕ доля дисперсии)"
+                : projection.method === "pca"
+                  ? "Доля дисперсии исходного пространства, объяснённая каждой главной компонентой"
+                  : undefined
+            }
+          >
             оси: {axesLabel}
-            {axisInfo && axisInfo.length >= 2
-              ? ` (${Math.round(axisInfo[0] * 100)}% / ${Math.round(axisInfo[1] * 100)}% дисперсии)`
-              : ""}
+            {axisInfoLabel}
           </span>
         )}
         {sliceMasks && (

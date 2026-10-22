@@ -102,3 +102,24 @@ export function sliceMasksForCloud(
   for (let i = 0; i < mask.length; i++) dimMask[i] = mask[i] ? 0 : 1;
   return { mask: null, dimMask, inLayer, total: fragmentIds.length, unknown };
 }
+
+/**
+ * Indices drawn in the BRIGHT buffer of a 3D scene: allowed by `mask`
+ * (null = every point) and NOT handed over to the dimmed buffer by
+ * `dimMask`. Every point is drawn exactly once — bright or dimmed, never
+ * both: overlaying a translucent dim sprite on a full-color point left the
+ * point visibly bright and the "dim out-of-layer" mode did nothing.
+ */
+export function brightIndices(
+  count: number,
+  mask: Uint8Array | null,
+  dimMask: Uint8Array | null,
+): Int32Array {
+  const list: number[] = [];
+  for (let i = 0; i < count; i++) {
+    if (mask && !mask[i]) continue;
+    if (dimMask && dimMask[i]) continue; // drawn once — in the dimmed buffer
+    list.push(i);
+  }
+  return Int32Array.from(list);
+}

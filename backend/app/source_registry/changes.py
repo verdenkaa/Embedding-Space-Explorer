@@ -121,6 +121,12 @@ def _change(cand: FileCandidate, reason: str) -> FileChange:
 def read_text_safely(abs_path: str) -> tuple[str | None, str | None]:
     """Read and decode a file as UTF-8 (replacement for invalid bytes).
 
+    Line endings are normalized to LF: on Windows checkouts (core.autocrlf)
+    the same file carries CRLF, and fragment texts/offsets/content hashes —
+    hence the STABLE FRAGMENT IDs — must be identical across machines and
+    git configurations, or caches and saved experiments stop matching the
+    corpus after a re-clone on another OS.
+
     Returns (text, error). Never raises; error is a human-readable string.
     """
     try:
@@ -128,6 +134,7 @@ def read_text_safely(abs_path: str) -> tuple[str | None, str | None]:
     except OSError as exc:
         return None, f"cannot read file: {exc.__class__.__name__}"
     try:
-        return data.decode("utf-8", errors="replace"), None
+        text = data.decode("utf-8", errors="replace")
+        return text.replace("\r\n", "\n").replace("\r", "\n"), None
     except Exception as exc:  # pragma: no cover - decode with replace cannot fail
         return None, f"cannot decode file: {exc!r}"

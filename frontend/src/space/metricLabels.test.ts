@@ -17,6 +17,7 @@ describe("metricLabels", () => {
     expect(metricLabel("neighbor_retention")).toBe("Сохранение соседей");
     expect(metricLabel("trustworthiness")).toBe("Trustworthiness");
     expect(metricLabel("relation_precision")).toContain("известными связями");
+    expect(metricLabel("relation_r_precision")).toContain("R-точность");
     expect(metricLabel("some_future_metric")).toBe("some_future_metric");
   });
 
@@ -27,6 +28,20 @@ describe("metricLabels", () => {
       "relation_coverage",
       "aaa_extra",
       "zzz_extra",
+    ]);
+    // R-Precision sits next to its fixed-k sibling, before coverage
+    expect(
+      orderedMetricIds([
+        "relation_coverage",
+        "relation_r_precision",
+        "relation_precision",
+        "neighbor_retention",
+      ]),
+    ).toEqual([
+      "neighbor_retention",
+      "relation_precision",
+      "relation_r_precision",
+      "relation_coverage",
     ]);
     // the declared order itself is stable knowledge (UI tables rely on it)
     expect(METRIC_ORDER[0]).toBe("neighbor_retention");

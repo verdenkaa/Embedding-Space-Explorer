@@ -177,8 +177,19 @@ class SpaceHandle:
         return np.array(self._npz().ids, dtype=np.str_)
 
     def embeddings(self) -> np.ndarray:
-        """Матрица векторов (N, D) float32 — копия не создаётся, грузится из .npz."""
-        return self._npz().vectors
+        """Матрица векторов (N, D) float32 — грузится из .npz по запросу.
+
+        Возвращается READ-ONLY представление массива в кэше сессии ядра
+        (копия данных не создаётся): случайная in-place операция в ячейке
+        (X -= X.mean(axis=0), нормализация и т.п.) больше не может испортить
+        векторы для последующих вызовов neighbors()/signature() в этом же
+        блокноте. Нужна изменяемая матрица — сделайте копию явно:
+        X = sp.embeddings().copy()
+        """
+        vectors = self._npz().vectors
+        view = vectors.view()
+        view.flags.writeable = False
+        return view
 
     def signature(self) -> str | None:
         """Сигнатура кэша векторов (для проверки устаревания проекций)."""

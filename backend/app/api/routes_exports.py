@@ -93,8 +93,11 @@ def export_relations(
                 (RelationRow.source_fragment_id == fragment_id)
                 | (RelationRow.target_fragment_id == fragment_id)
             )
-        rows = list(session.execute(stmt.order_by(RelationRow.kind, RelationRow.id)).scalars())
-        rows = rows[:RELATIONS_EXPORT_CAP]
+        # The cap lives IN THE SQL: reading the whole table into Python and
+        # slicing afterwards can OOM the backend on large corpora — the export
+        # must never materialize more rows than it will actually serve.
+        stmt = stmt.order_by(RelationRow.kind, RelationRow.id).limit(RELATIONS_EXPORT_CAP)
+        rows = list(session.execute(stmt).scalars())
         frags, files = _load_endpoint_maps(session, rows)
 
         def endpoint_dict(row: RelationRow) -> dict[str, Any]:

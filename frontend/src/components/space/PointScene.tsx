@@ -28,6 +28,7 @@ import {
 } from "../../space/selectionMath";
 import { AXIS_HALF, FLOOR_Y, gridLabels3D } from "../../space/gridMath";
 import type { FitTransform } from "../../space/selectionMath";
+import { brightIndices } from "../../space/sliceMath";
 import { useProjectStore } from "../../state/projectStore";
 import {
   useSpaceStore,
@@ -560,19 +561,15 @@ export function PointScene({
     };
   }, [clearSelection]);
 
-  const visible = useMemo(() => {
-    const count = cloud.metas.length;
-    if (!mask) {
-      const all = new Int32Array(count);
-      for (let i = 0; i < count; i++) all[i] = i;
-      return all;
-    }
-    const list: number[] = [];
-    for (let i = 0; i < count; i++) {
-      if (mask[i]) list.push(i);
-    }
-    return Int32Array.from(list);
-  }, [cloud, mask]);
+  /* Bright-buffer indices: mask (4D window / "only" slice) minus dimMask
+     ("dim" slice) — every point is drawn EXACTLY ONCE, either full-color
+     here or faded in the dimmed buffer below. Including dimmed points here
+     used to paint them bright first, so the translucent dim overlay barely
+     changed their look and the "dim out-of-layer" mode was invisible. */
+  const visible = useMemo(
+    () => brightIndices(cloud.metas.length, mask ?? null, dimMask ?? null),
+    [cloud, mask, dimMask],
+  );
 
   const dimmed = useMemo(() => {
     if (!dimMask) return new Int32Array(0);

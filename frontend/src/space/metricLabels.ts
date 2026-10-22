@@ -8,6 +8,7 @@ export const METRIC_LABELS: Record<string, string> = {
   neighbor_retention: "Сохранение соседей",
   trustworthiness: "Trustworthiness",
   relation_precision: "Согласие с известными связями",
+  relation_r_precision: "R-точность (k = |известных связей|)",
   relation_coverage: "Покрытие известных связей",
 };
 
@@ -16,6 +17,7 @@ export const METRIC_ORDER = [
   "neighbor_retention",
   "trustworthiness",
   "relation_precision",
+  "relation_r_precision",
   "relation_coverage",
 ] as const;
 

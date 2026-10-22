@@ -19,6 +19,7 @@ import {
 } from "../../space/selectionMath";
 import { useProjectStore } from "../../state/projectStore";
 import { buildCloud, useSpaceStore } from "../../state/spaceStore";
+import { COLORS, kindColor } from "../../space/palette";
 import { Projection2D } from "./Projection2D";
 
 const WIDTH = 600;
@@ -456,5 +457,120 @@ describe("Projection2D camera and multi-plot", () => {
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-pressed")).toBe("true");
     expect(screen.queryByText(/оси ×/)).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Second audit: honest axis_info labels (item 2) + working dim (item 4) */
+/* ------------------------------------------------------------------ */
+
+/** Canvas stub that captures the fillStyle IN EFFECT for every fillRect —
+ *  the name-only recorder above cannot prove WHICH color painted a point. */
+function stubCanvasCaptureFills() {
+  const fills: Array<{ style: string; x: number; y: number }> = [];
+  const state: Record<string, unknown> = {};
+  const handler: ProxyHandler<object> = {
+    get(_target, prop: string) {
+      if (prop in state) return state[prop];
+      if (prop === "setLineDash") return () => undefined;
+      return (...args: unknown[]) => {
+        if (prop === "fillRect") {
+          fills.push({
+            style: String(state["fillStyle"] ?? ""),
+            x: Number(args[0]),
+            y: Number(args[1]),
+          });
+        }
+      };
+    },
+    set(_target, prop: string, value: unknown) {
+      state[prop] = value;
+      return true;
+    },
+  };
+  const ctx = new Proxy({}, handler);
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+    ctx as unknown as CanvasRenderingContext2D,
+  );
+  return fills;
+}
+
+describe("Projection2D axis_info honesty (audit item 2)", () => {
+  it("raw_axes shows σ of the original axes, NOT «% дисперсии»", () => {
+    const dto = pointsDTO({ method: "raw_axes", method_display_name: "Сырые оси" });
+    seedClouds(dto, {
+      ...RUN,
+      method: "raw_axes",
+      method_display_name: "Сырые оси",
+      axis_labels: ["dim 0", "dim 3"],
+      axis_info: [1.2, 0.85],
+    });
+    render(<Projection2D />);
+    // σ = 1.2 used to render as the absurd "120% дисперсии"
+    expect(screen.getByText(/оси: dim 0 \/ dim 3 \(σ: 1\.20 \/ 0\.85\)/)).toBeTruthy();
+    expect(screen.queryByText(/дисперсии/)).toBeNull();
+  });
+
+  it("pca keeps the explained-variance share label", () => {
+    seedClouds();
+    render(<Projection2D />);
+    expect(screen.getByText(/PC1 \/ PC2 \(62% \/ 24% дисперсии\)/)).toBeTruthy();
+  });
+});
+
+describe("Projection2D slice dim mode (audit item 4)", () => {
+  it("out-of-layer points are painted exactly ONCE — gray, never overdrawn bright", () => {
+    const fills = stubCanvasCaptureFills();
+    const dto = pointsDTO();
+    seedClouds(dto);
+    useSpaceStore.setState({
+      sliceOverlay: {
+        embeddingRunId: "emb1", // == RUN.embedding_run_id → the slice applies
+        normalKind: "axis",
+        normalIndex: 0,
+        position: 0,
+        thickness: 2, // |u| ≤ 1 → fragA (u=0) inside; fragB/fragC (u=9) outside
+        uMin: 0,
+        uMax: 9,
+        total: 3,
+        uById: new Map([
+          ["fragA", 0],
+          ["fragB", 9],
+          ["fragC", 9],
+        ]),
+        note: "",
+        vector: null,
+        planeOffset: null,
+        drift: null,
+        savedSliceId: null,
+      },
+      sliceDisplay: "dim",
+    });
+    render(<Projection2D />);
+    expect(screen.getByText(/слой: 1 из 3/)).toBeTruthy();
+
+    const r = Math.max(1, 4 * 0.7); // pointSize = 4 (beforeEach) → square side
+    const squaresAt = (i: number) => {
+      const { cx, cy } = pixelOf(i, dto);
+      return fills.filter(
+        (f) => Math.abs(f.x + r / 2 - cx) < 0.5 && Math.abs(f.y + r / 2 - cy) < 0.5,
+      );
+    };
+
+    // in-layer fragA: bright kind color, one square
+    const a = squaresAt(0);
+    expect(a).toHaveLength(1);
+    expect(a[0].style).toBe(kindColor("method"));
+
+    // out-of-layer fragB/fragC: the dim pass paints them gray and the bright
+    // pass must SKIP them — before the fix each got a second, bright square
+    // on top, making the whole "dim" mode invisible
+    for (const i of [1, 2]) {
+      const squares = squaresAt(i);
+      expect(squares).toHaveLength(1);
+      expect(squares[0].style).toBe(COLORS.dim);
+    }
+    expect(fills.some((f) => f.style === kindColor("class"))).toBe(false);
+    expect(fills.some((f) => f.style === kindColor("section"))).toBe(false);
   });
 });

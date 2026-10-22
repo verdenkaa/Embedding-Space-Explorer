@@ -520,6 +520,15 @@ frags = sp.fragments()
 nb = sp.neighbors(str(ids[0]), k=3)
 text = sp.fragment_text(str(ids[0]))
 
+# Векторы отдаются read-only представлением кэша: in-place правка в ячейке
+# не должна портить данные ядра для последующих вызовов (audit, item 7).
+try:
+    X[0, 0] = 1e9
+    mutation_blocked = False
+except ValueError:
+    mutation_blocked = True
+nb_after = sp.neighbors(str(ids[0]), k=3)
+
 # Результаты эксперимента сохраняются в рабочем пространстве, не в основном хранилище.
 out = p.results_dir / "bridge_report.json"
 report = {{
@@ -532,6 +541,9 @@ report = {{
     "neighbors": [n["fragment_id"] for n in nb],
     "text_len": len(text),
     "other_visible": len(project.list_projects()),
+    "writeable": bool(X.flags.writeable),
+    "mutation_blocked": mutation_blocked,
+    "neighbors_stable": [n["fragment_id"] for n in nb] == [n["fragment_id"] for n in nb_after],
 }}
 out.write_text(json.dumps(report), encoding="utf-8")
 print(json.dumps(report))
@@ -550,6 +562,12 @@ print(json.dumps(report))
     assert len(report["neighbors"]) == 3
     assert report["text_len"] > 0
     assert report["other_visible"] >= 1
+    # item 7: the bridge hands out a READ-ONLY view of the kernel's cached
+    # vectors — an in-place edit in a cell raises instead of silently
+    # corrupting neighbors()/clustering() for the rest of the session.
+    assert report["writeable"] is False
+    assert report["mutation_blocked"] is True
+    assert report["neighbors_stable"] is True
 
     # The results file is real, on disk, inside workspace/results.
     tree = client.get(f"/api/projects/{pid}/workspace/tree").json()

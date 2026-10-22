@@ -55,7 +55,12 @@ def knn(
         safe = np.where(norms == 0, 1.0, norms)
         sims = (data @ query) / (safe * q_norm)
         sims = np.where(norms == 0, 0.0, sims)
-        distances = 1.0 - sims
+        # float32 roundoff pushes the dot product of (near-)identical or
+        # collinear vectors slightly past ±1 (e.g. 1.0000001), which used to
+        # leak NEGATIVE distances and scores > 1 into the API. Cosine is
+        # bounded by definition — clip, keeping d ∈ [0, 2] a real metric.
+        sims = np.clip(sims, -1.0, 1.0)
+        distances = np.clip(1.0 - sims, 0.0, 2.0)
         scores = sims
     else:  # euclidean
         diff = data - query

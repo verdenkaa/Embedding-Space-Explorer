@@ -17,7 +17,8 @@
     spaces = p.list_spaces()            # векторные пространства (embedding runs)
     sp = p.open_space(spaces[0]["id"])  # или p.open_space() — последнее
 
-    X = sp.embeddings()                 # (N, D) float32 — загрузка по запросу
+    X = sp.embeddings()                 # (N, D) float32 — загрузка по запросу;
+                                        # массив read-only: для правок — X.copy()
     ids = sp.ids                        # id фрагментов, тот же порядок
     frags = sp.fragments()              # метаданные: файл, строки, символ…
     text = sp.fragment_text(ids[0])     # исходный текст фрагмента

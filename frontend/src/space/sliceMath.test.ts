@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { cloudSliceMask, inLayer, sliceMasksForCloud } from "./sliceMath";
+import { brightIndices, cloudSliceMask, inLayer, sliceMasksForCloud } from "./sliceMath";
 
 const IDS = ["fA", "fB", "fC", "fD"];
 const U = new Map<string, number>([
@@ -64,5 +64,28 @@ describe("sliceMasksForCloud", () => {
 
   it("display=off disables the overlay", () => {
     expect(sliceMasksForCloud(IDS, source, "emb1", "off")).toBeNull();
+  });
+});
+
+describe("brightIndices", () => {
+  it("no masks -> every index once", () => {
+    expect(Array.from(brightIndices(4, null, null))).toEqual([0, 1, 2, 3]);
+  });
+
+  it("mask keeps only in-layer points", () => {
+    const mask = Uint8Array.from([1, 0, 1, 0]);
+    expect(Array.from(brightIndices(4, mask, null))).toEqual([0, 2]);
+  });
+
+  it("dimMask removes dimmed points from the bright buffer (drawn once)", () => {
+    const dim = Uint8Array.from([0, 1, 1, 0]);
+    expect(Array.from(brightIndices(4, null, dim))).toEqual([0, 3]);
+  });
+
+  it("mask AND dimMask compose (4D window + dim slice)", () => {
+    const mask = Uint8Array.from([1, 1, 1, 0]); // 4D window hides index 3
+    const dim = Uint8Array.from([0, 1, 0, 0]); // slice dims index 1
+    // bright = in the window and not dimmed -> 0 and 2
+    expect(Array.from(brightIndices(4, mask, dim))).toEqual([0, 2]);
   });
 });

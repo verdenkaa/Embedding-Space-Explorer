@@ -421,7 +421,9 @@ class ProjectionRunDTO(BaseModel):
     params: dict[str, ProjectionParamValue]
     seed: int
     axis_labels: list[str]
-    #: PCA explained variance ratio per axis; None for methods without it
+    #: per-axis interpretability numbers — MEANING DEPENDS ON THE METHOD:
+    #: PCA → explained variance ratio (0..1), raw_axes → σ of the original
+    #: coordinates, UMAP → None. The UI must label them per method.
     axis_info: list[float] | None = None
     count: int
     #: vectors changed since compute (or embedding run gone) → recompute

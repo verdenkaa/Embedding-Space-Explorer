@@ -65,7 +65,11 @@ def metric_versions() -> dict[str, str]:
     # (queries from the sample, cosine in the original space) and
     # relation_coverage counts directed arcs — values are NOT comparable
     # with v1 runs, so the formula set is part of the recorded versions.
-    versions: dict[str, str] = {"numpy": np.__version__, "metric_formulas": "2"}
+    # metric_formulas v3: trustworthiness k is capped at k < N/2 (sklearn's
+    # constraint; the old (2N−2)/3 cap let T(k) leave [0, 1]) and the bundle
+    # gained relation_r_precision — trustworthiness values computed with the
+    # old cap are NOT comparable with v3 runs.
+    versions: dict[str, str] = {"numpy": np.__version__, "metric_formulas": "3"}
     for dist in ("scikit-learn",):
         with contextlib.suppress(metadata.PackageNotFoundError):
             versions[dist] = metadata.version(dist)

@@ -11,12 +11,16 @@ from app.metrics.compute import (
     METRIC_EXPLANATIONS,
     MetricsInputError,
     compute_metric_bundle,
+    partners_from_pairs,
     relation_pairs_from_rows,
+    relation_r_precision,
 )
 
 __all__ = [
     "METRIC_EXPLANATIONS",
     "MetricsInputError",
     "compute_metric_bundle",
+    "partners_from_pairs",
     "relation_pairs_from_rows",
+    "relation_r_precision",
 ]

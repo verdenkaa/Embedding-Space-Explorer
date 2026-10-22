@@ -377,6 +377,125 @@ def test_topk_ties_match_knn_order() -> None:
     assert topk == knn_order
 
 
+def test_trustworthiness_k_capped_below_half_n() -> None:
+    """Second-audit item 1: k ≥ N/2 let T(k) leave [0, 1] (go NEGATIVE).
+
+    The normalizer S·k·(2N−3k−1) assumes every one of the k false neighbors
+    can sit at the worst original ranks (N−1 … N−k) — but a false neighbor
+    has rank > k by definition, and only N−1−k such points exist. At k ≥ N/2
+    the true worst case is smaller than the normalizer, so the old cap
+    k ≤ (2N−2)/3 admitted configurations with T < 0. sklearn enforces
+    k < N/2 for exactly this reason; the cap is now (N−1)//2.
+    """
+    from app.metrics.compute import trustworthiness
+
+    rng = np.random.default_rng(7)
+    n = 12  # old cap: k ≤ 7; correct cap: k ≤ 5
+    worst_value = 1.0
+    for _ in range(200):
+        v = rng.normal(size=(n, 5)).astype(np.float32)
+        v /= np.linalg.norm(v, axis=1, keepdims=True)
+        for k in (6, 7, 20):
+            # adversarial projection: order on a line by ascending mean
+            # similarity → projection top-k is maximally wrong
+            mean_sim = (v @ v.T).mean(axis=1)
+            order = np.argsort(mean_sim)
+            coords = np.zeros((n, 2), dtype=np.float32)
+            coords[order, 0] = np.arange(n, dtype=np.float32) * 0.01
+            coords[:, 1] = rng.normal(size=n).astype(np.float32) * 1e-4
+            value, k_used = trustworthiness(v, coords, np.arange(n, dtype=np.int64), k)
+            assert k_used == (n - 1) // 2  # sklearn's constraint: k < N/2
+            assert -1e-9 <= value <= 1.0 + 1e-9
+            worst_value = min(worst_value, value)
+    assert worst_value >= 0.0
+
+    # the bundle reports the honest k with the corrected constraint text
+    ids = [f"v{i:02d}" for i in range(n)]
+    v = rng.normal(size=(n, 5)).astype(np.float32)
+    bundle = compute_metric_bundle(
+        vectors=v, coords=v[:, :2].copy(), ids=ids, k=10, sample=n, seed=3, pairs=set()
+    )
+    warnings = bundle["warnings"]
+    assert isinstance(warnings, list)
+    trust_warnings = [str(w) for w in warnings if "trustworthiness computed with k=" in str(w)]
+    assert trust_warnings and "k < N/2" in trust_warnings[0]
+
+
+def test_relation_r_precision_is_uncapped_by_fixed_k() -> None:
+    """Second-audit item 5: precision@fixed-k has a |known|/k ceiling —
+    R-Precision (per-point k = |known|) does not."""
+    ids = [f"f{i}" for i in range(6)]
+    vectors = np.array(
+        [
+            [1.0, 0.0, 0.0],  # f0
+            [0.98, 0.2, 0.0],  # f1 — near f0
+            [0.97, 0.0, 0.24],  # f2 — near f0
+            [0.96, 0.28, 0.0],  # f3 — near f0
+            [0.0, 1.0, 0.0],  # f4 — far
+            [0.0, 0.0, 1.0],  # f5 — far
+        ],
+        dtype=np.float32,
+    )
+    pairs = {frozenset(("f0", "f1")), frozenset(("f0", "f2")), frozenset(("f0", "f3"))}
+
+    bundle = compute_metric_bundle(
+        vectors=vectors, coords=None, ids=ids, k=5, sample=6, seed=1, pairs=pairs
+    )
+    metrics = bundle["metrics"]
+    assert isinstance(metrics, dict)
+    precision = metrics["relation_precision"]
+    r_precision = metrics["relation_r_precision"]
+    assert isinstance(precision, dict) and isinstance(r_precision, dict)
+
+    # f0 knows 3 partners; at k=5 EVERY point's precision is capped by
+    # |known|/5 (f0: ≤ 3/5, its partners: ≤ 1/5) — the mean stays low even
+    # though f0's ranking is perfect.
+    assert precision["k"] == 5
+    assert precision["value"] is not None and precision["value"] <= 0.6
+    # R-Precision: f0 asks exactly for its 3 known partners (top-3 = f1,f2,f3
+    # by construction → 1.0); each partner asks for its 1 known (f0).
+    assert r_precision["k"] is None  # per-point k = |known| — that IS the metric
+    assert r_precision["value"] is not None and r_precision["value"] > precision["value"]
+    assert r_precision["baseline"] == pytest.approx(float(np.mean([3 / 5, 1 / 5, 1 / 5, 1 / 5])))
+    assert r_precision["lift"] == pytest.approx(r_precision["value"] / r_precision["baseline"])
+    assert r_precision["n_sampled_with_relations"] == 4
+
+    # no known relations → None (never a fake 0.0), like every relation metric
+    empty = compute_metric_bundle(
+        vectors=vectors, coords=None, ids=ids, k=3, sample=6, seed=1, pairs=set()
+    )
+    empty_metrics = empty["metrics"]
+    assert isinstance(empty_metrics, dict)
+    assert empty_metrics["relation_r_precision"]["value"] is None
+
+
+def test_cosine_distance_never_negative_in_float32() -> None:
+    """Second-audit item 3: float32 roundoff pushed cos past 1 for
+    (near-)identical/collinear vectors → negative distances and scores > 1
+    leaked into the API. Cosine is bounded by definition — clipped."""
+    from app.neighbor_search.search import knn
+
+    rng = np.random.default_rng(0)
+    for _ in range(500):
+        dim = int(rng.integers(2, 512))
+        base = rng.normal(size=dim).astype(np.float32)
+        # same direction, wildly different magnitude: cos must be exactly 1
+        scale = np.float32(10.0 ** rng.uniform(-8, 8))
+        data = np.vstack([base, (base * scale).astype(np.float32)]).astype(np.float32)
+        hit = knn(data, 0, 1, "cosine")[0]
+        assert hit.distance >= 0.0
+        assert hit.distance <= 2.0
+        assert -1.0 <= hit.score <= 1.0
+        # identical directions: the clipped values are exact
+        assert hit.score == pytest.approx(1.0, abs=1e-5)
+        assert hit.distance == pytest.approx(0.0, abs=1e-5)
+
+    # metrics rankings must agree with the clipped (honest) cosine too
+    data = np.array([[1.0, 0.0], [1.0000001, 0.0], [0.0, 1.0]], dtype=np.float32)
+    top = original_topk(data, np.array([0], dtype=np.int64), k=2)
+    assert top[0].tolist() == [1, 2]
+
+
 # ---------------------------------------------------------------------------
 # Metrics API
 # ---------------------------------------------------------------------------
@@ -847,6 +966,31 @@ def test_export_relations_csv(client: TestClient, mini_tree: str) -> None:
     payload = filtered.json()
     assert payload["count"] >= 1
     assert all(r["kind"] == "belongs_to" for r in payload["relations"])
+
+
+def test_export_relations_limit_is_applied_in_sql(
+    client: TestClient, mini_tree: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Second-audit item 8: the cap must be a SQL LIMIT, not a Python slice
+    after loading the whole table (memory safety on large corpora). Behavior
+    is asserted by shrinking the cap: exactly CAP rows come back."""
+    import app.api.routes_exports as routes_exports
+
+    pid = mini_tree
+    extract = client.post(f"/api/projects/{pid}/relations/extract")
+    assert wait_for_job(client, pid, extract.json()["id"])["state"] == "done"
+
+    full = client.get(f"/api/projects/{pid}/exports/relations?format=json").json()
+    total = full["count"]
+    assert total >= 2, "the fixture must produce several relations to cap"
+
+    monkeypatch.setattr(routes_exports, "RELATIONS_EXPORT_CAP", 1)
+    capped = client.get(f"/api/projects/{pid}/exports/relations?format=json").json()
+    assert capped["count"] == 1
+
+    csv_resp = client.get(f"/api/projects/{pid}/exports/relations?format=csv")
+    lines = csv_resp.text.lstrip("\ufeff").strip().split("\n")
+    assert len(lines) == 2  # header + exactly 1 capped row
 
 
 def test_export_metric_run_json(
